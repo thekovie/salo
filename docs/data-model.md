@@ -1,0 +1,41 @@
+# Data model
+
+PostgreSQL, defined in `src/server/db/schema.ts`; migrations in `drizzle/` (applied automatically at startup). Every table hangs off `sessions` with `ON DELETE CASCADE`, so deleting a session removes everything that belongs to it.
+
+## Tables
+
+| Table | Purpose |
+|---|---|
+| `sessions` | One table's ordering session. `status` OPEN/CLOSED, `revision` (+1 per committed change), `join_code` (6-character typed code), `last_activity_at`, `closed_at`, `expires_at` (when cleanup deletes it). |
+| `participants` | Host or guest identity. Display names may repeat; identity is the id. Exactly one HOST per session. |
+| `participant_credentials` | SHA-256 hash of each participant's cookie token (raw tokens are never stored). Type HOST or GUEST. |
+| `rounds` | Ordering rounds, numbered from 1. DRAFT or CONFIRMED. At most one DRAFT per session. |
+| `participant_round_readiness` | "I'm ready" per participant per round, with the revision they acknowledged. |
+| `dishes` | Session-scoped dish names: `canonical_name` as first typed, `normalized_name` unique per session. |
+| `order_groups`, `order_group_members` | Optional collective-order labels and their optional members. |
+| `order_batches` | Who an entry is for (`attribution_type` INDIVIDUAL/GROUP/TABLE/UNASSIGNED) and who submitted it (owner). |
+| `order_entries` | Source entries: dish, quantity 1–99, variant, instructions, own revision, soft delete (`deleted_at`) for Undo. |
+| `confirmed_round_snapshots` | Immutable JSON snapshot taken when the host confirms a round. |
+| `order_corrections` | Changes to confirmed rounds, carried on the next round's waiter ticket. |
+| `entry_claims` | A guest asking the host to hand over an entry recorded for them. |
+| `mutation_records` | Idempotency: (session, actor, key) unique; retries return the stored result. |
+| `session_events` | Durable, ordered event log (unique per session + revision) used for real-time replay. |
+
+## Integrity rules enforced by the database
+
+- CHECK constraints on every status/role/type enum, `quantity BETWEEN 1 AND 99`, `revision >= 0`, and status/timestamp agreement (CLOSED ⇔ `closed_at`, CONFIRMED ⇔ `confirmed_at`).
+- Partial unique indexes: one DRAFT round per session, one HOST per session, one pending claim per batch and requester.
+- Triggers (`drizzle/0001_integrity_triggers.sql`): a confirmed snapshot can never be updated; a session revision can never go backwards; entries of a confirmed round cannot be inserted or updated.
+- Covered by `tests/db-integrity.test.ts`.
+
+## Deviations from brief section 8
+
+- `sessions.active_round_id` is not stored: the active round is the session's DRAFT round (or its latest round when none is draft), which avoids a circular foreign key.
+- `order_entries.variant_data` is a plain `variant` text column (size or variant as typed).
+- `entry_claims` is added: section 10 lists claim endpoints but section 8 has no table for them.
+- `order_corrections.target_round_id` is added: the draft round whose waiter ticket carries the correction.
+- `order_batches.group_id` links a batch to an optional `order_groups` row; `collective_label` still works without one.
+
+## Consolidation
+
+Implemented in Phase 1 (documented with it).
