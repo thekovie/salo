@@ -12,7 +12,7 @@ export const BRAND_HEX = {
   ticket: "#fffdf8",
   ink: "#262b45",
   inkSoft: "#5a5f78",
-  tomato: "#c4402c",
+  tomato: "#b8392a",
   onTomato: "#fffcf5",
   saffron: "#f1b83c",
   canary: "#fbf3b8",

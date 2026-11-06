@@ -2,6 +2,7 @@
 
 @custom-variant dark (&:is(.dark *));
 
+
 /*
  * Salo's world: a carbonless restaurant order pad. Thermal paper, ballpoint ink, tomato-red numbering, canary and
  * pink carbon copies for later rounds, saffron highlights. Dark mode is the same pad under a dim bar light.
@@ -16,9 +17,9 @@
   --rule: oklch(0.87 0.018 80);
   /* Form-control boundary: at least 3:1 on the ticket (WCAG 1.4.11). */
   --input: oklch(0.6 0.025 75);
-  --tomato: oklch(0.54 0.19 31);
+  --tomato: oklch(0.5 0.185 30);
   --on-tomato: oklch(0.99 0.008 90);
-  --tomato-ink: oklch(0.5 0.18 30);
+  --tomato-ink: oklch(0.49 0.18 30);
   --tomato-wash: oklch(0.94 0.04 35);
   --saffron: oklch(0.83 0.15 80);
   --saffron-ink: oklch(0.47 0.1 68);
@@ -32,10 +33,16 @@
   --bad: oklch(0.48 0.17 25);
   --bad-wash: oklch(0.945 0.035 25);
   --ring: oklch(0.5 0.15 262);
+  --stamp-blend: multiply;
+  /* Toasts: an inverted chip in either theme; the action colour is chosen for that inverted surface. */
+  --toast-bg: var(--ink);
+  --toast-fg: var(--paper);
+  --toast-action: oklch(0.84 0.14 82);
   --shadow: 0 1px 1px oklch(0.4 0.03 60 / 0.08), 0 6px 18px -6px oklch(0.4 0.04 60 / 0.22);
   --radius: 0.875rem;
 }
 
+/* Dark: the system preference applies with no script at all; an explicit choice (.dark / .light on <html>) wins. */
 .dark {
   color-scheme: dark;
   --paper: oklch(0.205 0.012 55);
@@ -59,7 +66,43 @@
   --bad: oklch(0.8 0.12 25);
   --bad-wash: oklch(0.31 0.07 25);
   --ring: oklch(0.78 0.11 262);
+  --stamp-blend: screen;
+  --toast-bg: var(--ink);
+  --toast-fg: var(--paper);
+  --toast-action: oklch(0.47 0.13 55);
   --shadow: 0 1px 1px oklch(0 0 0 / 0.3), 0 8px 22px -8px oklch(0 0 0 / 0.6);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    color-scheme: dark;
+    --paper: oklch(0.205 0.012 55);
+    --ticket: oklch(0.255 0.014 60);
+    --ink: oklch(0.94 0.014 86);
+    --ink-soft: oklch(0.76 0.02 80);
+    --rule: oklch(0.35 0.016 60);
+    --input: oklch(0.58 0.02 70);
+    --tomato: oklch(0.68 0.17 33);
+    --on-tomato: oklch(0.17 0.02 30);
+    --tomato-ink: oklch(0.75 0.15 33);
+    --tomato-wash: oklch(0.3 0.06 30);
+    --saffron: oklch(0.8 0.14 80);
+    --saffron-ink: oklch(0.83 0.13 82);
+    --saffron-wash: oklch(0.31 0.05 75);
+    --copy-1: var(--ticket);
+    --copy-2: oklch(0.3 0.045 98);
+    --copy-3: oklch(0.29 0.04 8);
+    --ok: oklch(0.82 0.13 150);
+    --ok-wash: oklch(0.3 0.06 150);
+    --bad: oklch(0.8 0.12 25);
+    --bad-wash: oklch(0.31 0.07 25);
+    --ring: oklch(0.78 0.11 262);
+    --stamp-blend: screen;
+  --toast-bg: var(--ink);
+  --toast-fg: var(--paper);
+  --toast-action: oklch(0.47 0.13 55);
+  --shadow: 0 1px 1px oklch(0 0 0 / 0.3), 0 8px 22px -8px oklch(0 0 0 / 0.6);
+  }
 }
 
 @theme inline {
@@ -86,6 +129,9 @@
   --color-ring: var(--ring);
   --radius-lg: var(--radius);
   --shadow-ticket: var(--shadow);
+  --color-toast: var(--toast-bg);
+  --color-toast-fg: var(--toast-fg);
+  --color-toast-action: var(--toast-action);
   --font-sans: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-fredoka), var(--font-nunito), ui-sans-serif, sans-serif;
   --font-mono: var(--font-dmmono), ui-monospace, monospace;
@@ -178,5 +224,19 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
+/* A line that just landed on the ticket: a brief saffron wash, like a highlighter swipe. */
+@keyframes landed {
+  from {
+    background-color: color-mix(in oklch, var(--saffron) 45%, transparent);
   }
 }

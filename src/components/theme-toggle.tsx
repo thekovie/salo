@@ -9,7 +9,10 @@ function subscribe(onChange: () => void) {
   return () => observer.disconnect();
 }
 
-const isDark = () => document.documentElement.classList.contains("dark");
+const isDark = () => {
+  const root = document.documentElement.classList;
+  return root.contains("dark") || (!root.contains("light") && matchMedia("(prefers-color-scheme: dark)").matches);
+};
 
 /** Light/dark switch. The choice is a per-device convenience kept in localStorage. */
 export function ThemeToggle({ className }: { className?: string }) {
@@ -17,6 +20,7 @@ export function ThemeToggle({ className }: { className?: string }) {
   function toggle() {
     const next = !dark;
     document.documentElement.classList.toggle("dark", next);
+    document.documentElement.classList.toggle("light", !next);
     try {
       localStorage.setItem("theme", next ? "dark" : "light");
     } catch {

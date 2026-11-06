@@ -53,7 +53,8 @@ export const viewport: Viewport = {
 };
 
 // Runs before first paint so there is no flash of the wrong theme. Stamped with the request's CSP nonce.
-const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem('theme');var d=t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);}catch(e){}})();`;
+// Only an explicit choice needs a class; the system preference is handled by CSS alone (globals.css).
+const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem('theme');if(t==='dark'||t==='light')document.documentElement.classList.add(t);}catch(e){}})();`;
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const nonce = (await headers()).get("x-nonce") ?? undefined;

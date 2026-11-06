@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import { Wordmark } from "@/components/brand/logo";
 import { JoinForm } from "@/components/landing/join-form";
+import { ResumeList } from "@/components/landing/resume-list";
 import { SampleTicket } from "@/components/landing/sample-ticket";
 import { StartForm } from "@/components/landing/start-form";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SITE } from "@/lib/site";
+import { listResumable } from "@/server/sessions/resume";
 
 export const metadata: Metadata = {
   title: { absolute: `${SITE.name} · ${SITE.tagline}` },
@@ -18,7 +20,8 @@ const STEPS = [
   { title: "Hand the waiter one ticket", body: "Big, clear quantities to read out or show. Add-ons later go on a fresh round, so nothing gets ordered twice." },
 ] as const;
 
-export default function Home() {
+export default async function Home() {
+  const resumable = await listResumable();
   return (
     <div className="mx-auto flex min-h-dvh max-w-5xl flex-col px-4 pt-[max(env(safe-area-inset-top),0.75rem)] pb-10 sm:px-8">
       <header className="flex items-center justify-between py-2">
@@ -39,6 +42,7 @@ export default function Home() {
             </p>
             <div className="mt-8 flex flex-col gap-6">
               <StartForm />
+              <ResumeList items={resumable} />
               <JoinForm />
             </div>
           </div>
