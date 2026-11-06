@@ -274,3 +274,12 @@ Fixed from the screenshots:
 
 Tests: 104 unit/integration (new: analytics no-op and safety, POSTHOG_KEY schema, CSP worker-src); 29 e2e (new `policies.spec.ts`).
 
+**Messenger follow-up (2026-11-06).** After the redeploy the Sharing Debugger still reported *403, "could be due to a robots.txt block"* for `/j/<code>`.
+- Ruled out:
+  - Every crawler user agent and Facebook-style request (HTTP/1.1, byte range, no SNI) gets 200.
+  - A datacenter fetch gets 200, and opengraph.xyz renders all platforms.
+  - DNS is consistent (Cloudflare, DNS-only, no IPv6 record), and the TLS chain is valid.
+  - The proxy labels contain no IP or bot rules.
+- Cause: Facebook's cached copy of the old robots.txt (`Disallow: /j/`, removed in PR #13 the same day). Facebook reports a robots block as 403 without fetching the page.
+- Resolution: wait for Facebook to re-read robots.txt, then Scrape Again. Documented in `docs/deployment.md` → Link previews. No code change.
+
