@@ -36,10 +36,10 @@ export function RemoveGuestSheet({ name, itemCount, roundNumber, onRemove }: Rem
 
   return (
     <Drawer open={open} onOpenChange={(next) => !busy && setOpen(next)}>
-      <DrawerTrigger aria-label={`Remove ${name}`} className="inline-flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full text-ink-soft hover:bg-bad-wash hover:text-bad">
+      <DrawerTrigger aria-label={`Remove ${name}`} className="ph-no-capture inline-flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full text-ink-soft hover:bg-bad-wash hover:text-bad">
         <UserX className="size-5" aria-hidden />
       </DrawerTrigger>
-      <DrawerContent>
+      <DrawerContent data-ph-mask="">
         <div className="flex items-start justify-between gap-3">
           <DrawerTitle className="font-display text-2xl font-medium">Remove {name} from the order?</DrawerTitle>
           <DrawerClose aria-label="Close" className="inline-flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full hover:bg-ink/6">

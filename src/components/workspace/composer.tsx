@@ -3,6 +3,7 @@
 import { ChevronDown, Plus, UserRound, UsersRound, X } from "lucide-react";
 import { useId, useMemo, useRef, useState } from "react";
 import type { AddInput } from "@/hooks/use-session";
+import { track } from "@/lib/analytics";
 import { normalizeText } from "@/lib/dish-name";
 import { cn } from "@/lib/utils";
 import { Stepper } from "./stepper";
@@ -123,6 +124,7 @@ export function Composer({ dishNames, people, names, groups, disabled, onAdd }: 
       return;
     }
     onAdd({ dishName: dish, quantity, variant: variant || null, instructions: instructions || null, attribution: who });
+    track({ name: "dish_added", props: { recipient: current.kind.toLowerCase(), quantity, has_notes: Boolean(variant || instructions) } });
     // A name typed once is a chip from now on: keep pointing at it instead of the empty "new" field.
     if (current.kind === "NEW_GROUP") setRecipient({ kind: "GROUP", label: typed.trim() });
     if (current.kind === "NEW_PERSON") setRecipient({ kind: "NAMED", name: typed.trim() });
@@ -150,7 +152,7 @@ export function Composer({ dishNames, people, names, groups, disabled, onAdd }: 
   return (
     <form onSubmit={submit} noValidate className="rounded-[1.4rem] bg-ticket p-2 shadow-ticket ring-[1.5px] ring-rule" aria-label="Add a dish">
       {suggestions.length > 0 ? (
-        <div className="flex flex-wrap gap-1.5 px-1 pb-2" aria-label="Dishes already in this order">
+        <div className="flex flex-wrap gap-1.5 px-1 pb-2" aria-label="Dishes already in this order" data-ph-mask="">
           {suggestions.map((name) => (
             <button
               key={name}
@@ -185,7 +187,7 @@ export function Composer({ dishNames, people, names, groups, disabled, onAdd }: 
             <span className="block pr-10 text-sm font-semibold" id={`${id}-for`}>
               Who&rsquo;s it for?
             </span>
-            <div role="radiogroup" aria-labelledby={`${id}-for`} className="mt-1.5 flex flex-wrap gap-1.5">
+            <div role="radiogroup" aria-labelledby={`${id}-for`} className="mt-1.5 flex flex-wrap gap-1.5" data-ph-mask="">
               {chips.map(({ r, label, group }) => {
                 const checked = same(current, r);
                 return (
@@ -283,7 +285,10 @@ export function Composer({ dishNames, people, names, groups, disabled, onAdd }: 
       <div className="mt-1.5 flex items-center gap-1">
         <button
           type="button"
-          onClick={() => setOpen((v) => !v)}
+          onClick={() => {
+            if (!open) track({ name: "recipient_panel_opened" });
+            setOpen((v) => !v);
+          }}
           aria-expanded={open}
           aria-controls={open ? `${id}-panel` : undefined}
           data-tour="for"
@@ -291,7 +296,7 @@ export function Composer({ dishNames, people, names, groups, disabled, onAdd }: 
         >
           <ForIcon className="size-4 shrink-0 text-ink-soft" aria-hidden />
           <span className="hidden shrink-0 text-sm text-ink-soft min-[360px]:inline">For</span>
-          <span className="truncate font-semibold">{summary(current, typed)}</span>
+          <span className="truncate font-semibold" data-ph-mask="">{summary(current, typed)}</span>
           <ChevronDown className={cn("size-4 shrink-0 text-ink-soft transition-transform duration-200", open && "rotate-180")} aria-hidden />
           {!open && hasNotes ? <span className="absolute top-2 right-2 size-2 rounded-full bg-tomato" aria-hidden /> : null}
           <span className="sr-only">. Change who it&rsquo;s for, size or notes</span>

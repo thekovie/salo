@@ -11,7 +11,7 @@ export function RemovedNotice({ reason, inviteCode }: { reason: string | null; i
         <h1 className="mt-4 text-3xl">You&rsquo;re no longer in this order</h1>
         <p className="mt-2 text-ink-soft">The host removed you, and your dishes in the open round came off the ticket.</p>
         {reason ? (
-          <figure className="mt-4 rounded-2xl bg-paper px-4 py-3 text-left">
+          <figure className="mt-4 rounded-2xl bg-paper px-4 py-3 text-left" data-ph-mask="">
             <figcaption className="text-xs font-semibold tracking-wide text-ink-soft uppercase">The host said</figcaption>
             <blockquote className="mt-1 text-lg break-words">&ldquo;{reason}&rdquo;</blockquote>
           </figure>

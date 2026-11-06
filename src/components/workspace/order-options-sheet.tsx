@@ -153,6 +153,15 @@ function OptionsBody({ onOpenChange, title, anyConfirmed, unsentRound, onRename,
           {verb} order
         </Button>
       </div>
+      <p className="mt-5 text-center text-sm text-ink-soft">
+        <a href="/privacy" className="underline underline-offset-4">
+          Privacy
+        </a>{" "}
+        ·{" "}
+        <a href="/cookies" className="underline underline-offset-4">
+          Cookies
+        </a>
+      </p>
     </div>
   );
 }

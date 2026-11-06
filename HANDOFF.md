@@ -49,8 +49,15 @@ All 14 brief end-to-end scenarios are covered by Playwright (see `docs/testing.m
 2. **Backups**: daily schedule, S3 off-VPS destination, retention, failure alerts on the PostgreSQL resource (`docs/backups.md`); run the first production restore drill and note the date here.
 3. **Proxy check in production**: `node scripts/sse-proxy-check.mjs https://<domain> 75`.
 4. **Real phones**: try a full order on Android and iPhone over mobile data (QR join, live updates, waiter ticket in sunlight and in a dim place, screen reader spot check with TalkBack/VoiceOver).
-5. **Link previews**: paste an invite link in Messenger and Viber; use the Facebook Sharing Debugger if a preview is stale.
+5. **Link previews**: checked live on 2026-11-06. Every crawler (Facebook, Facebot, meta-externalagent, Viber, WhatsApp, Telegram) gets a correct card for a fresh invite: 200, tags in `<head>`, image 200 PNG; room links redirect to the invite. If Messenger shows no card, Facebook has cached the link (links first fetched before PR #13 were blocked then). Paste the exact link into the Facebook Sharing Debugger (developers.facebook.com/tools/debug) and press **Scrape Again**. A brand-new link can also take one paste before its card appears.
 6. **Usability test** against Notes with a real table (brief 15.6): time to record ten dishes, mistakes, corrections, confidence.
+7. **PostHog**:
+   - In Coolify, set `POSTHOG_KEY` to the US project's `phc_…` key and redeploy.
+   - In PostHog project settings, turn on Session replay (sample rate 100%), Heatmaps, Autocapture and Exception autocapture. Consider "Discard client IP data", which the privacy policy allows for but doesn't promise.
+   - Suggested insights:
+     - funnel order_started → dish_added → round_confirmed → order_ended;
+     - tour_offer_shown → tour_started → tour_completed;
+     - rage clicks and dead clicks by page.
 
 ## Known limitations
 

@@ -19,6 +19,8 @@ export function buildCsp({ nonce, isDev, isHttps }: CspOptions): string {
     "img-src 'self' data: blob:",
     "font-src 'self'",
     "connect-src 'self'",
+    // PostHog's session-replay recorder compresses in a worker built from a blob.
+    "worker-src 'self' blob:",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

@@ -36,6 +36,13 @@
 | Text | dish 60, size 40, instructions 140, names 40, order name 60; no NUL |
 Rate limits live in process memory (one instance) and key on the last `X-Forwarded-For` hop (one trusted proxy; see deployment.md). Each per-address table holds 2,000 addresses (IPv6 grouped by /64); the all-addresses ceilings exist because rotating through more addresses than that would otherwise evict every counter before it filled. Preview cards and app icons are drawn once per process and served from memory. A Traefik rate limit in front is a sensible extra backstop.
 
+## Analytics (PostHog)
+- Only when `POSTHOG_KEY` is set. Requests go to `/ingest` on Salo's own domain (Next rewrites to PostHog US), so the CSP stays same-origin; `worker-src 'self' blob:` is added for the replay recorder.
+- On by default, with an opt-out switch on `/cookies` (PostHog's own opt-out flag). Do Not Track is honoured. Everyone is anonymous (`person_profiles: identified_only`).
+- Session replay on every session. All inputs are masked, and so is any text inside `data-ph-mask` (tickets, People/Groups/Rounds, waiter and summary tickets, header order name, arrival pills, For chips, invite title, resume list, removed notice, review checks). Autocapture sends no element text (`mask_all_text`). The remove-guest button is `ph-no-capture`.
+- Product events (`src/lib/analytics.ts`) carry kinds, counts and error codes only. Never names, dishes, order titles, join codes or order ids (a room id can open an invite).
+- Policies: `/privacy` and `/cookies`; contact salo@projects.thekovie.com.
+
 ## Data minimization and retention
 Preview images for unknown or ended invites are a cached static card (fonts read once per process).
 

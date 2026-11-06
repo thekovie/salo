@@ -13,7 +13,7 @@ const MAX_VISIBLE = 2;
 export function ArrivalPills({ arrivals, onSelect }: { arrivals: Arrival[]; onSelect: (arrival: Arrival) => void }) {
   const shown = arrivals.slice(-MAX_VISIBLE);
   return (
-    <div role="status" aria-live="polite" className="pointer-events-none fixed inset-x-0 top-[calc(env(safe-area-inset-top)+4.5rem)] z-40 flex flex-col items-center gap-1.5 px-4">
+    <div role="status" aria-live="polite" data-ph-mask="" className="pointer-events-none fixed inset-x-0 top-[calc(env(safe-area-inset-top)+4.5rem)] z-40 flex flex-col items-center gap-1.5 px-4">
       {shown.map((a) => (
         <button
           key={a.key}

@@ -5,6 +5,7 @@ import { useMemo, useState, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
 import type { SessionSnapshot } from "@/lib/snapshot";
+import { track } from "@/lib/analytics";
 import { buildSummary, itemsLabel, roundsLabel, summaryText } from "@/lib/summary";
 
 const noSubscribe = () => () => {};
@@ -43,6 +44,7 @@ export function SummarySheet({ open, onOpenChange, snapshot }: SummarySheetProps
     try {
       await navigator.clipboard.writeText(text);
       flash({ kind: "copied" });
+      track({ name: "summary_copied" });
     } catch {
       setStatus({ kind: "error", message: "Couldn’t copy. Try Share, or select the text in your notes app." });
     }
@@ -69,6 +71,7 @@ export function SummarySheet({ open, onOpenChange, snapshot }: SummarySheetProps
       if (navigator.canShare?.({ files: [file] })) {
         try {
           await navigator.share({ files: [file], title: `${summary.title}: who ordered what` });
+          track({ name: "summary_image_saved", props: { method: "share" } });
         } catch (error) {
           if ((error as Error).name === "AbortError") return setStatus({ kind: "idle" });
           throw error;
@@ -80,6 +83,7 @@ export function SummarySheet({ open, onOpenChange, snapshot }: SummarySheetProps
         link.click();
         link.remove();
         setTimeout(() => URL.revokeObjectURL(url), 10_000);
+        track({ name: "summary_image_saved", props: { method: "download" } });
       }
       flash({ kind: "saved" });
     } catch (error) {
@@ -105,7 +109,7 @@ export function SummarySheet({ open, onOpenChange, snapshot }: SummarySheetProps
         {empty ? (
           <p className="mt-6 rounded-2xl bg-paper px-4 py-6 text-center text-ink-soft">Nothing confirmed with the waiter yet. Confirm a round first; only confirmed dishes count.</p>
         ) : (
-          <div className="ticket mt-4 px-5" aria-label="Summary preview">
+          <div className="ticket mt-4 px-5" aria-label="Summary preview" data-ph-mask="">
             <ul className="divide-y-[1.5px] divide-dashed divide-rule">
               {summary.sections.map((s) => (
                 <li key={`${s.title}:${s.note}`} className="py-3">

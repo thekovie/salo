@@ -7,7 +7,7 @@ import type { Resumable } from "@/server/sessions/resume";
 export function ResumeList({ items }: { items: Resumable[] }) {
   if (items.length === 0) return null;
   return (
-    <section aria-labelledby="resume" className="max-w-sm">
+    <section aria-labelledby="resume" className="max-w-sm" data-ph-mask="">
       <h2 id="resume" className="font-sans text-sm font-semibold">
         Pick up where you left off
       </h2>

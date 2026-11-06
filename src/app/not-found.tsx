@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { LogoMark } from "@/components/brand/logo";
+import { PolicyLinks } from "@/components/policy/policy-links";
 import { buttonVariants } from "@/components/ui/button";
 
 export default function NotFound() {
@@ -11,6 +12,7 @@ export default function NotFound() {
       <Link href="/" className={buttonVariants({ variant: "primary" })}>
         Start a new order
       </Link>
+      <PolicyLinks className="mt-4" />
     </main>
   );
 }

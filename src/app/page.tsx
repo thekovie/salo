@@ -4,6 +4,7 @@ import { JoinForm } from "@/components/landing/join-form";
 import { ResumeList } from "@/components/landing/resume-list";
 import { AddScene, HeroScene, InviteScene, SummaryScene, WaiterScene } from "@/components/landing/scenes";
 import { StartForm } from "@/components/landing/start-form";
+import { PolicyLinks } from "@/components/policy/policy-links";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SITE } from "@/lib/site";
 import { listResumable } from "@/server/sessions/resume";
@@ -117,10 +118,13 @@ export default async function Home() {
       </main>
 
       <footer className="flex flex-wrap items-center justify-between gap-3 border-t-[1.5px] border-dashed border-rule pt-6 text-sm text-ink-soft">
-        <span>No accounts, no menus to set up. Orders delete themselves a week after the meal.</span>
-        <a href="#how-it-works" className="font-semibold text-ink underline-offset-4 hover:underline">
-          How it works
-        </a>
+        <span>No accounts, no menus to set up. Orders delete themselves a week after the meal. Anonymous analytics (names and dishes hidden) helps us improve Salo.</span>
+        <div className="flex flex-wrap items-center gap-4">
+          <a href="#how-it-works" className="font-semibold text-ink underline-offset-4 hover:underline">
+            How it works
+          </a>
+          <PolicyLinks />
+        </div>
       </footer>
     </div>
   );

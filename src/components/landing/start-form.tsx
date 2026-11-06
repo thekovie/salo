@@ -4,6 +4,7 @@ import { ArrowRight, LoaderCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { track } from "@/lib/analytics";
 
 /** "Start an order": creates the session (and the host's credential cookie), then opens the workspace. */
 export function StartForm({ label = "Start an order" }: { label?: string }) {
@@ -17,6 +18,7 @@ export function StartForm({ label = "Start an order" }: { label?: string }) {
       const response = await fetch("/api/sessions", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
       const body = (await response.json().catch(() => null)) as { data?: { id: string }; error?: { message: string } } | null;
       if (!response.ok || !body?.data) throw new Error(body?.error?.message ?? "Could not start an order. Try again.");
+      track({ name: "order_started" });
       router.push(`/s/${body.data.id}`);
     } catch (error) {
       setMessage(error instanceof Error && error.message !== "Failed to fetch" ? error.message : "No connection. Check your data or Wi-Fi and try again.");
