@@ -132,7 +132,7 @@ export const participantRoundReadiness = pgTable(
     acknowledgedRevision: bigint("acknowledged_revision", { mode: "number" }).notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [primaryKey({ columns: [t.participantId, t.roundId] })],
+  (t) => [primaryKey({ columns: [t.participantId, t.roundId] }), index("readiness_round_idx").on(t.roundId)],
 );
 
 export const dishes = pgTable(
@@ -291,6 +291,7 @@ export const entryClaims = pgTable(
   (t) => [
     check("claims_status_ck", inList("status", CLAIM_STATUSES)),
     uniqueIndex("claims_one_pending_uq").on(t.batchId, t.requestedBy).where(sql`status = 'PENDING'`),
+    index("claims_pending_session_idx").on(t.sessionId).where(sql`status = 'PENDING'`),
   ],
 );
 

@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, count, eq, inArray, isNull } from "drizzle-orm";
 import { normalizeText, tidyText } from "@/lib/dish-name";
 import { can, type Actor } from "@/lib/permissions";
 import type { Tx } from "@/server/db/client";
@@ -30,12 +30,17 @@ export async function setReady(tx: Tx, session: SessionRow, actor: Actor, ready:
   return { result: { ready }, event: { type: "readiness.changed", payload: { participantId: actor.participantId } } };
 }
 
-/** Changing your order after saying you're ready makes you not ready again. Called inside entry mutations. */
-export async function resetReadiness(tx: Tx, participantId: string, roundId: string): Promise<void> {
+/**
+ * A change to someone's order after they said they were ready makes them not ready again (brief 5.11): the person who
+ * made the change, whoever owns the dish, and whoever it is for. Called inside entry and claim mutations.
+ */
+export async function resetReadiness(tx: Tx, roundId: string, participantIds: (string | null | undefined)[]): Promise<void> {
+  const ids = [...new Set(participantIds.filter((id): id is string => Boolean(id)))];
+  if (ids.length === 0) return;
   await tx
     .update(participantRoundReadiness)
     .set({ ready: false, updatedAt: new Date() })
-    .where(and(eq(participantRoundReadiness.participantId, participantId), eq(participantRoundReadiness.roundId, roundId), eq(participantRoundReadiness.ready, true)));
+    .where(and(inArray(participantRoundReadiness.participantId, ids), eq(participantRoundReadiness.roundId, roundId), eq(participantRoundReadiness.ready, true)));
 }
 
 /**
@@ -50,14 +55,23 @@ export async function setGroupMembers(tx: Tx, session: SessionRow, actor: Actor,
     const found = await tx.select({ id: participants.id }).from(participants).where(and(eq(participants.sessionId, session.id), inArray(participants.id, unique)));
     if (found.length !== unique.length) throw new AppError(422, "UNKNOWN_PERSON", "Someone in that list isn’t in this order.");
   }
-  await tx
-    .insert(orderGroups)
-    .values({ sessionId: session.id, label, normalizedLabel: normalizeText(label), createdBy: actor.participantId })
-    .onConflictDoNothing();
-  const [group] = await tx
-    .select({ id: orderGroups.id })
+  const [existing] = await tx
+    .select({ id: orderGroups.id, createdBy: orderGroups.createdBy })
     .from(orderGroups)
     .where(and(eq(orderGroups.sessionId, session.id), eq(orderGroups.normalizedLabel, normalizeText(label))));
+  // Whoever first named the group's members, or the host, may change them; others see them but cannot overwrite them.
+  if (existing && actor.role !== "HOST" && existing.createdBy !== actor.participantId) {
+    throw forbidden("Only the host or the person who set up this group can change its members.");
+  }
+  let group = existing;
+  if (!group) {
+    const [{ value: groupCount }] = await tx.select({ value: count() }).from(orderGroups).where(eq(orderGroups.sessionId, session.id));
+    if (groupCount >= LIMITS.groupsPerSession) throw new AppError(422, "TOO_MANY_GROUPS", `An order can have up to ${LIMITS.groupsPerSession} groups.`);
+    [group] = await tx
+      .insert(orderGroups)
+      .values({ sessionId: session.id, label, normalizedLabel: normalizeText(label), createdBy: actor.participantId })
+      .returning({ id: orderGroups.id, createdBy: orderGroups.createdBy });
+  }
   await tx.delete(orderGroupMembers).where(eq(orderGroupMembers.groupId, group.id));
   if (unique.length > 0) await tx.insert(orderGroupMembers).values(unique.map((participantId) => ({ groupId: group.id, participantId })));
   return { result: { groupId: group.id }, event: { type: "group.updated", payload: { groupId: group.id } } };
@@ -66,7 +80,7 @@ export async function setGroupMembers(tx: Tx, session: SessionRow, actor: Actor,
 /** The batch with its owner and round, scoped to the session. */
 async function loadBatch(tx: Tx, sessionId: string, batchId: string) {
   const [batch] = await tx
-    .select({ id: orderBatches.id, submittedBy: orderBatches.submittedBy, roundStatus: rounds.status, attributionType: orderBatches.attributionType, attributedParticipantId: orderBatches.attributedParticipantId })
+    .select({ id: orderBatches.id, roundId: orderBatches.roundId, submittedBy: orderBatches.submittedBy, roundStatus: rounds.status, attributionType: orderBatches.attributionType, attributedParticipantId: orderBatches.attributedParticipantId })
     .from(orderBatches)
     .innerJoin(rounds, eq(rounds.id, orderBatches.roundId))
     .where(and(eq(orderBatches.id, batchId), eq(orderBatches.sessionId, sessionId)));
@@ -115,6 +129,15 @@ export async function resolveClaim(tx: Tx, session: SessionRow, actor: Actor, cl
   if (approve) {
     const batch = await loadBatch(tx, session.id, claim.batchId);
     if (batch.roundStatus !== "DRAFT") throw new AppError(409, "ROUND_CONFIRMED", "This round was already confirmed with the waiter.");
+    const [active] = await tx
+      .select({ id: orderEntries.id })
+      .from(orderEntries)
+      .where(and(eq(orderEntries.batchId, claim.batchId), isNull(orderEntries.deletedAt)))
+      .limit(1);
+    if (!active) throw new AppError(409, "ENTRY_REMOVED", "That dish was removed, so there’s nothing to hand over. Decline the request instead.");
+    if (batch.attributedParticipantId && batch.attributedParticipantId !== claim.requestedBy) {
+      throw new AppError(409, "CLAIM_STALE", "This dish is now marked for someone else. Decline the request, or change who it’s for first.");
+    }
     await tx
       .update(orderBatches)
       .set({ submittedBy: claim.requestedBy, attributionType: "INDIVIDUAL", attributedParticipantId: claim.requestedBy, collectiveLabel: null, groupId: null })
@@ -123,6 +146,7 @@ export async function resolveClaim(tx: Tx, session: SessionRow, actor: Actor, cl
       .update(entryClaims)
       .set({ status: "REJECTED", resolvedAt: new Date() })
       .where(and(eq(entryClaims.batchId, claim.batchId), eq(entryClaims.status, "PENDING")));
+    await resetReadiness(tx, batch.roundId, [claim.requestedBy, batch.attributedParticipantId]);
   }
   await tx.update(entryClaims).set({ status, resolvedAt: new Date() }).where(eq(entryClaims.id, claimId));
   return { result: { claimId, status }, event: { type: "attribution.changed", payload: { claimId, batchId: claim.batchId, status } } };

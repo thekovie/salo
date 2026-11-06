@@ -9,7 +9,7 @@ import { consolidate } from "@/lib/consolidate";
 import type { SessionSnapshot } from "@/lib/snapshot";
 import { cn } from "@/lib/utils";
 import { canEditEntry } from "@/lib/permissions";
-import { readinessSummary } from "@/lib/views";
+import { byGroup, readinessSummary } from "@/lib/views";
 import { Composer } from "./composer";
 import { GroupsView } from "./groups-view";
 import { PeopleView } from "./people-view";
@@ -33,7 +33,7 @@ export function Workspace({ initial, appUrl }: { initial: SessionSnapshot; appUr
   const [view, setView] = useState<View>("order");
   const ready = readinessSummary(snapshot);
   const iAmReady = ready.readyIds.has(snapshot.me.participantId);
-  const groupCount = new Set(roundEntries.filter((e) => e.attribution.type === "GROUP").map((e) => e.attribution.label?.toLowerCase())).size;
+  const groupCount = byGroup(roundEntries, snapshot.groups).length;
   const claimsForHost = isHost
     ? snapshot.claims.flatMap((claim) => {
         const entry = snapshot.entries.find((e) => e.batchId === claim.batchId);
@@ -136,13 +136,13 @@ export function Workspace({ initial, appUrl }: { initial: SessionSnapshot; appUr
           ) : view === "people" ? (
             <PeopleView
               snapshot={snapshot}
-              entries={roundEntries.filter((e) => !e.pending)}
+              entries={roundEntries}
               canClaim={!isHost && isOpen}
               onClaim={(entry) => void mutate({ kind: "claim", batchId: entry.batchId, dishName: entry.dishName })}
               onRemoveDuplicate={(entry) => actions.remove(entry)}
             />
           ) : (
-            <GroupsView snapshot={snapshot} entries={roundEntries.filter((e) => !e.pending)} onSetMembers={(label, memberIds) => void mutate({ kind: "groupMembers", label, memberIds })} />
+            <GroupsView snapshot={snapshot} entries={roundEntries} onSetMembers={(label, memberIds) => void mutate({ kind: "groupMembers", label, memberIds })} />
           )}
         </div>
       </main>

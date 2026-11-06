@@ -15,10 +15,11 @@ const VIEWS: { id: View; label: string }[] = [
 export function ViewTabs({ view, onChange, counts }: { view: View; onChange: (view: View) => void; counts: Partial<Record<View, number>> }) {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   function onKey(event: React.KeyboardEvent, index: number) {
-    const delta = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
-    if (!delta) return;
+    const last = VIEWS.length - 1;
+    const next =
+      event.key === "ArrowRight" ? (index + 1) % VIEWS.length : event.key === "ArrowLeft" ? (index + last) % VIEWS.length : event.key === "Home" ? 0 : event.key === "End" ? last : -1;
+    if (next < 0) return;
     event.preventDefault();
-    const next = (index + delta + VIEWS.length) % VIEWS.length;
     onChange(VIEWS[next].id);
     refs.current[next]?.focus();
   }
@@ -33,7 +34,7 @@ export function ViewTabs({ view, onChange, counts }: { view: View; onChange: (vi
           role="tab"
           id={`tab-${v.id}`}
           aria-selected={view === v.id}
-          aria-controls={`panel-${v.id}`}
+          aria-controls={view === v.id ? `panel-${v.id}` : undefined}
           tabIndex={view === v.id ? 0 : -1}
           onClick={() => onChange(v.id)}
           onKeyDown={(e) => onKey(e, i)}

@@ -99,3 +99,8 @@ Running record of decisions, issues, tests and deviations, one section per PR. N
 - Groups are matched to orders by normalized label instead of a required `group_id`; a group with members exists only when someone adds members.
 - Any participant may name a group's members (low risk, optional metadata); claims and approvals follow brief 4.
 - Found by e2e: the members dialog's label id contained spaces (no accessible name); fixed with generated ids. Guest bottom bar no longer wraps at 390 px; empty host card hidden in People.
+
+**Independent reviews (before PR)**
+- Security: no critical/high. Fixed: 30 groups per order; group members changed only by the host or the group's creator; approving a claim on a removed dish or a dish now marked for someone else is refused (`ENTRY_REMOVED`, `CLAIM_STALE`).
+- Code review: no high; mediums fixed: People/Groups keep pending edits visible (only unsaved adds are claim-disabled); "That's mine" appears only on dishes the host added; readiness resets for the actor, the dish owner and whoever the dish is for (and on claim approval); new indexes for pending claims and readiness by round (migration 0003). Lows fixed: double-order hint requires the guest's own dish to be for themselves; Groups tab count matches the view; tabs support Home/End and point aria-controls only at the shown panel.
+- Tests after fixes: 79 unit/integration, 13 e2e.

@@ -97,7 +97,9 @@ export function GroupsView({ snapshot, entries, onSetMembers }: GroupsViewProps)
                 ))}
               </ul>
             ) : null}
-            <MembersDialog group={group} people={snapshot.participants} onSave={(ids) => onSetMembers(group.label, ids)} />
+            {snapshot.me.role === "HOST" || !group.createdBy || group.createdBy === snapshot.me.participantId ? (
+              <MembersDialog group={group} people={snapshot.participants} onSave={(ids) => onSetMembers(group.label, ids)} />
+            ) : null}
           </div>
           {group.entries.length ? (
             <ul className="mt-2 space-y-1">

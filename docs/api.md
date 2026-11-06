@@ -26,9 +26,9 @@ JSON over HTTPS. Implemented in `src/app/api/**` with shared helpers in `src/ser
 | `POST /api/sessions/:id/entries/:entryId/restore` | host, or the guest who added it | — | Undo a removal. Deviation: the brief lists no restore endpoint; Undo needs one. |
 | `POST /api/sessions/:id/join` | anyone with the code | `{ code, displayName }` | Creates a guest and their cookie. The code must belong to `:id`. `404 INVITE_NOT_FOUND`, `409 SESSION_CLOSED`, `422 TABLE_FULL` (30 people). Rate limit 30/hour per client address. |
 | `PUT /api/sessions/:id/readiness` | participant | `{ ready }` | "I'm ready" for the open round. Advisory; reset automatically when that person later changes their own entries. |
-| `PUT /api/sessions/:id/groups` | participant | `{ label, memberIds }` | Optional members of a collective group, matched by label (case and spacing ignored). Replaces the member list. |
+| `PUT /api/sessions/:id/groups` | participant | `{ label, memberIds }` | Optional members of a collective group, matched by label (case and spacing ignored). Replaces the member list. Only the host or whoever set the group up may change it (`403`); 30 groups per order (`422 TOO_MANY_GROUPS`). |
 | `POST /api/sessions/:id/claims` | guest | `{ batchId }` | "That's mine" for a dish the host added (for this guest by name, or for nobody). Not for other guests' dishes or dishes marked for someone else. `409 CLAIM_PENDING`, `409 ALREADY_YOURS`. |
-| `POST /api/sessions/:id/claims/:claimId/approve` | host | — | The dish becomes the guest's own (owner and "for" both change); other pending claims on it close. |
+| `POST /api/sessions/:id/claims/:claimId/approve` | host | — | The dish becomes the guest's own (owner and "for" both change); other pending claims on it close. Refused if the dish was removed (`409 ENTRY_REMOVED`) or is now marked for someone else (`409 CLAIM_STALE`). |
 | `POST /api/sessions/:id/claims/:claimId/reject` | host | — | Declines; nothing changes. `409 CLAIM_RESOLVED` when already answered. |
 | `GET /api/sessions/:id/events` | participant | — | Server-Sent Events; see realtime.md. `503 TOO_MANY_STREAMS`. |
 | `GET /api/health` | anyone | — | `200 { ok, database }` or `503`. |

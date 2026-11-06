@@ -30,6 +30,7 @@
 | Request body | 8 KB |
 | People per order | 30 |
 | Entries | 300 active, 1,000 ever, 300 distinct dishes per order |
+| Groups | 30 per order; members changed only by the host or whoever set the group up |
 | Text | dish 60, size 40, instructions 140, names 40, order name 60; no NUL |
 Rate limits live in process memory (one instance) and key on the last `X-Forwarded-For` hop (one trusted proxy; see deployment.md).
 

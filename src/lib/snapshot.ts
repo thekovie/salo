@@ -25,7 +25,7 @@ export interface SessionSnapshot {
   /** "I'm ready" for the active round, by participant (brief 5.11). */
   readiness: { participantId: string; ready: boolean }[];
   /** Collective groups with optional members (brief 5.9). Groups also exist implicitly through order labels. */
-  groups: { id: string; label: string; memberIds: string[] }[];
+  groups: { id: string; label: string; createdBy: string | null; memberIds: string[] }[];
 }
 
 export interface SnapshotEntry extends SourceEntry {

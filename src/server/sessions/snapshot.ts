@@ -30,10 +30,10 @@ export async function getSnapshot(db: Db, actor: Actor): Promise<SessionSnapshot
         tx.select({ name: dishes.canonicalName }).from(dishes).where(eq(dishes.sessionId, session.id)).orderBy(asc(dishes.canonicalName))
           .limit(LIMITS.dishesPerSession),
       ]);
-      const draft0 = roundRows.find((r) => r.status === "DRAFT") ?? roundRows[roundRows.length - 1];
+      const draft = roundRows.find((r) => r.status === "DRAFT") ?? roundRows[roundRows.length - 1];
       const [claimRows, readyRows, groupRows, memberRows] = await Promise.all([
         tx.select().from(entryClaims).where(and(eq(entryClaims.sessionId, session.id), eq(entryClaims.status, "PENDING"))).orderBy(asc(entryClaims.createdAt)),
-        tx.select().from(participantRoundReadiness).where(eq(participantRoundReadiness.roundId, draft0.id)),
+        tx.select().from(participantRoundReadiness).where(eq(participantRoundReadiness.roundId, draft.id)),
         tx.select().from(orderGroups).where(eq(orderGroups.sessionId, session.id)).orderBy(asc(orderGroups.createdAt)),
         tx
           .select({ groupId: orderGroupMembers.groupId, participantId: orderGroupMembers.participantId })
@@ -41,7 +41,8 @@ export async function getSnapshot(db: Db, actor: Actor): Promise<SessionSnapshot
           .innerJoin(orderGroups, eq(orderGroups.id, orderGroupMembers.groupId))
           .where(eq(orderGroups.sessionId, session.id)),
       ]);
-      const draft = roundRows.find((r) => r.status === "DRAFT") ?? roundRows[roundRows.length - 1];
+      const membersByGroup = new Map<string, string[]>();
+      for (const m of memberRows) membersByGroup.set(m.groupId, [...(membersByGroup.get(m.groupId) ?? []), m.participantId]);
       const me = people.find((p) => p.id === actor.participantId);
       return {
         session: {
@@ -74,7 +75,7 @@ export async function getSnapshot(db: Db, actor: Actor): Promise<SessionSnapshot
         dishNames: dishRows.map((d) => d.name),
         claims: claimRows.map((c) => ({ id: c.id, batchId: c.batchId, requestedBy: c.requestedBy, createdAt: c.createdAt.toISOString() })),
         readiness: readyRows.map((r) => ({ participantId: r.participantId, ready: r.ready })),
-        groups: groupRows.map((g) => ({ id: g.id, label: g.label, memberIds: memberRows.filter((m) => m.groupId === g.id).map((m) => m.participantId) })),
+        groups: groupRows.map((g) => ({ id: g.id, label: g.label, createdBy: g.createdBy, memberIds: membersByGroup.get(g.id) ?? [] })),
       };
     },
     { isolationLevel: "repeatable read", accessMode: "read only" },

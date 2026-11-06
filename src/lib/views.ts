@@ -44,6 +44,7 @@ export interface GroupBucket {
   key: string;
   label: string;
   groupId: string | null;
+  createdBy: string | null;
   memberIds: string[];
   entries: SnapshotEntry[];
   ticket: Consolidated;
@@ -53,12 +54,12 @@ export interface GroupBucket {
 export function byGroup(entries: readonly SnapshotEntry[], groups: SessionSnapshot["groups"]): GroupBucket[] {
   const buckets = new Map<string, GroupBucket>();
   for (const g of groups) {
-    buckets.set(normalizeText(g.label), { key: normalizeText(g.label), label: g.label, groupId: g.id, memberIds: g.memberIds, entries: [], ticket: consolidate([]) });
+    buckets.set(normalizeText(g.label), { key: normalizeText(g.label), label: g.label, groupId: g.id, createdBy: g.createdBy, memberIds: g.memberIds, entries: [], ticket: consolidate([]) });
   }
   for (const e of entries) {
     if (e.attribution.type !== "GROUP" || !e.attribution.label) continue;
     const key = normalizeText(e.attribution.label);
-    const bucket = buckets.get(key) ?? { key, label: e.attribution.label, groupId: null, memberIds: [], entries: [], ticket: consolidate([]) };
+    const bucket = buckets.get(key) ?? { key, label: e.attribution.label, groupId: null, createdBy: null, memberIds: [], entries: [], ticket: consolidate([]) };
     buckets.set(key, { ...bucket, entries: [...bucket.entries, e] });
   }
   return [...buckets.values()].map((b) => ({ ...b, ticket: consolidate(b.entries) }));
@@ -90,7 +91,7 @@ export function findLikelyDuplicates(entries: readonly SnapshotEntry[], people: 
         e.attribution.type === "INDIVIDUAL" &&
         (e.attribution.participantId === person.id || (!e.attribution.participantId && e.attribution.label != null && normalizeText(e.attribution.label) === name)),
     );
-    const theirOwn = entries.filter((e) => e.submittedBy === person.id);
+    const theirOwn = entries.filter((e) => e.submittedBy === person.id && e.attribution.participantId === person.id);
     for (const hostEntry of recordedForThem) {
       const ownEntry = theirOwn.find((e) => preparationKey(e) === preparationKey(hostEntry));
       if (ownEntry) hints.push({ participantId: person.id, personName: person.displayName, dishName: hostEntry.dishName, hostEntry, ownEntry });

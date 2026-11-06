@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import type { Actor } from "@/lib/permissions";
 import { runMutation } from "@/server/mutations";
@@ -30,6 +31,14 @@ describe("readiness", () => {
     await add(db, host, { dishName: "Rice", quantity: 1 });
     expect((await getSnapshot(db, host)).readiness[0].ready).toBe(true);
     await run(rafa, (tx, s) => setEntryRemoved(tx, s, rafa, result.entryId, true));
+    expect((await getSnapshot(db, host)).readiness[0].ready).toBe(false);
+  });
+
+  it("also resets when the host changes or adds a dish for that person", async () => {
+    const { host, sessionId } = await newSession(db);
+    const rafa = await addGuest(db, sessionId, "Rafa");
+    await run(rafa, (tx, s) => setReady(tx, s, rafa, true));
+    await add(db, host, { dishName: "Gyoza", quantity: 1, attribution: { type: "INDIVIDUAL", participantId: rafa.participantId } });
     expect((await getSnapshot(db, host)).readiness[0].ready).toBe(false);
   });
 });
@@ -73,6 +82,23 @@ describe("claims", () => {
   });
 });
 
+describe("claim edge cases", () => {
+  it("refuses to approve a claim on a removed dish or one now marked for someone else", async () => {
+    const { host, sessionId } = await newSession(db);
+    const rafa = await addGuest(db, sessionId, "Rafa");
+    const jd = await addGuest(db, sessionId, "JD");
+    await add(db, host, { dishName: "Gyoza", quantity: 1 });
+    await add(db, host, { dishName: "Rice", quantity: 1 });
+    const [gyoza, rice] = (await getSnapshot(db, host)).entries;
+    const c1 = await run(rafa, (tx, s) => requestClaim(tx, s, rafa, gyoza.batchId));
+    const c2 = await run(rafa, (tx, s) => requestClaim(tx, s, rafa, rice.batchId));
+    await run(host, (tx, s) => setEntryRemoved(tx, s, host, gyoza.id, true));
+    expect(await errorOf(run(host, (tx, s) => resolveClaim(tx, s, host, c1.result.claimId, true)))).toMatchObject({ code: "ENTRY_REMOVED" });
+    await db.execute(sql`UPDATE order_batches SET attribution_type = 'INDIVIDUAL', attributed_participant_id = ${jd.participantId} WHERE id = ${rice.batchId}`);
+    expect(await errorOf(run(host, (tx, s) => resolveClaim(tx, s, host, c2.result.claimId, true)))).toMatchObject({ code: "CLAIM_STALE" });
+  });
+});
+
 describe("groups", () => {
   it("records a label with optional members and replaces the member list on update", async () => {
     const { host, sessionId } = await newSession(db);
@@ -81,6 +107,9 @@ describe("groups", () => {
     await run(host, (tx, s) => setGroupMembers(tx, s, host, "Miguel's group", [rafa.participantId, jd.participantId]));
     await run(host, (tx, s) => setGroupMembers(tx, s, host, "miguel's  GROUP", [jd.participantId]));
     expect((await getSnapshot(db, host)).groups).toEqual([expect.objectContaining({ label: "Miguel's group", memberIds: [jd.participantId] })]);
+    // A guest cannot overwrite members the host set; the cap stops label spam.
+    expect(await errorOf(run(rafa, (tx, s) => setGroupMembers(tx, s, rafa, "Miguel's group", [])))).toMatchObject({ status: 403 });
+    await expect(run(rafa, (tx, s) => setGroupMembers(tx, s, rafa, "Rafa's group", [rafa.participantId]))).resolves.toBeDefined();
     const other = await newSession(db);
     expect(await errorOf(run(host, (tx, s) => setGroupMembers(tx, s, host, "X", [other.host.participantId])))).toMatchObject({ code: "UNKNOWN_PERSON" });
   });

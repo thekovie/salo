@@ -40,8 +40,8 @@ describe("byGroup", () => {
   it("collects collective orders by label and keeps declared groups with their members", () => {
     const entries = [e("Katsu", 2, "h", { type: "GROUP", label: "Miguel's group", participantId: null }), e("Tea", 3, "h", { type: "GROUP", label: "miguel's  GROUP", participantId: null })];
     const groups = byGroup(entries, [
-      { id: "g1", label: "Miguel's group", memberIds: ["rafa", "jd"] },
-      { id: "g2", label: "Office", memberIds: [] },
+      { id: "g1", label: "Miguel's group", createdBy: "h", memberIds: ["rafa", "jd"] },
+      { id: "g2", label: "Office", createdBy: "h", memberIds: [] },
     ]);
     expect(groups.map((g) => [g.label, g.ticket.totalItems, g.memberIds.length])).toEqual([
       ["Miguel's group", 5, 2],
@@ -57,6 +57,12 @@ describe("findLikelyDuplicates", () => {
     const differentPrep = e("Katsu", 1, "h", { type: "INDIVIDUAL", label: "Rafa", participantId: null }, { instructions: "No sauce" });
     const hints = findLikelyDuplicates([hostCopy, own, differentPrep], people);
     expect(hints.map((h) => [h.personName, h.hostEntry.id, h.ownEntry.id])).toEqual([["Rafa", hostCopy.id, own.id]]);
+  });
+
+  it("does not flag a guest's dish for the whole table as a double", () => {
+    const hostCopy = e("Gyoza", 1, "h", { type: "INDIVIDUAL", label: "Rafa", participantId: null });
+    const forTable = e("Gyoza", 1, "rafa", { type: "TABLE", label: null, participantId: null });
+    expect(findLikelyDuplicates([hostCopy, forTable], people)).toEqual([]);
   });
 
   it("does not flag same dishes for different people or for nobody", () => {

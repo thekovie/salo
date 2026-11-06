@@ -11,6 +11,7 @@ export const LIMITS = {
   /** Lifetime cap including removed entries, so add/remove loops cannot grow a session forever. */
   entriesEverPerSession: 1000,
   dishesPerSession: 300,
+  groupsPerSession: 30,
   participantsPerSession: 30,
 } as const;
 

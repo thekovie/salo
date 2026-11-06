@@ -14,7 +14,7 @@ interface PeopleViewProps {
   onRemoveDuplicate: (entry: SnapshotEntry) => void;
 }
 
-function Lines({ bucket, claimable, myClaims, onClaim }: { bucket: PersonBucket; claimable: boolean; myClaims: Set<string>; onClaim: (e: SnapshotEntry) => void }) {
+function Lines({ bucket, claimable, canClaimEntry, myClaims, onClaim }: { bucket: PersonBucket; claimable: boolean; canClaimEntry: (e: SnapshotEntry) => boolean; myClaims: Set<string>; onClaim: (e: SnapshotEntry) => void }) {
   if (bucket.entries.length === 0) return <p className="text-sm text-ink-soft">Nothing yet.</p>;
   if (claimable) {
     // Guests see each dish separately so they can say which one is theirs.
@@ -27,7 +27,7 @@ function Lines({ bucket, claimable, myClaims, onClaim }: { bucket: PersonBucket;
               {e.variant || e.instructions ? <span className="text-ink-soft"> · {[e.variant, e.instructions].filter(Boolean).join(" · ")}</span> : null}
               <span className="tally ml-2 text-tomato-ink">×{e.quantity}</span>
             </span>
-            {myClaims.has(e.batchId) ? (
+            {!canClaimEntry(e) ? null : myClaims.has(e.batchId) ? (
               <span className="inline-flex items-center gap-1 text-sm text-ink-soft">
                 <Clock className="size-4" aria-hidden /> Asked the host
               </span>
@@ -82,7 +82,7 @@ export function PeopleView({ snapshot, entries, canClaim, onClaim, onRemoveDupli
           <h3 className="font-sans text-sm font-semibold">Possibly ordered twice</h3>
           <ul className="mt-2 space-y-2">
             {hints.map((h) => (
-              <li key={h.hostEntry.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+              <li key={`${h.hostEntry.id}:${h.participantId}`} className="flex flex-wrap items-center justify-between gap-2 text-sm">
                 <span>
                   {h.personName} added {h.dishName} ×{h.ownEntry.quantity}, and you also added it for them (×{h.hostEntry.quantity}).
                 </span>
@@ -120,7 +120,7 @@ export function PeopleView({ snapshot, entries, canClaim, onClaim, onRemoveDupli
                 </span>
               </div>
             </div>
-            <Lines bucket={bucket} claimable={claimable} myClaims={myClaims} onClaim={onClaim} />
+            <Lines bucket={bucket} claimable={claimable} canClaimEntry={(e) => hostIds.has(e.submittedBy) && !e.id.startsWith("pending:")} myClaims={myClaims} onClaim={onClaim} />
           </section>
         );
       })}

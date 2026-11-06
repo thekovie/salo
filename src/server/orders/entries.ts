@@ -71,7 +71,7 @@ export async function addEntry(tx: Tx, session: SessionRow, actor: Actor, input:
   const [batch] = await tx
     .insert(orderBatches)
     .values({ sessionId: session.id, roundId: round.id, submittedBy: actor.participantId, ...(await batchValues(tx, session, actor, input.attribution)) })
-    .returning({ id: orderBatches.id });
+    .returning({ id: orderBatches.id, attributedParticipantId: orderBatches.attributedParticipantId });
   const [entry] = await tx
     .insert(orderEntries)
     .values({
@@ -83,14 +83,14 @@ export async function addEntry(tx: Tx, session: SessionRow, actor: Actor, input:
       specialInstructions: optionalText(input.instructions),
     })
     .returning({ id: orderEntries.id, revision: orderEntries.revision });
-  await resetReadiness(tx, actor.participantId, round.id);
+  await resetReadiness(tx, round.id, [actor.participantId, batch.attributedParticipantId]);
   return { result: { entryId: entry.id, revision: entry.revision }, event: { type: "entry.added", payload: { entryId: entry.id } } };
 }
 
 /** The entry with what permission checks need, scoped to this session (an id from another session is "not found"). */
 async function loadEntry(tx: Tx, sessionId: string, entryId: string) {
   const [row] = await tx
-    .select({ id: orderEntries.id, revision: orderEntries.revision, deletedAt: orderEntries.deletedAt, submittedBy: orderBatches.submittedBy, roundId: orderEntries.roundId, roundStatus: rounds.status })
+    .select({ id: orderEntries.id, revision: orderEntries.revision, deletedAt: orderEntries.deletedAt, submittedBy: orderBatches.submittedBy, attributedParticipantId: orderBatches.attributedParticipantId, roundId: orderEntries.roundId, roundStatus: rounds.status })
     .from(orderEntries)
     .innerJoin(orderBatches, eq(orderBatches.id, orderEntries.batchId))
     .innerJoin(rounds, eq(rounds.id, orderEntries.roundId))
@@ -123,7 +123,7 @@ export async function updateEntry(tx: Tx, session: SessionRow, actor: Actor, ent
       ...(input.instructions !== undefined ? { specialInstructions: optionalText(input.instructions) } : {}),
     })
     .where(eq(orderEntries.id, entryId));
-  await resetReadiness(tx, actor.participantId, entry.roundId);
+  await resetReadiness(tx, entry.roundId, [actor.participantId, entry.submittedBy, entry.attributedParticipantId]);
   return { result: { entryId, revision }, event: { type: "entry.updated", payload: { entryId } } };
 }
 
@@ -141,6 +141,6 @@ export async function setEntryRemoved(tx: Tx, session: SessionRow, actor: Actor,
     .update(orderEntries)
     .set({ revision, updatedAt: new Date(), deletedAt: removed ? new Date() : null })
     .where(eq(orderEntries.id, entryId));
-  await resetReadiness(tx, actor.participantId, entry.roundId);
+  await resetReadiness(tx, entry.roundId, [actor.participantId, entry.submittedBy, entry.attributedParticipantId]);
   return { result: { entryId, revision }, event: { type: removed ? "entry.removed" : "entry.restored", payload: { entryId } } };
 }
