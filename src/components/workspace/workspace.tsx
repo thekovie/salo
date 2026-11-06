@@ -1,12 +1,13 @@
 "use client";
 
-import { CircleCheck, Hand, Lock, Plus, ReceiptText, X } from "lucide-react";
+import { CircleCheck, Hand, Lock, Plus, ReceiptText } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { WaiterTicket } from "@/components/ticket/waiter-ticket";
 import { Button } from "@/components/ui/button";
 import { describeOp, useSession, type AddInput, type OverlayEntry } from "@/hooks/use-session";
 import { consolidate } from "@/lib/consolidate";
 import type { SessionSnapshot } from "@/lib/snapshot";
+import { normalizeText } from "@/lib/dish-name";
 import { liveTicket } from "@/lib/ticket";
 import { cn } from "@/lib/utils";
 import { canEditEntry } from "@/lib/permissions";
@@ -23,10 +24,13 @@ import { OrderTicket, type TicketActions } from "./order-ticket";
 import { SessionHeader } from "./session-header";
 import { Toasts, useToasts } from "./toasts";
 
+/** Refusals that may succeed on a second try (server hiccup, too fast); conflicts and permissions will not. */
+const isRetryable = (code?: string) => code === "INTERNAL" || code === "RATE_LIMITED" || code === "UNKNOWN";
+
 const copyFor = (roundNumber: number): 1 | 2 | 3 => (roundNumber >= 3 ? 3 : roundNumber === 2 ? 2 : 1);
 
-export function Workspace({ initial, appUrl }: { initial: SessionSnapshot; appUrl: string }) {
-  const { snapshot, entries, pending, failed, sync, mutate, dismiss, entryById } = useSession(initial);
+export function Workspace({ initial, appUrl, justJoined = false }: { initial: SessionSnapshot; appUrl: string; justJoined?: boolean }) {
+  const { snapshot, entries, pending, failed, sync, mutate, dismiss, retry, entryById } = useSession(initial);
   const { toasts, show, dismiss: dismissToast } = useToasts();
   const round = snapshot.rounds.find((r) => r.id === snapshot.activeRoundId) ?? snapshot.rounds[0];
   const roundEntries = useMemo(() => entries.filter((e) => e.roundId === round.id), [entries, round.id]);
@@ -44,6 +48,13 @@ export function Workspace({ initial, appUrl }: { initial: SessionSnapshot; appUr
   const [modeState, setModeState] = useState<{ mode: "edit" | "review" | "waiter"; key: string }>({ mode: "edit", key: roundKey });
   const mode = modeState.key === roundKey || justConfirmed === round.id ? modeState.mode : "edit";
   const setMode = (next: "edit" | "review" | "waiter") => setModeState({ mode: next, key: roundKey });
+  // First visit after joining: one short tip, then the address loses its ?joined=1.
+  useEffect(() => {
+    if (!justJoined) return;
+    show({ message: "You’re in! Add your dishes below. Only you can change yours." });
+    window.history.replaceState(null, "", window.location.pathname);
+  }, [justJoined, show]);
+
   useEffect(() => {
     if (!justConfirmed) return;
     const timer = setTimeout(() => setJustConfirmed(null), 1500); // the stamp plays once
@@ -70,7 +81,16 @@ export function Workspace({ initial, appUrl }: { initial: SessionSnapshot; appUr
 
   const add = useCallback(
     async (input: AddInput) => {
-      const result = await mutate({ kind: "add", input });
+      const pendingResult = mutate({ kind: "add", input });
+      // Bring the line into view above the composer (it may land below the fold).
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          const row = document.querySelector(`[data-dish="${CSS.escape(normalizeText(input.dishName))}"]`);
+          const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+          row?.scrollIntoView({ block: "nearest", behavior: reduce ? "auto" : "smooth" });
+        }),
+      );
+      const result = await pendingResult;
       if (result?.entryId) {
         const entryId = result.entryId;
         show({
@@ -98,7 +118,7 @@ export function Workspace({ initial, appUrl }: { initial: SessionSnapshot; appUr
     },
   };
 
-  async function confirmRound() {
+  async function confirmRound(): Promise<string | null> {
     let failure = "";
     const result = await mutate(
       { kind: "confirm", roundId: round.id, roundNumber: round.number, expectedRevision: snapshot.session.revision },
@@ -107,11 +127,11 @@ export function Workspace({ initial, appUrl }: { initial: SessionSnapshot; appUr
     if (result) {
       setJustConfirmed(round.id);
       setModeState({ mode: "waiter", key: `${round.id}:CONFIRMED` });
-      show({ message: `Round ${round.number} confirmed. Kain na!` });
-    } else {
-      setMode("review");
-      show({ message: `Not confirmed. ${failure || "Try again."}` });
+      // Let the stamp land first; the message follows it.
+      setTimeout(() => show({ message: `Round ${round.number} confirmed. Kain na!` }), 900);
+      return null;
     }
+    return failure || "Not confirmed. Check your connection and try again.";
   }
 
   async function openRound() {
@@ -154,8 +174,13 @@ export function Workspace({ initial, appUrl }: { initial: SessionSnapshot; appUr
                 <span className="flex-1">
                   <span className="font-semibold">{describeOp(item.op)}:</span> {item.error}
                 </span>
-                <button type="button" onClick={() => dismiss(item.key)} aria-label={`Dismiss: ${describeOp(item.op)}`} className="inline-flex size-11 cursor-pointer items-center justify-center rounded-full hover:bg-bad/10">
-                  <X className="size-4" aria-hidden />
+                {isRetryable(item.code) ? (
+                  <button type="button" onClick={() => retry(item.key)} className="min-h-11 shrink-0 cursor-pointer rounded-full border-[1.5px] border-bad px-3 font-semibold hover:bg-bad/10">
+                    Retry
+                  </button>
+                ) : null}
+                <button type="button" onClick={() => dismiss(item.key)} className="min-h-11 shrink-0 cursor-pointer rounded-full px-3 font-semibold hover:bg-bad/10">
+                  Discard<span className="sr-only">: {describeOp(item.op)}</span>
                 </button>
               </div>
             ))}
@@ -287,7 +312,7 @@ export function Workspace({ initial, appUrl }: { initial: SessionSnapshot; appUr
           notSaved={failed.length}
           onBack={() => setMode("edit")}
           onShowWaiter={() => setMode("waiter")}
-          onConfirm={() => void confirmRound()}
+          onConfirm={confirmRound}
           onRemoveDuplicate={(entry) => actions.remove(entry)}
         />
       ) : null}
@@ -301,7 +326,7 @@ export function Workspace({ initial, appUrl }: { initial: SessionSnapshot; appUr
             setMode(isHost && isOpen ? "review" : "edit");
             setJustConfirmed(null);
           }}
-          onConfirm={() => void confirmRound()}
+          onConfirm={confirmRound}
         />
       ) : null}
       <Toasts toasts={toasts} onDismiss={dismissToast} />

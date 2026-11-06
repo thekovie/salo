@@ -30,7 +30,7 @@ test("100 entries for 20 people stay quick to load and to change", async ({ page
   const tapStart = Date.now();
   await page.getByRole("textbox", { name: "Dish" }).fill("Calamansi Juice");
   await page.getByRole("button", { name: "Add", exact: true }).click();
-  await expect(page.getByText("Calamansi Juice")).toBeVisible();
+  await expect(page.getByTestId("dish-row").filter({ hasText: "Calamansi Juice" })).toBeVisible();
   const addVisibleMs = Date.now() - tapStart;
   await expect(page.getByText("Saved")).toBeVisible();
   const addSavedMs = Date.now() - tapStart;

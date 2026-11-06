@@ -72,7 +72,7 @@ function CorrectionDialog({ roundNumber, entries, corrections, onCorrect }: { ro
       >
         <Wrench className="size-4" aria-hidden /> Correct a dish
       </Button>
-      <dialog ref={ref} aria-labelledby={`${id}-t`} className="m-auto w-[min(26rem,calc(100vw-2rem))] rounded-[1.4rem] bg-ticket p-5 text-ink shadow-ticket backdrop:bg-ink/55">
+      <dialog ref={ref} aria-labelledby={`${id}-t`} className="m-auto w-[min(26rem,calc(100vw-2rem))] ticket px-5 text-ink backdrop:bg-ink/55">
         <form
           method="dialog"
           onSubmit={(e) => {

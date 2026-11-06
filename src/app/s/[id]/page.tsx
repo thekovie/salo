@@ -4,13 +4,13 @@ import { Workspace } from "@/components/workspace/workspace";
 import { getEnv } from "@/env";
 import { loadSessionForPage } from "@/server/sessions/page-data";
 
-type Props = { params: Promise<{ id: string }> };
+type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ joined?: string }> };
 
 export const metadata: Metadata = { title: "Table order", robots: { index: false, follow: false } };
 
-export default async function SessionPage({ params }: Props) {
+export default async function SessionPage({ params, searchParams }: Props) {
   const data = await loadSessionForPage((await params).id);
   // Not part of this order (or it no longer exists): the same answer for both, so ids reveal nothing.
   if (!data) notFound();
-  return <Workspace initial={data.snapshot} appUrl={getEnv().APP_URL} />;
+  return <Workspace initial={data.snapshot} appUrl={getEnv().APP_URL} justJoined={(await searchParams).joined === "1"} />;
 }

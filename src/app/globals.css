@@ -251,6 +251,12 @@
   from {
     background-color: color-mix(in oklch, var(--saffron) 45%, transparent);
   }
+  to {
+    background-color: transparent;
+  }
+}
+.wash {
+  animation: landed 900ms var(--ease-out-expo) both;
 }
 
 /* The signature moment: a rubber stamp lands on a confirmed round. */

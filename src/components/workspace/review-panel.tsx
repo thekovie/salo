@@ -18,7 +18,7 @@ interface ReviewPanelProps {
   notSaved: number;
   onBack: () => void;
   onShowWaiter: () => void;
-  onConfirm: () => void;
+  onConfirm: () => Promise<string | null>;
   onRemoveDuplicate: (entry: SnapshotEntry) => void;
 }
 
@@ -50,11 +50,11 @@ export function ReviewPanel({ snapshot, entries, ticket, unsaved, notSaved, onBa
   return (
     <FullScreenSheet label={`Review round ${ticket.roundNumber}`} onClose={onBack} className="pb-[calc(env(safe-area-inset-bottom)+8rem)]">
       <div className="sticky top-0 z-10 bg-paper/95 pt-[env(safe-area-inset-top)] backdrop-blur-sm">
-        <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-3 py-2">
-          <Button variant="ghost" onClick={onBack}>
+        <div className="mx-auto max-w-2xl px-3 pt-2 pb-1">
+          <Button variant="ghost" onClick={onBack} className="-ml-2">
             <ArrowLeft className="size-5" aria-hidden /> Back to order
           </Button>
-          <h2 className="text-xl">Review round {ticket.roundNumber}</h2>
+          <h2 className="mt-1 px-1 text-2xl">Review round {ticket.roundNumber}</h2>
         </div>
       </div>
       <div className="mx-auto max-w-2xl space-y-4 px-3 pt-2">
@@ -111,6 +111,7 @@ export function ReviewPanel({ snapshot, entries, ticket, unsaved, notSaved, onBa
                 </>
               }
               confirmLabel="Yes, the waiter has it"
+              busyLabel="Confirming…"
               onConfirm={onConfirm}
               trigger={(open) => (
                 <Button size="lg" onClick={open} disabled={blocked}>

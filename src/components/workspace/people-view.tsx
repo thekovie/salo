@@ -4,6 +4,7 @@ import { CircleCheck, Clock, Hand } from "lucide-react";
 import { hasSubLines, preparationLabel } from "@/lib/consolidate";
 import type { SessionSnapshot, SnapshotEntry } from "@/lib/snapshot";
 import { cn } from "@/lib/utils";
+import { normalizeText } from "@/lib/dish-name";
 import { byPerson, findLikelyDuplicates, readinessSummary, type PersonBucket } from "@/lib/views";
 
 interface PeopleViewProps {
@@ -68,7 +69,11 @@ function Lines({ bucket, claimable, canClaimEntry, myClaims, onClaim }: { bucket
 /** By person (brief 5.3, 5.8): who ordered what, who hasn't ordered, who is ready; guests claim dishes recorded for them. */
 export function PeopleView({ snapshot, entries, canClaim, onClaim, onRemoveDuplicate }: PeopleViewProps) {
   // The host usually orders for others; an empty host card is noise. Guests with nothing yet stay visible.
-  const buckets = byPerson(entries, snapshot.participants).filter((b) => b.role !== "HOST" || b.entries.length > 0);
+  const all = byPerson(entries, snapshot.participants).filter((b) => b.role !== "HOST" || b.entries.length > 0);
+  // A guest sees dishes the host typed under their own name inside their own card, not as a second "them".
+  const myName = normalizeText(snapshot.me.displayName);
+  const forMe = snapshot.me.role === "HOST" ? undefined : all.find((b) => b.kind === "name" && normalizeText(b.title) === myName);
+  const buckets = all.filter((b) => b !== forMe);
   const ready = readinessSummary(snapshot);
   const isHost = snapshot.me.role === "HOST";
   const hints = isHost ? findLikelyDuplicates(entries, snapshot.participants) : [];
@@ -121,6 +126,12 @@ export function PeopleView({ snapshot, entries, canClaim, onClaim, onRemoveDupli
               </div>
             </div>
             <Lines bucket={bucket} claimable={claimable} canClaimEntry={(e) => hostIds.has(e.submittedBy) && !e.id.startsWith("pending:")} myClaims={myClaims} onClaim={onClaim} />
+            {isMe && forMe ? (
+              <div className="tear mt-3 pt-3">
+                <p className="mb-1 text-sm text-ink-soft">The host added these for &ldquo;{forMe.title}&rdquo;. Yours?</p>
+                <Lines bucket={forMe} claimable={canClaim} canClaimEntry={(e) => hostIds.has(e.submittedBy) && !e.id.startsWith("pending:")} myClaims={myClaims} onClaim={onClaim} />
+              </div>
+            ) : null}
           </section>
         );
       })}

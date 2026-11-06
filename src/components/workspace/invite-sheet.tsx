@@ -75,7 +75,7 @@ export function InviteSheet({ appUrl, joinCode, title, peopleCount }: InviteShee
         ref={dialog}
         aria-labelledby="invite-title"
         onClick={(e) => e.target === dialog.current && dialog.current?.close()}
-        className="m-auto w-[min(26rem,calc(100vw-2rem))] rounded-[1.6rem] bg-ticket p-0 text-ink shadow-ticket backdrop:bg-ink/55 backdrop:backdrop-blur-[2px]"
+        className="m-auto w-[min(26rem,calc(100vw-2rem))] ticket p-0 text-ink backdrop:bg-ink/55 backdrop:backdrop-blur-[2px]"
       >
         <div className="p-5">
           <div className="flex items-start justify-between gap-3">
