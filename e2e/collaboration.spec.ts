@@ -1,27 +1,6 @@
-import { expect, test, type Browser, type Page } from "@playwright/test";
-
-async function startOrder(page: Page) {
-  await page.goto("/");
-  await page.getByRole("button", { name: "Start an order" }).click();
-  await expect(page).toHaveURL(/\/s\/[0-9a-f-]{36}$/);
-}
-
-async function addDish(page: Page, name: string, quantity = 1) {
-  const dish = page.getByRole("textbox", { name: "Dish" });
-  await dish.fill(name);
-  for (let i = 1; i < quantity; i++) await page.getByRole("button", { name: "One more this dish" }).click();
-  await page.getByRole("button", { name: "Add", exact: true }).click();
-  await expect(dish).toHaveValue("");
-}
-
-async function inviteCode(page: Page): Promise<string> {
-  await page.getByRole("button", { name: "Invite" }).click();
-  const dialog = page.getByRole("dialog", { name: "Invite the table" });
-  await expect(dialog.getByRole("img", { name: /QR code to join/ })).toBeVisible();
-  const code = ((await dialog.getByText(/^Code /).textContent()) ?? "").replace(/^Code /, "").replace(/\s/g, "");
-  await dialog.getByRole("button", { name: "Close" }).click();
-  return code;
-}
+import { expect, test } from "@playwright/test";
+import { addDish, inviteCode, startOrder } from "./support/helpers";
+import type { Browser } from "@playwright/test";
 
 async function joinAsGuest(browser: Browser, code: string, name: string) {
   const context = await browser.newContext({ ...test.info().project.use });
@@ -71,7 +50,7 @@ test("network recovery: changes made while offline elsewhere arrive after reconn
   await expect(guest.page.getByText("Saved")).toBeVisible();
   await context.setOffline(false);
   await expect(page.getByText("Gyoza")).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText(/items? this round/)).toContainText("3");
+  await expect(page.getByTestId("round-total")).toContainText("3");
 
   // The guest's own queued change survives their connection dropping too.
   await guest.context.setOffline(true);

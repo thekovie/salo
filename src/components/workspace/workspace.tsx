@@ -1,15 +1,19 @@
 "use client";
 
-import { ReceiptText, X } from "lucide-react";
+import { CircleCheck, Hand, ReceiptText, X } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { buttonVariants } from "@/components/ui/button";
 import { describeOp, useSession, type AddInput, type OverlayEntry } from "@/hooks/use-session";
 import { consolidate } from "@/lib/consolidate";
 import type { SessionSnapshot } from "@/lib/snapshot";
 import { cn } from "@/lib/utils";
 import { canEditEntry } from "@/lib/permissions";
+import { readinessSummary } from "@/lib/views";
 import { Composer } from "./composer";
+import { GroupsView } from "./groups-view";
+import { PeopleView } from "./people-view";
+import { ViewTabs, type View } from "./view-tabs";
 import { InviteSheet } from "./invite-sheet";
 import { OrderTicket, type TicketActions } from "./order-ticket";
 import { SessionHeader } from "./session-header";
@@ -25,6 +29,18 @@ export function Workspace({ initial, appUrl }: { initial: SessionSnapshot; appUr
   const total = consolidate(roundEntries).totalItems;
   const isHost = snapshot.me.role === "HOST";
   const isOpen = snapshot.session.status === "OPEN" && round.status === "DRAFT";
+
+  const [view, setView] = useState<View>("order");
+  const ready = readinessSummary(snapshot);
+  const iAmReady = ready.readyIds.has(snapshot.me.participantId);
+  const groupCount = new Set(roundEntries.filter((e) => e.attribution.type === "GROUP").map((e) => e.attribution.label?.toLowerCase())).size;
+  const claimsForHost = isHost
+    ? snapshot.claims.flatMap((claim) => {
+        const entry = snapshot.entries.find((e) => e.batchId === claim.batchId);
+        const who = snapshot.participants.find((p) => p.id === claim.requestedBy)?.displayName ?? "A guest";
+        return entry ? [{ claim, entry, who }] : [];
+      })
+    : [];
 
   const knownLabels = useMemo(
     () => [...new Set([...snapshot.participants.map((p) => p.displayName), ...snapshot.entries.map((e) => e.attribution.label).filter((l): l is string => Boolean(l))])],
@@ -93,16 +109,73 @@ export function Workspace({ initial, appUrl }: { initial: SessionSnapshot; appUr
             ))}
           </div>
         ) : null}
-        <OrderTicket entries={roundEntries} people={snapshot.participants} roundNumber={round.number} copy={copyFor(round.number)} actions={actions} readOnly={!isOpen} />
+        {claimsForHost.length > 0 ? (
+          <section aria-label="Requests from guests" className="mb-4 space-y-2 rounded-2xl bg-saffron-wash p-3">
+            {claimsForHost.map(({ claim, entry, who }) => (
+              <div key={claim.id} className="flex flex-wrap items-center gap-2">
+                <Hand className="size-4 shrink-0 text-saffron-ink" aria-hidden />
+                <p className="min-w-0 flex-1 text-sm">
+                  <span className="font-semibold">{who}</span> says {entry.dishName} ×{entry.quantity} is theirs.
+                </p>
+                <div className="flex gap-1">
+                  <button type="button" onClick={() => void mutate({ kind: "resolveClaim", claimId: claim.id, approve: false, dishName: entry.dishName })} className="min-h-11 cursor-pointer rounded-full px-3 text-sm font-semibold hover:bg-ink/6">
+                    Decline
+                  </button>
+                  <button type="button" onClick={() => void mutate({ kind: "resolveClaim", claimId: claim.id, approve: true, dishName: entry.dishName })} className="min-h-11 cursor-pointer rounded-full bg-ink px-4 text-sm font-semibold text-paper hover:bg-ink/90">
+                    Approve
+                  </button>
+                </div>
+              </div>
+            ))}
+          </section>
+        ) : null}
+        <ViewTabs view={view} onChange={setView} counts={{ people: snapshot.participants.length, groups: groupCount }} />
+        <div role="tabpanel" id={`panel-${view}`} aria-labelledby={`tab-${view}`}>
+          {view === "order" ? (
+            <OrderTicket entries={roundEntries} people={snapshot.participants} roundNumber={round.number} copy={copyFor(round.number)} actions={actions} readOnly={!isOpen} />
+          ) : view === "people" ? (
+            <PeopleView
+              snapshot={snapshot}
+              entries={roundEntries.filter((e) => !e.pending)}
+              canClaim={!isHost && isOpen}
+              onClaim={(entry) => void mutate({ kind: "claim", batchId: entry.batchId, dishName: entry.dishName })}
+              onRemoveDuplicate={(entry) => actions.remove(entry)}
+            />
+          ) : (
+            <GroupsView snapshot={snapshot} entries={roundEntries.filter((e) => !e.pending)} onSetMembers={(label, memberIds) => void mutate({ kind: "groupMembers", label, memberIds })} />
+          )}
+        </div>
       </main>
 
       <div className="fixed inset-x-0 bottom-0 z-30 bg-gradient-to-t from-paper from-70% to-transparent pt-6 pb-[calc(env(safe-area-inset-bottom)+0.5rem)]">
         <div className="mx-auto max-w-2xl space-y-2 px-3">
           {isOpen ? <Composer dishNames={snapshot.dishNames} knownLabels={knownLabels} defaultFor={isHost ? "UNASSIGNED" : "ME"} onAdd={(input) => void add(input)} /> : null}
           <div className="flex items-center justify-between gap-3 px-2">
-            <p className="text-ink-soft">
-              <span className="tally text-xl text-ink">{total}</span> {total === 1 ? "item" : "items"} this round
-            </p>
+            <div className="min-w-0">
+              <p className="whitespace-nowrap text-ink-soft" data-testid="round-total">
+                <span className="tally text-xl text-ink">{total}</span> {total === 1 ? "item" : "items"}
+                <span className="hidden sm:inline"> this round</span>
+              </p>
+              {isHost && ready.total > 0 ? (
+                <p className="text-sm text-ink-soft">
+                  {ready.ready} of {ready.total} {ready.total === 1 ? "guest" : "guests"} ready
+                </p>
+              ) : null}
+            </div>
+            {!isHost && isOpen ? (
+              <button
+                type="button"
+                aria-pressed={iAmReady}
+                onClick={() => void mutate({ kind: "ready", ready: !iAmReady })}
+                className={cn(
+                  "inline-flex min-h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-4 font-semibold transition-colors",
+                  iAmReady ? "bg-ok-wash text-ok" : "border-[1.5px] border-input bg-ticket text-ink hover:bg-paper",
+                )}
+              >
+                <CircleCheck className="size-5" aria-hidden />
+                {iAmReady ? "Ready" : "I’m ready"}
+              </button>
+            ) : null}
             <Link
               href={`/s/${snapshot.session.id}/waiter`}
               aria-disabled={total === 0}

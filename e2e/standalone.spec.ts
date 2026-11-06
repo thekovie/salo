@@ -16,7 +16,7 @@ async function addDish(page: Page, name: string, quantity = 1) {
   await expect(dish).toHaveValue("");
 }
 
-const items = (page: Page) => page.getByText(/items? this round/);
+const items = (page: Page) => page.getByTestId("round-total");
 
 test("host-only ordering: start, add dishes, consolidate, waiter ticket (scenarios 1, 5, 9)", async ({ page }) => {
   await startOrder(page);

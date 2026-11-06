@@ -53,3 +53,7 @@ export const renameSessionSchema = z.object({ title: optional(LIMITS.title) });
 export type AddEntryInput = z.infer<typeof addEntrySchema>;
 export type UpdateEntryInput = z.infer<typeof updateEntrySchema>;
 export type AttributionInput = z.infer<typeof attributionSchema>;
+
+export const readySchema = z.object({ ready: z.boolean() });
+export const groupMembersSchema = z.object({ label: text(LIMITS.label).min(1, "Give the group a name."), memberIds: z.array(z.uuid()).max(LIMITS.participantsPerSession) });
+export const claimSchema = z.object({ batchId: z.uuid() });

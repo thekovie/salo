@@ -20,10 +20,17 @@ export interface SessionSnapshot {
   entries: SnapshotEntry[];
   /** Dish names typed in this session, for suggestions. */
   dishNames: string[];
+  /** Pending "that's mine" requests (brief 5.10). */
+  claims: { id: string; batchId: string; requestedBy: string; createdAt: string }[];
+  /** "I'm ready" for the active round, by participant (brief 5.11). */
+  readiness: { participantId: string; ready: boolean }[];
+  /** Collective groups with optional members (brief 5.9). Groups also exist implicitly through order labels. */
+  groups: { id: string; label: string; memberIds: string[] }[];
 }
 
 export interface SnapshotEntry extends SourceEntry {
   roundId: string;
+  batchId: string;
   revision: number;
 }
 

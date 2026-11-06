@@ -153,10 +153,12 @@ export const orderGroups = pgTable(
     id: id(),
     sessionId: sessionRef(),
     label: text("label").notNull(),
+    /** Groups are matched to collective orders by label, conservatively (same rules as dish names). */
+    normalizedLabel: text("normalized_label").notNull(),
     createdBy: uuid("created_by").references(() => participants.id, { onDelete: "set null" }),
     createdAt: createdAt(),
   },
-  (t) => [index("order_groups_session_idx").on(t.sessionId)],
+  (t) => [uniqueIndex("order_groups_label_uq").on(t.sessionId, t.normalizedLabel)],
 );
 
 export const orderGroupMembers = pgTable(

@@ -5,6 +5,7 @@ import { dishes, orderBatches, orderEntries, participants, rounds } from "@/serv
 import { AppError, forbidden } from "@/server/errors";
 import type { Applied, SessionRow } from "@/server/mutations";
 import { can, canEditEntry, type Actor } from "@/lib/permissions";
+import { resetReadiness } from "./people";
 import { LIMITS, type AddEntryInput, type AttributionInput, type UpdateEntryInput } from "./validation";
 
 export interface EntryRef {
@@ -82,13 +83,14 @@ export async function addEntry(tx: Tx, session: SessionRow, actor: Actor, input:
       specialInstructions: optionalText(input.instructions),
     })
     .returning({ id: orderEntries.id, revision: orderEntries.revision });
+  await resetReadiness(tx, actor.participantId, round.id);
   return { result: { entryId: entry.id, revision: entry.revision }, event: { type: "entry.added", payload: { entryId: entry.id } } };
 }
 
 /** The entry with what permission checks need, scoped to this session (an id from another session is "not found"). */
 async function loadEntry(tx: Tx, sessionId: string, entryId: string) {
   const [row] = await tx
-    .select({ id: orderEntries.id, revision: orderEntries.revision, deletedAt: orderEntries.deletedAt, submittedBy: orderBatches.submittedBy, roundStatus: rounds.status })
+    .select({ id: orderEntries.id, revision: orderEntries.revision, deletedAt: orderEntries.deletedAt, submittedBy: orderBatches.submittedBy, roundId: orderEntries.roundId, roundStatus: rounds.status })
     .from(orderEntries)
     .innerJoin(orderBatches, eq(orderBatches.id, orderEntries.batchId))
     .innerJoin(rounds, eq(rounds.id, orderEntries.roundId))
@@ -121,6 +123,7 @@ export async function updateEntry(tx: Tx, session: SessionRow, actor: Actor, ent
       ...(input.instructions !== undefined ? { specialInstructions: optionalText(input.instructions) } : {}),
     })
     .where(eq(orderEntries.id, entryId));
+  await resetReadiness(tx, actor.participantId, entry.roundId);
   return { result: { entryId, revision }, event: { type: "entry.updated", payload: { entryId } } };
 }
 
@@ -138,5 +141,6 @@ export async function setEntryRemoved(tx: Tx, session: SessionRow, actor: Actor,
     .update(orderEntries)
     .set({ revision, updatedAt: new Date(), deletedAt: removed ? new Date() : null })
     .where(eq(orderEntries.id, entryId));
+  await resetReadiness(tx, actor.participantId, entry.roundId);
   return { result: { entryId, revision }, event: { type: removed ? "entry.removed" : "entry.restored", payload: { entryId } } };
 }

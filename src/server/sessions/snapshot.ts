@@ -1,7 +1,7 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
 import type { SessionSnapshot } from "@/lib/snapshot";
 import type { Db } from "@/server/db/client";
-import { dishes, orderBatches, orderEntries, participants, rounds, sessions } from "@/server/db/schema";
+import { dishes, entryClaims, orderBatches, orderEntries, orderGroupMembers, orderGroups, participantRoundReadiness, participants, rounds, sessions } from "@/server/db/schema";
 import { notFound } from "@/server/errors";
 import { LIMITS } from "@/server/orders/validation";
 import type { Actor } from "@/lib/permissions";
@@ -30,6 +30,17 @@ export async function getSnapshot(db: Db, actor: Actor): Promise<SessionSnapshot
         tx.select({ name: dishes.canonicalName }).from(dishes).where(eq(dishes.sessionId, session.id)).orderBy(asc(dishes.canonicalName))
           .limit(LIMITS.dishesPerSession),
       ]);
+      const draft0 = roundRows.find((r) => r.status === "DRAFT") ?? roundRows[roundRows.length - 1];
+      const [claimRows, readyRows, groupRows, memberRows] = await Promise.all([
+        tx.select().from(entryClaims).where(and(eq(entryClaims.sessionId, session.id), eq(entryClaims.status, "PENDING"))).orderBy(asc(entryClaims.createdAt)),
+        tx.select().from(participantRoundReadiness).where(eq(participantRoundReadiness.roundId, draft0.id)),
+        tx.select().from(orderGroups).where(eq(orderGroups.sessionId, session.id)).orderBy(asc(orderGroups.createdAt)),
+        tx
+          .select({ groupId: orderGroupMembers.groupId, participantId: orderGroupMembers.participantId })
+          .from(orderGroupMembers)
+          .innerJoin(orderGroups, eq(orderGroups.id, orderGroupMembers.groupId))
+          .where(eq(orderGroups.sessionId, session.id)),
+      ]);
       const draft = roundRows.find((r) => r.status === "DRAFT") ?? roundRows[roundRows.length - 1];
       const me = people.find((p) => p.id === actor.participantId);
       return {
@@ -56,10 +67,14 @@ export async function getSnapshot(db: Db, actor: Actor): Promise<SessionSnapshot
           instructions: entry.specialInstructions,
           createdAt: entry.createdAt.toISOString(),
           revision: entry.revision,
+          batchId: batch.id,
           submittedBy: batch.submittedBy,
           attribution: { type: batch.attributionType, label: batch.collectiveLabel, participantId: batch.attributedParticipantId },
         })),
         dishNames: dishRows.map((d) => d.name),
+        claims: claimRows.map((c) => ({ id: c.id, batchId: c.batchId, requestedBy: c.requestedBy, createdAt: c.createdAt.toISOString() })),
+        readiness: readyRows.map((r) => ({ participantId: r.participantId, ready: r.ready })),
+        groups: groupRows.map((g) => ({ id: g.id, label: g.label, memberIds: memberRows.filter((m) => m.groupId === g.id).map((m) => m.participantId) })),
       };
     },
     { isolationLevel: "repeatable read", accessMode: "read only" },
