@@ -1,0 +1,182 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Salo's world: a carbonless restaurant order pad. Thermal paper, ballpoint ink, tomato-red numbering, canary and
+ * pink carbon copies for later rounds, saffron highlights. Dark mode is the same pad under a dim bar light.
+ * Components use these semantic names only, never raw colours.
+ */
+:root {
+  color-scheme: light;
+  --paper: oklch(0.972 0.013 84);
+  --ticket: oklch(0.993 0.007 92);
+  --ink: oklch(0.27 0.045 266);
+  --ink-soft: oklch(0.46 0.035 266);
+  --rule: oklch(0.87 0.018 80);
+  /* Form-control boundary: at least 3:1 on the ticket (WCAG 1.4.11). */
+  --input: oklch(0.6 0.025 75);
+  --tomato: oklch(0.54 0.19 31);
+  --on-tomato: oklch(0.99 0.008 90);
+  --tomato-ink: oklch(0.5 0.18 30);
+  --tomato-wash: oklch(0.94 0.04 35);
+  --saffron: oklch(0.83 0.15 80);
+  --saffron-ink: oklch(0.47 0.1 68);
+  --saffron-wash: oklch(0.95 0.06 88);
+  /* Carbon copies: round 1 white, round 2 canary, round 3+ pink (the order pad's own colours). */
+  --copy-1: var(--ticket);
+  --copy-2: oklch(0.965 0.065 101);
+  --copy-3: oklch(0.945 0.045 2);
+  --ok: oklch(0.44 0.11 150);
+  --ok-wash: oklch(0.94 0.05 150);
+  --bad: oklch(0.48 0.17 25);
+  --bad-wash: oklch(0.945 0.035 25);
+  --ring: oklch(0.5 0.15 262);
+  --shadow: 0 1px 1px oklch(0.4 0.03 60 / 0.08), 0 6px 18px -6px oklch(0.4 0.04 60 / 0.22);
+  --radius: 0.875rem;
+}
+
+.dark {
+  color-scheme: dark;
+  --paper: oklch(0.205 0.012 55);
+  --ticket: oklch(0.255 0.014 60);
+  --ink: oklch(0.94 0.014 86);
+  --ink-soft: oklch(0.76 0.02 80);
+  --rule: oklch(0.35 0.016 60);
+  --input: oklch(0.58 0.02 70);
+  --tomato: oklch(0.68 0.17 33);
+  --on-tomato: oklch(0.17 0.02 30);
+  --tomato-ink: oklch(0.75 0.15 33);
+  --tomato-wash: oklch(0.3 0.06 30);
+  --saffron: oklch(0.8 0.14 80);
+  --saffron-ink: oklch(0.83 0.13 82);
+  --saffron-wash: oklch(0.31 0.05 75);
+  --copy-1: var(--ticket);
+  --copy-2: oklch(0.3 0.045 98);
+  --copy-3: oklch(0.29 0.04 8);
+  --ok: oklch(0.82 0.13 150);
+  --ok-wash: oklch(0.3 0.06 150);
+  --bad: oklch(0.8 0.12 25);
+  --bad-wash: oklch(0.31 0.07 25);
+  --ring: oklch(0.78 0.11 262);
+  --shadow: 0 1px 1px oklch(0 0 0 / 0.3), 0 8px 22px -8px oklch(0 0 0 / 0.6);
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-ticket: var(--ticket);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-rule: var(--rule);
+  --color-input: var(--input);
+  --color-tomato: var(--tomato);
+  --color-on-tomato: var(--on-tomato);
+  --color-tomato-ink: var(--tomato-ink);
+  --color-tomato-wash: var(--tomato-wash);
+  --color-saffron: var(--saffron);
+  --color-saffron-ink: var(--saffron-ink);
+  --color-saffron-wash: var(--saffron-wash);
+  --color-copy-1: var(--copy-1);
+  --color-copy-2: var(--copy-2);
+  --color-copy-3: var(--copy-3);
+  --color-ok: var(--ok);
+  --color-ok-wash: var(--ok-wash);
+  --color-bad: var(--bad);
+  --color-bad-wash: var(--bad-wash);
+  --color-ring: var(--ring);
+  --radius-lg: var(--radius);
+  --shadow-ticket: var(--shadow);
+  --font-sans: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-fredoka), var(--font-nunito), ui-sans-serif, sans-serif;
+  --font-mono: var(--font-dmmono), ui-monospace, monospace;
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@layer base {
+  * {
+    border-color: var(--rule);
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+    /* Fixed composer and bottom bar: keep keyboard focus from scrolling underneath them (WCAG 2.4.11). */
+    scroll-padding-bottom: 10rem;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+    line-height: 1.5;
+    min-height: 100dvh;
+    caret-color: var(--tomato);
+  }
+  ::selection {
+    background: color-mix(in oklch, var(--saffron) 55%, transparent);
+    color: var(--ink);
+  }
+  :focus-visible {
+    outline: 2.5px solid var(--ring);
+    outline-offset: 2px;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-fredoka), var(--font-nunito), sans-serif;
+    font-weight: 500;
+    text-wrap: balance;
+    letter-spacing: -0.01em;
+  }
+  a {
+    text-underline-offset: 0.2em;
+  }
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
+  }
+  html {
+    scrollbar-color: var(--rule) transparent;
+  }
+}
+
+@layer components {
+  /* A ticket strip: torn perforated edges top and bottom, the order pad's paper. */
+  .ticket {
+    background: var(--ticket);
+    box-shadow: var(--shadow);
+    --perf: radial-gradient(circle at 50% 0, transparent 5px, #000 5.5px) top / 16px 10px repeat-x,
+      radial-gradient(circle at 50% 100%, transparent 5px, #000 5.5px) bottom / 16px 10px repeat-x,
+      linear-gradient(#000, #000) center / 100% calc(100% - 18px) no-repeat;
+    mask: var(--perf);
+    -webkit-mask: var(--perf);
+    padding-block: 1.25rem;
+  }
+  .ticket-copy-2 {
+    background: var(--copy-2);
+  }
+  .ticket-copy-3 {
+    background: var(--copy-3);
+  }
+  /* A dashed tear line inside a ticket. */
+  .tear {
+    border-top: 1.5px dashed var(--rule);
+  }
+  .tally {
+    font-family: var(--font-dmmono), ui-monospace, monospace;
+    font-variant-numeric: tabular-nums slashed-zero;
+    letter-spacing: -0.02em;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

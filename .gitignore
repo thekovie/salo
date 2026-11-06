@@ -1,0 +1,23 @@
+# dependencies and build output
+node_modules/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# environment (the template is tracked)
+.env
+.env.*
+!.env.example
+
+backups/
+
+# tooling
+.impeccable/*
+# The surface brief (direction contract) is durable design context: tracked.
+!.impeccable/surfaces/
+.DS_Store
+playwright-report/
+test-results/
+

@@ -1,0 +1,29 @@
+interface CspOptions {
+  /** Fresh per request. Next adds it to its own scripts when it sees it in the request's CSP header. */
+  nonce: string;
+  isDev: boolean;
+  /** Only upgrade to https when the app is actually served over it (plain http works for local trials). */
+  isHttps: boolean;
+}
+
+/**
+ * Content-Security-Policy for every page. Scripts, styles, fonts and connections stay on this origin (fonts are
+ * self-hosted by next/font); pictures may also be data: or blob: URLs (the invite QR code). Scripts need this request's nonce
+ * (`strict-dynamic` lets those scripts load their own chunks). Styles allow inline because React sets style attributes.
+ */
+export function buildCsp({ nonce, isDev, isHttps }: CspOptions): string {
+  const directives = [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "font-src 'self'",
+    "connect-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ];
+  if (isHttps) directives.push("upgrade-insecure-requests");
+  return directives.join("; ");
+}

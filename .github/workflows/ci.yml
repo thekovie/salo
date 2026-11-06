@@ -1,0 +1,57 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: salo
+          POSTGRES_PASSWORD: salo
+          POSTGRES_DB: salo
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U salo -d salo" --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      DATABASE_URL: postgres://salo:salo@localhost:5433/salo
+      TEST_DATABASE_URL: postgres://salo:salo@localhost:5433/salo_test
+      APP_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # The committed migrations must match src/server/db/schema.ts: regenerating must change nothing.
+      - run: pnpm db:generate
+      - run: git diff --exit-code drizzle
+      - run: pnpm audit --prod --audit-level high
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm build
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Build and start app + Postgres, wait for the health check
+        run: |
+          docker compose --profile app up -d --build
+          for i in $(seq 1 40); do
+            if curl -fsS http://localhost:3000/api/health; then
+              curl -sI http://localhost:3000/ | grep -i "content-security-policy:.*'nonce-"
+              curl -fsS -o /dev/null http://localhost:3000/opengraph-image
+              exit 0
+            fi
+            sleep 3
+          done
+          docker compose --profile app logs app
+          exit 1
