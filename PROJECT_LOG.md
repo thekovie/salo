@@ -245,3 +245,13 @@ Owner deployed the app, then asked for a landing page that shows what Salo does 
 - **Bug found while building**: inline timeline arrays restarted every scene on each render. `useScene` now keys on the durations.
 - **Tests**: e2e storageState seeds the tour flags so the offer never shifts other specs. `onboarding.spec.ts` covers the host tour (5 steps, reload, replay, keyboard), the guest tour (Not now, ? replay) and the landing steps. 28 e2e total; unit tests unchanged.
 
+
+**Playwright UI/UX pass (owner asked before merging).** `UX_REVIEW=1 pnpm e2e e2e/ux-review.spec.ts` (opt-in, writes screenshots and a report to `.impeccable/review/ux`).
+- Landing: phone 390, small 320 and desktop 1280, light and dark, plus reduced motion.
+- Every tour step, host (light, dark, 320) and guest.
+- 121 automated checks: no horizontal scroll; axe WCAG 2.2 AA (landing, offer, tour open); tour card inside the viewport and never over its spotlight; spotlight on screen; card buttons ≥ 44 px; focus on Next/Done.
+
+Fixed from the screenshots:
+1. The hero's first frame had empty gaps where later lines would appear. Rows now open with a grid-rows collapse, and an invisible full copy holds the final height, so the spare room sits at the bottom.
+2. At 320 px the composer's For button showed only "For". Under 360 px the word "For" hides and Add becomes an icon-only 44 px button (still named "Add").
+3. Spotlights on edge controls (⋯, Invite) had their frame cut off; the frame is now clamped inside the viewport.

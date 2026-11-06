@@ -53,7 +53,47 @@ function Phone({ children, className }: { children: React.ReactNode; className?:
   );
 }
 
+/** Opens a row's height and fades it in, so a list grows without holding empty gaps. */
+function Collapse({ on, children }: { on: boolean; children: React.ReactNode }) {
+  return (
+    <div className={cn("grid transition-[grid-template-rows,opacity] duration-300 ease-[var(--ease-out-expo)]", on ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0")}>
+      <div className="min-h-0 overflow-hidden">{children}</div>
+    </div>
+  );
+}
+
 const HERO_TIMELINE = [1300, 1100, 1300, 1300, 1200, 2600] as const;
+const HERO_LAST = HERO_TIMELINE.length - 1;
+
+/** The hero ticket's dish list at one step of the loop. */
+function HeroLines({ step, still = false }: { step: number; still?: boolean }) {
+  const katsu = step >= 2 ? 3 : step >= 1 ? 2 : 1;
+  return (
+    <ul className="mt-3 text-lg">
+      <Line name="Chicken Katsu" qty={katsu} wash={!still}>
+        <Collapse on={step >= 2}>
+          <div className="mt-0.5 space-y-0.5 border-l-[1.5px] border-rule pl-3 text-base text-ink-soft">
+            <div className="flex justify-between">
+              <span>Regular</span>
+              <span className="tally">×2</span>
+            </div>
+            <div className="flex justify-between">
+              <span>No sauce</span>
+              <span className="tally">×1</span>
+            </div>
+          </div>
+        </Collapse>
+      </Line>
+      <Line name="Crispy Pata" qty={1} />
+      <Collapse on={step >= 3}>
+        <Line name="Gyoza" qty={2} wash={!still && step === 3} />
+      </Collapse>
+      <Collapse on={step >= 4}>
+        <Line name="Iced Tea" qty={4} wash={!still && step === 4} />
+      </Collapse>
+    </ul>
+  );
+}
 
 /** Hero: a round fills itself as the table calls out dishes, counts merge, then the waiter's stamp lands. Loops. */
 export function HeroScene() {
@@ -71,27 +111,14 @@ export function HeroScene() {
           <span className="font-mono text-sm tracking-[0.14em] text-tomato-ink uppercase">Round 1</span>
           <span className="text-sm text-ink-soft">Table of 6</span>
         </div>
-        <ul className="mt-3 text-lg">
-          <Line name="Chicken Katsu" qty={katsu} wash>
-            <Reveal on={step >= 2} className="mt-0.5 space-y-0.5 border-l-[1.5px] border-rule pl-3 text-base text-ink-soft">
-              <div className="flex justify-between">
-                <span>Regular</span>
-                <span className="tally">×2</span>
-              </div>
-              <div className="flex justify-between">
-                <span>No sauce</span>
-                <span className="tally">×1</span>
-              </div>
-            </Reveal>
-          </Line>
-          <Line name="Crispy Pata" qty={1} />
-          <Reveal on={step >= 3}>
-            <Line name="Gyoza" qty={2} wash={step === 3} />
-          </Reveal>
-          <Reveal on={step >= 4}>
-            <Line name="Iced Tea" qty={4} wash={step === 4} />
-          </Reveal>
-        </ul>
+        {/* The full list, invisible, holds the ticket at its final height; the live list grows inside it and the
+            spare room sits at the bottom, like space left on the pad. */}
+        <div className="grid *:[grid-area:1/1]">
+          <div className="invisible">
+            <HeroLines step={HERO_LAST} still />
+          </div>
+          <HeroLines step={step} />
+        </div>
         <div className="tear mt-3 flex items-baseline justify-between pt-3">
           <span className="text-ink-soft">Total</span>
           <span className="tally text-xl">
@@ -99,7 +126,7 @@ export function HeroScene() {
           </span>
         </div>
       </div>
-      {step >= 5 ? <Stamp key="stamp" animate className="absolute top-[44%] left-[36%] text-lg" /> : null}
+      {step >= HERO_LAST ? <Stamp key="stamp" animate className="absolute top-[44%] left-[36%] text-lg" /> : null}
       <figcaption className="mt-4 text-center text-sm text-ink-soft">Sample order</figcaption>
     </figure>
   );

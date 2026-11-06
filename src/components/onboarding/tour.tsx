@@ -39,7 +39,12 @@ export function Tour({ steps, onClose }: { steps: readonly TourStep[]; onClose: 
     const el = targetOf(step);
     if (!el) return setRect(null);
     const r = el.getBoundingClientRect();
-    setRect({ top: r.top - PAD, left: r.left - PAD, width: r.width + PAD * 2, height: r.height + PAD * 2 });
+    // Grown by PAD for breathing room, but kept on screen: a control at the edge keeps its whole frame.
+    const top = Math.max(2, r.top - PAD);
+    const left = Math.max(2, r.left - PAD);
+    const right = Math.min(window.innerWidth - 2, r.right + PAD);
+    const bottom = Math.min(window.innerHeight - 2, r.bottom + PAD);
+    setRect({ top, left, width: right - left, height: bottom - top });
   }, [step]);
 
   useEffect(() => {
