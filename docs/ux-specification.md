@@ -6,7 +6,10 @@ What is built, screen by screen. Design world and tokens: `PRODUCT.md`, the dire
 - Primary action **Start an order** (one tap: creates the session and opens the workspace). Errors appear under the button in plain words.
 - **Pick up where you left off**: orders this browser is part of (from its session cookies), newest first, up to five.
 - **Join with a code**: six characters; lower case, spaces, dashes and look-alikes (I, L → 1; O → 0; U → V) are forgiven; opens the invite page.
-- Sample ticket (labelled "Sample order") and a three-step how-it-works.
+- **Hero scene** (labelled "Sample order"): a Round 1 ticket that fills itself on a loop. "Rafa added…" pill, counts merge, "No sauce" splits off, the total ticks, the CONFIRMED stamp lands.
+- **How it works**, four rows (text with an illustrated phone scene that plays once when scrolled into view): start and invite (QR, code, people joining); everyone adds their own (typing, Add, counts merging with a "+2 · JD" tag); one ticket for the waiter (big numbers, stamp); settle up later (who ordered what, Copy text / Save image). Scenes are decorative (`aria-hidden`); with reduced motion they show their last frame, still.
+- "Why Salo" strip (no app, live on every phone, rounds and fixes, gone after the meal), a closing **Start your table's order** ticket, and a footer link to How it works.
+- **First-time tour** (in an order): a saffron card "New to Salo? Take a 30-second tour" (Show me / Not now), once per browser and role. The tour spotlights one control at a time with a ticket card (n of N, Back / Next / Skip, Done; arrows and Escape work). Host: dish field, For, Invite, Review order, Order options. Guest: dish field, For, I'm ready, Ticket, the ? button. Steps whose control isn't on screen are skipped. Replay: host from Order options → How Salo works, guest from the ? in the header.
 
 ## Workspace (`/s/:id`)
 - **Header band** (tomato): home, order name, "Round n · Open" with the sync pill under it (Saved shows as a check), Invite, and for the host an **Order options** drawer (name, Cancel/End order). Sync pill: Saving… / Saved / Offline · not saved yet / Changed elsewhere / Not saved. Announced politely to screen readers.

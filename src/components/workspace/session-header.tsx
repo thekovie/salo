@@ -1,6 +1,6 @@
 "use client";
 
-import { Ellipsis } from "lucide-react";
+import { CircleHelp, Ellipsis } from "lucide-react";
 import Link from "next/link";
 import { LogoMark } from "@/components/brand/logo";
 import type { SyncState } from "@/hooks/use-session";
@@ -15,6 +15,8 @@ interface SessionHeaderProps {
   sync: SyncState;
   /** Host only: opens the order options (name, cancel or end). */
   onOptions?: () => void;
+  /** Guests: replay the tour (the host finds it in order options). */
+  onHelp?: () => void;
   actions?: React.ReactNode;
 }
 
@@ -22,7 +24,7 @@ interface SessionHeaderProps {
  * The tomato band: which table, which round, whether everything is saved. One row on a phone: the name gets the
  * width, sync status sits on the line under it, and settings live behind one button instead of an inline field.
  */
-export function SessionHeader({ title, roundNumber, roundStatus, ended = null, sync, onOptions, actions }: SessionHeaderProps) {
+export function SessionHeader({ title, roundNumber, roundStatus, ended = null, sync, onOptions, onHelp, actions }: SessionHeaderProps) {
   const status = ended === "cancelled" ? "Cancelled" : ended ? "Order ended" : `Round ${roundNumber} · ${roundStatus === "DRAFT" ? "Open" : "Confirmed"}`;
   return (
     <header className="sticky top-0 z-30 bg-band text-on-band pt-[env(safe-area-inset-top)] shadow-[0_6px_16px_-10px_oklch(0.3_0.1_30/0.6)]">
@@ -48,8 +50,13 @@ export function SessionHeader({ title, roundNumber, roundStatus, ended = null, s
         </div>
         {actions}
         {onOptions ? (
-          <button type="button" onClick={onOptions} aria-label="Order options" className="inline-flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full hover:bg-on-band/10">
+          <button type="button" onClick={onOptions} aria-label="Order options" data-tour="options" className="inline-flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full hover:bg-on-band/10">
             <Ellipsis className="size-6" aria-hidden />
+          </button>
+        ) : null}
+        {onHelp ? (
+          <button type="button" onClick={onHelp} aria-label="How Salo works" data-tour="help" className="inline-flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full hover:bg-on-band/10">
+            <CircleHelp className="size-6" aria-hidden />
           </button>
         ) : null}
       </div>

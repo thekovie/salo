@@ -1,6 +1,6 @@
 "use client";
 
-import { LoaderCircle, X } from "lucide-react";
+import { Compass, LoaderCircle, X } from "lucide-react";
 import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
@@ -16,6 +16,8 @@ interface OrderOptionsSheetProps {
   onRename: (title: string | null) => void;
   /** Resolves true when the server accepted it. */
   onEnd: () => Promise<boolean>;
+  /** Replay the "how Salo works" tour. */
+  onTour: () => void;
 }
 
 /**
@@ -32,7 +34,7 @@ export function OrderOptionsSheet(props: OrderOptionsSheetProps) {
   );
 }
 
-function OptionsBody({ onOpenChange, title, anyConfirmed, unsentRound, onRename, onEnd }: OrderOptionsSheetProps) {
+function OptionsBody({ onOpenChange, title, anyConfirmed, unsentRound, onRename, onEnd, onTour }: OrderOptionsSheetProps) {
   const id = useId();
   const [draft, setDraft] = useState(title ?? "");
   const [step, setStep] = useState<"options" | "confirm">("options");
@@ -129,7 +131,20 @@ function OptionsBody({ onOpenChange, title, anyConfirmed, unsentRound, onRename,
         </Button>
       </form>
 
-      <div className="mt-6 border-t-[1.5px] border-dashed border-rule pt-5">
+      <button
+        type="button"
+        onClick={() => {
+          onOpenChange(false);
+          onTour();
+        }}
+        className="mt-5 flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-xl px-1 text-left hover:bg-ink/6"
+      >
+        <Compass className="size-5 shrink-0 text-ink-soft" aria-hidden />
+        <span className="flex-1 font-semibold">How Salo works</span>
+        <span className="text-sm text-ink-soft">30-second tour</span>
+      </button>
+
+      <div className="mt-4 border-t-[1.5px] border-dashed border-rule pt-5">
         <p className="font-semibold">{anyConfirmed ? "All done?" : "Not ordering after all?"}</p>
         <p className="mt-0.5 text-sm text-ink-soft">
           {anyConfirmed ? "End the order when the table is finished. Everyone can still read the tickets for a week." : "Cancel the order. Nothing has been sent to the waiter yet."}

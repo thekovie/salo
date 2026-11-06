@@ -258,7 +258,7 @@ export function Composer({ dishNames, people, names, groups, disabled, onAdd }: 
         </fieldset>
       ) : null}
 
-      <div className="rounded-xl bg-paper px-3 pt-1.5 pb-0.5 has-[input:focus-visible]:outline-2 has-[input:focus-visible]:outline-offset-1 has-[input:focus-visible]:outline-ink">
+      <div data-tour="dish" className="rounded-xl bg-paper px-3 pt-1.5 pb-0.5 has-[input:focus-visible]:outline-2 has-[input:focus-visible]:outline-offset-1 has-[input:focus-visible]:outline-ink">
         <label htmlFor={`${id}-dish`} className="block text-xs font-semibold text-ink-soft">
           Dish
         </label>
@@ -286,10 +286,11 @@ export function Composer({ dishNames, people, names, groups, disabled, onAdd }: 
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
           aria-controls={open ? `${id}-panel` : undefined}
+          data-tour="for"
           className={cn("relative inline-flex min-h-11 min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-full px-3 text-left hover:bg-ink/6", open && "bg-ink/8")}
         >
           <ForIcon className="size-4 shrink-0 text-ink-soft" aria-hidden />
-          <span className="shrink-0 text-sm text-ink-soft">For</span>
+          <span className="hidden shrink-0 text-sm text-ink-soft min-[360px]:inline">For</span>
           <span className="truncate font-semibold">{summary(current, typed)}</span>
           <ChevronDown className={cn("size-4 shrink-0 text-ink-soft transition-transform duration-200", open && "rotate-180")} aria-hidden />
           {!open && hasNotes ? <span className="absolute top-2 right-2 size-2 rounded-full bg-tomato" aria-hidden /> : null}
@@ -299,10 +300,11 @@ export function Composer({ dishNames, people, names, groups, disabled, onAdd }: 
         <button
           type="submit"
           disabled={disabled}
-          className="inline-flex min-h-11 shrink-0 cursor-pointer items-center gap-1 rounded-full bg-tomato pr-4 pl-3 font-semibold text-on-tomato transition-[background-color,transform] duration-100 ease-out hover:bg-tomato/90 active:scale-[0.97] disabled:opacity-45"
+          className="inline-flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center gap-1 rounded-full bg-tomato font-semibold text-on-tomato transition-[background-color,transform] duration-100 ease-out hover:bg-tomato/90 active:scale-[0.97] disabled:opacity-45 min-[360px]:pr-4 min-[360px]:pl-3"
         >
           <Plus className="size-5" aria-hidden />
-          Add
+          {/* Under 360 px the word goes (screen readers keep it) so the name in "For …" has room. */}
+          <span className="max-[359px]:sr-only">Add</span>
         </button>
       </div>
       <p id={`${id}-error`} role="alert" className={cn("px-3 text-sm text-bad", error ? "pt-1.5 pb-0.5" : "sr-only")}>
