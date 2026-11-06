@@ -12,6 +12,9 @@ import { LIMITS, type CorrectionInput } from "./validation";
 
 type Db = Pick<Tx, "select">;
 
+/** A cancelled order (ended before any round was confirmed) is deleted after a day, not the full closed retention. */
+export const CANCELLED_RETENTION_DAYS = 1;
+
 /** Corrections of a session with what the waiter needs to hear (dish, preparation, source round). */
 export async function loadCorrections(tx: Db, sessionId: string): Promise<CorrectionView[]> {
   const rows = await tx
@@ -181,11 +184,13 @@ export async function removeCorrection(tx: Tx, session: SessionRow, actor: Actor
 
 /**
  * End session (brief 5.16): read-only from now on; deleted after the closed-retention period. Host only. An open round
- * that was never confirmed stays as it was (visible, not sent anywhere).
+ * that was never confirmed stays as it was (visible, not sent anywhere). Ending before any confirmation is a cancel.
  */
 export async function closeSession(tx: Tx, session: SessionRow, actor: Actor): Promise<Applied<{ closedAt: string; expiresAt: string }>> {
   if (!can(actor, "session.close")) throw forbidden("Only the host can end the order.");
-  const days = getEnv().CLOSED_RETENTION_DAYS;
+  // Nothing ever confirmed with the waiter = the table called it off: keep it just long enough for guests to see that.
+  const [confirmed] = await tx.select({ id: rounds.id }).from(rounds).where(and(eq(rounds.sessionId, session.id), eq(rounds.status, "CONFIRMED"))).limit(1);
+  const days = confirmed ? getEnv().CLOSED_RETENTION_DAYS : CANCELLED_RETENTION_DAYS;
   const closedAt = new Date();
   const expiresAt = new Date(closedAt.getTime() + days * 86_400_000);
   await tx.update(sessions).set({ status: "CLOSED", closedAt, expiresAt }).where(eq(sessions.id, session.id));

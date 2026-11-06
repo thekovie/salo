@@ -66,8 +66,9 @@ test("review, waiter view, host-only confirmation, round 2 with a correction, en
   await expect(page.getByRole("region", { name: "Round 2, confirmed with the waiter" })).toContainText("3 items");
 
   // End session (scenario 13): read-only for everyone.
+  await page.getByRole("button", { name: "Order options" }).click();
   await page.getByRole("button", { name: "End order" }).click();
-  await page.getByRole("dialog", { name: "End this order?" }).getByRole("button", { name: "End order" }).click();
+  await page.getByRole("dialog", { name: "End this order?" }).getByRole("button", { name: "Yes, end the order" }).click();
   await expect(page.getByText(/This order has ended/)).toBeVisible();
   await guest.page.reload();
   await expect(guest.page.getByText(/This order has ended/)).toBeVisible();

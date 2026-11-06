@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, SlidersHorizontal } from "lucide-react";
+import { Plus, SlidersHorizontal, X } from "lucide-react";
 import { useId, useMemo, useRef, useState } from "react";
 import type { AddInput } from "@/hooks/use-session";
 import { normalizeText } from "@/lib/dish-name";
@@ -115,9 +115,20 @@ export function Composer({ dishNames, knownLabels, disabled, defaultFor = "UNASS
       ) : null}
 
       {open ? (
-        <fieldset className="ease-in-panel mb-2 space-y-3 rounded-2xl bg-paper p-3">
+        <fieldset className="ease-in-panel relative mb-2 space-y-3 rounded-2xl bg-paper p-3">
           <legend className="sr-only">Details</legend>
-          <div>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              dishRef.current?.focus();
+            }}
+            aria-label="Close details"
+            className="absolute top-1 right-1 inline-flex size-11 cursor-pointer items-center justify-center rounded-full text-ink-soft hover:bg-ink/6 hover:text-ink"
+          >
+            <X className="size-5" aria-hidden />
+          </button>
+          <div className="pr-10">
             <span className="text-sm font-semibold" id={`${id}-for`}>
               Ordered for
             </span>

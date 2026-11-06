@@ -18,7 +18,8 @@ const STATES: Record<SyncState, { label: string; Icon: typeof Check; spin?: bool
 /** Saves usually finish in well under half a second: only say "Saving…" if it takes longer, so the pill does not flicker. */
 const SAVING_DELAY_MS = 400;
 
-export function SyncPill({ state, className }: { state: SyncState; className?: string }) {
+/** `compact`: the calm "Saved" state shrinks to its check mark (still read out); anything worth noticing keeps its words. */
+export function SyncPill({ state, className, compact = false }: { state: SyncState; className?: string; compact?: boolean }) {
   const [slow, setSlow] = useState(false);
   useEffect(() => {
     if (state !== "saving") return;
@@ -43,7 +44,7 @@ export function SyncPill({ state, className }: { state: SyncState; className?: s
       )}
     >
       <Icon className={cn("size-3.5", spin && "animate-spin")} aria-hidden />
-      <span key={shown} className="fade-in">
+      <span key={shown} className={compact && shown === "saved" ? "sr-only" : "fade-in"}>
         {label}
       </span>
     </span>

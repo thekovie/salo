@@ -33,7 +33,7 @@ test("QR/code collaboration: guests join and every change shows up live (scenari
   await expect(page.getByText("Rafa").first()).toBeVisible();
 
   // Guests cannot rename the order or change the host's dish.
-  await expect(guest.page.getByRole("button", { name: /\(rename\)/ })).toHaveCount(0);
+  await expect(guest.page.getByRole("button", { name: "Order options" })).toHaveCount(0);
   await guest.page.getByRole("button", { name: /Show who ordered Chicken Katsu/ }).click();
   await expect(guest.page.getByRole("button", { name: /One more Chicken Katsu/ })).toHaveCount(1);
   await guest.context.close();
@@ -63,9 +63,10 @@ test("network recovery: changes made while offline elsewhere arrive after reconn
 
 test("invite link preview names the order but never its dishes or people", async ({ page, request }) => {
   await startOrder(page);
-  await page.getByRole("button", { name: /rename/ }).click();
+  await page.getByRole("button", { name: "Order options" }).click();
   await page.getByLabel("Order name").fill("Ramen Nagi");
   await page.getByLabel("Order name").press("Enter");
+  await expect(page.getByRole("dialog", { name: "Order options" })).toHaveCount(0);
   await expect(page.locator('[data-sync="saved"]')).toBeVisible();
   await addDish(page, "Secret Dish");
   const code = await inviteCode(page);
@@ -78,6 +79,28 @@ test("invite link preview names the order but never its dishes or people", async
   const image = await request.get(`/j/${code}/opengraph-image`);
   expect(image.status()).toBe(200);
   expect(image.headers()["content-type"]).toBe("image/png");
+
+  // Preview crawlers that honour robots.txt must be allowed to fetch invites; noindex keeps them out of search.
+  const robots = await (await request.get("/robots.txt")).text();
+  expect(robots).not.toMatch(/Disallow: \/(j|s)\//);
+  // A forwarded room link (no cookie: a friend or a crawler) lands on the invite, preview and all.
+  const room = await request.get(new URL(page.url()).pathname);
+  expect(room.url()).toContain(`/j/${code}`);
+  expect(await room.text()).toContain('content="Join the order at Ramen Nagi"');
+});
+
+test("the host can cancel an order nothing was confirmed for; guests see it cancelled", async ({ page, browser }) => {
+  await startOrder(page);
+  const guest = await joinAsGuest(browser, await inviteCode(page), "JD");
+  await addDish(guest.page, "Gyoza");
+  await page.getByRole("button", { name: "Order options" }).click();
+  await page.getByRole("button", { name: "Cancel order" }).click();
+  await page.getByRole("dialog", { name: "Cancel this order?" }).getByRole("button", { name: "Yes, cancel the order" }).click();
+  await expect(page.getByText(/This order was cancelled/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Order options" })).toHaveCount(0);
+  await expect(guest.page.getByText(/This order was cancelled/)).toBeVisible({ timeout: 10_000 });
+  await expect(guest.page.getByRole("form", { name: "Add a dish" })).toHaveCount(0);
+  await guest.context.close();
 });
 
 test("unknown codes and strangers get nothing", async ({ request }) => {
