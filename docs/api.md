@@ -37,6 +37,7 @@ JSON over HTTPS. Implemented in `src/app/api/**` with shared helpers in `src/ser
 | `DELETE /api/sessions/:id/corrections/:correctionId` | host | — | Take a correction back before its round is confirmed. |
 | `POST /api/sessions/:id/participants/:pid/remove` | host | `{ reason? }` (≤140) | Remove a guest: their own open-round entries are soft-deleted, pending claims rejected, readiness and group memberships cleared. `409 CANNOT_REMOVE_HOST`, `409 ALREADY_REMOVED`. The reason is stored for that guest only, never in events. |
 | `POST /api/sessions/:id/participants/:pid/restore` | host | — | Undo a removal: the guest and the entries that left with them come back if their round is still open. |
+| `GET /api/sessions/:id/summary?date=<label>` | anyone in the order | — | "Who ordered what" as a PNG (confirmed rounds, corrections applied). `date` is a short label formatted on the device (letters, digits, spaces, commas, dots; else an ISO date). Same per-person limit as `/sync`; `413 TOO_LONG` for very large orders (use the text copy); `Cache-Control: private, no-store`. |
 | `POST /api/sessions/:id/close` | host | — | End session: read-only, invite stops working, deleted after `CLOSED_RETENTION_DAYS` (7). |
 | `GET /api/sessions/:id/events` | participant | — | Server-Sent Events; see realtime.md. `503 TOO_MANY_STREAMS`. |
 | `GET /api/health` | anyone | — | `200 { ok, database }` or `503`. |

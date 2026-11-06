@@ -27,6 +27,7 @@ import { InviteSheet } from "./invite-sheet";
 import { OrderTicket, type TicketActions } from "./order-ticket";
 import { ArrivalPills, ARRIVAL_MS } from "./arrival-pills";
 import { OrderOptionsSheet } from "./order-options-sheet";
+import { SummarySheet } from "./summary-sheet";
 import { SessionHeader } from "./session-header";
 import { Toasts, useToasts } from "./toasts";
 
@@ -51,6 +52,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
   const anyConfirmed = snapshot.rounds.some((r) => r.status === "CONFIRMED");
   const ended = sessionOpen ? null : anyConfirmed ? "ended" : "cancelled";
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(false);
 
   // Someone else's new dishes, noticed when a newer snapshot arrives (compared during render, React's "previous
   // value" pattern), shown as pills for a moment and tagged on their rows.
@@ -218,8 +220,12 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
 
   async function closeOrder(): Promise<boolean> {
     const accepted = Boolean(await mutate({ kind: "close" }));
-    // An ended order opens on its tickets; a cancelled one has none, so it stays on the (now read-only) order.
-    if (accepted && anyConfirmed) setView("rounds");
+    // An ended order opens on its tickets, and the host gets "who ordered what" to keep for settling up. A cancelled
+    // one has neither, so it stays on the (now read-only) order.
+    if (accepted && anyConfirmed) {
+      setView("rounds");
+      setSummaryOpen(true);
+    }
     return accepted;
   }
 
@@ -239,6 +245,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
         }
       />
       {sessionOpen ? <ArrivalPills arrivals={arrivals} onSelect={jumpTo} /> : null}
+      {anyConfirmed ? <SummarySheet open={summaryOpen} onOpenChange={setSummaryOpen} snapshot={snapshot} /> : null}
       {isHost && sessionOpen ? (
         <OrderOptionsSheet
           open={optionsOpen}
@@ -275,10 +282,18 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
         {!sessionOpen ? (
           <div role="status" className="mb-4 flex items-start gap-2.5 px-1 text-ink-soft">
             <Lock className="mt-0.5 size-5 shrink-0" aria-hidden />
-            <p>
-              {ended === "cancelled" ? "This order was cancelled. Nothing was sent to the waiter." : "This order has ended. Nothing can be changed."} Everything is
-              deleted on <LocalTime iso={snapshot.session.expiresAt} style="date" />.
-            </p>
+            <div className="min-w-0 flex-1">
+              <p>
+                {ended === "cancelled" ? "This order was cancelled. Nothing was sent to the waiter." : "This order has ended. Nothing can be changed."} Everything is
+                deleted on <LocalTime iso={snapshot.session.expiresAt} style="date" />.
+              </p>
+              {ended === "ended" ? (
+                <Button variant="outline" className="mt-3" onClick={() => setSummaryOpen(true)}>
+                  <ReceiptText className="size-5" aria-hidden />
+                  Who ordered what
+                </Button>
+              ) : null}
+            </div>
           </div>
         ) : null}
         {claimsForHost.length > 0 ? (
@@ -336,6 +351,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
               onRemoveDuplicate={(entry) => actions.remove(entry)}
               roundNumber={round.number}
               onRemoveGuest={isHost && sessionOpen ? removeGuest : undefined}
+              onSummary={anyConfirmed ? () => setSummaryOpen(true) : undefined}
             />
           ) : (
             <GroupsView snapshot={snapshot} entries={roundEntries} onSetMembers={(label, memberIds) => void mutate({ kind: "groupMembers", label, memberIds })} />
