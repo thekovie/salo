@@ -30,13 +30,13 @@ test("keyboard only: add dishes, step quantities, switch views, open and close d
   await page.keyboard.press("Home");
   await expect(page.getByRole("tab", { name: /Order/ })).toHaveAttribute("aria-selected", "true");
 
-  // Invite dialog: Enter opens it, focus moves inside, Escape closes it and returns focus.
+  // Invite drawer: Enter opens it, focus moves inside, Escape closes it and returns focus.
   const invite = page.getByRole("button", { name: "Invite" });
   await invite.focus();
   await page.keyboard.press("Enter");
   const dialog = page.getByRole("dialog", { name: "Invite the table" });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole("button", { name: "Close" })).toBeFocused();
+  await expect.poll(() => dialog.evaluate((el) => el.contains(document.activeElement))).toBe(true);
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
   await expect(invite).toBeFocused();

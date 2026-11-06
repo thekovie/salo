@@ -169,3 +169,9 @@ Tests: 89 unit/integration, 18 e2e (join helper asserts the live line and the ti
 ## Motion system (`feat/motion`, stacked on the UX fixes)
 
 From the same audit's motion review (only three moments animated before). Added motion tokens; `Ticker` for every count; wash on re-add and live arrivals (kept under reduced motion as information); View Transitions for remove/Undo; confirm sequence (sheet rise → stamp at +280 ms → thunk → Android buzz → toast); sheets and dialogs enter/exit with `@starting-style` and `allow-discrete`; toasts fade out; sync pill waits 400 ms before "Saving…"; consistent press feedback. No new dependencies. Tests: e2e `motion.spec.ts` pins tick direction, wash duration under reduced motion and the stamp delay; tests now wait on the pill's real state (`data-sync`). 89 unit + 19 e2e, three consecutive green runs.
+
+**Merged** 2026-11-06: PR #9 (UX fixes), PR #11 (motion; replaces #10, closed when its base branch was deleted).
+
+## Bottom drawers (`feat/drawers`)
+
+Owner asked whether shadcn would improve the UI; answer: not wholesale (the app already has accessible primitives and its own look), but a swipe-to-dismiss bottom drawer helps one-handed use. Added `vaul` (what shadcn's Drawer wraps) as `src/components/ui/drawer.tsx`, styled as a ticket torn off the pad, and moved the invite sheet and the correction sheet onto it. Found: vaul leaves focus on the trigger unless `autoFocus` is set; our Drawer turns it on (keyboard test now checks focus moves inside). Also fixed a test that measured contrast in the same frame as a theme switch. 89 unit + 19 e2e, two consecutive green runs.

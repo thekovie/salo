@@ -415,3 +415,11 @@ dialog.sheet {
 ::view-transition-old(*) {
   animation-duration: var(--dur-quick);
 }
+
+/* A ticket torn off the pad from the bottom: perforated top edge only (bottom drawers). */
+.ticket-top {
+  --perf-top: radial-gradient(circle at 50% 0, transparent 5px, #000 5.5px) top / 16px 10px repeat-x,
+    linear-gradient(#000, #000) bottom / 100% calc(100% - 9px) no-repeat;
+  mask: var(--perf-top);
+  -webkit-mask: var(--perf-top);
+}

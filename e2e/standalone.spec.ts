@@ -138,6 +138,8 @@ test("landing and workspace have no automatically detectable accessibility viola
   const workspace = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
   expect(workspace.violations).toEqual([]);
   await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  // Let the theme switch paint (colour transitions settle) before measuring contrast.
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   const dark = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
   expect(dark.violations).toEqual([]);
   await page.getByRole("button", { name: "Review order" }).click();
