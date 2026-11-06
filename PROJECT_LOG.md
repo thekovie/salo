@@ -217,3 +217,14 @@ Tests: 95 unit/integration (new: removal, arrivals, relative time), 24 e2e (new:
 
 Left as accepted: guests may attribute dishes to other people in the order (by design: ordering for a friend); host-written reasons are plain text; a large table behind one carrier-grade NAT shares the 30 joins/hour.
 
+## Who ordered what (`feat/order-summary`)
+
+Owner asked for a prompt at the end of an order to copy every order as text or save it as an image, to track who ordered what for paying later. Owner chose: items only (no prices), offered at the end and anytime.
+
+- `src/lib/summary.ts` (pure) builds the summary from confirmed rounds only, applying corrections: cancellations lower counts, a swap reads "A → B", and an unconfirmed round is noted and left out. Order: people (host labelled), groups (with members, or "members not set"), whole table, unassigned. Removed guests show "(left)". `summaryText` gives the group-chat text.
+- `GET /api/sessions/:id/summary`: a PNG drawn with the link-preview renderer's fonts and colours. Members only, under the snapshot read limit, height capped at 8000 px (`413` beyond, use the text), `private, no-store`. The date label comes from the device.
+- `SummarySheet` (vaul drawer): preview, then Copy text, Save image (share sheet with the file on phones, download elsewhere), and Share text.
+- Opens for the host after End order; a button on the ended banner for everyone; on the People tab once a round is confirmed.
+
+Tests: 100 unit/integration (new: summary with corrections, groups, table, removed guest, unconfirmed round); 25 e2e (new: end, then summary, copy text checked on the clipboard, PNG download, guest access, strangers get 404).
+

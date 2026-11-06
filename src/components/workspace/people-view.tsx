@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleCheck, Clock, Hand } from "lucide-react";
+import { CircleCheck, Clock, Hand, ReceiptText } from "lucide-react";
 import { hasSubLines, preparationLabel } from "@/lib/consolidate";
 import { everyone, type SessionSnapshot, type SnapshotEntry } from "@/lib/snapshot";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,8 @@ interface PeopleViewProps {
   /** Host, order open: remove a guest. Resolves true when accepted. */
   onRemoveGuest?: (participantId: string, name: string, reason: string | null) => Promise<boolean>;
   roundNumber: number;
+  /** Opens "who ordered what" (once a round is confirmed). */
+  onSummary?: () => void;
 }
 
 function Lines({ bucket, claimable, canClaimEntry, myClaims, onClaim }: { bucket: PersonBucket; claimable: boolean; canClaimEntry: (e: SnapshotEntry) => boolean; myClaims: Set<string>; onClaim: (e: SnapshotEntry) => void }) {
@@ -71,7 +73,7 @@ function Lines({ bucket, claimable, canClaimEntry, myClaims, onClaim }: { bucket
 }
 
 /** By person (brief 5.3, 5.8): who ordered what, who hasn't ordered, who is ready; guests claim dishes recorded for them. */
-export function PeopleView({ snapshot, entries, canClaim, onClaim, onRemoveDuplicate, onRemoveGuest, roundNumber }: PeopleViewProps) {
+export function PeopleView({ snapshot, entries, canClaim, onClaim, onRemoveDuplicate, onRemoveGuest, roundNumber, onSummary }: PeopleViewProps) {
   // The host usually orders for others; an empty host card is noise. Guests with nothing yet stay visible.
   // Removed guests only show while something is still marked for them.
   const draftOpen = snapshot.rounds.find((r) => r.id === snapshot.activeRoundId)?.status === "DRAFT";
@@ -98,6 +100,15 @@ export function PeopleView({ snapshot, entries, canClaim, onClaim, onRemoveDupli
 
   return (
     <div className="space-y-3">
+      {onSummary ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-paper px-4 py-2.5">
+          <p className="text-sm text-ink-soft">For settling up: everyone&rsquo;s confirmed dishes.</p>
+          <button type="button" onClick={onSummary} className="inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-full px-3 font-semibold text-ink hover:bg-ink/6">
+            <ReceiptText className="size-4" aria-hidden />
+            Who ordered what
+          </button>
+        </div>
+      ) : null}
       {hints.length > 0 ? (
         <section aria-label="Possible double orders" className="rounded-2xl bg-saffron-wash p-4 text-ink">
           <h3 className="font-sans text-sm font-semibold">Possibly ordered twice</h3>

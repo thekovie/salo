@@ -9,7 +9,7 @@ const FONT_DIR = path.join(process.cwd(), "assets", "fonts");
 
 let fontCache: ReturnType<typeof loadFonts> | undefined;
 /** Read once per process: previews are fetched by crawlers, so every request must stay cheap. */
-const fonts = () => (fontCache ??= loadFonts());
+export const fonts = () => (fontCache ??= loadFonts());
 
 async function loadFonts() {
   const load = (file: string) => readFile(path.join(FONT_DIR, file));
@@ -27,7 +27,7 @@ async function loadFonts() {
   ];
 }
 
-function Mark({ size }: { size: number }) {
+export function Mark({ size }: { size: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 48 48">
       <circle cx="25" cy="23" r="20" fill={C.tomato} />
