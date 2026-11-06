@@ -38,4 +38,10 @@ PostgreSQL, defined in `src/server/db/schema.ts`; migrations in `drizzle/` (appl
 
 ## Consolidation
 
-Implemented in Phase 1 (documented with it).
+`src/lib/consolidate.ts`, pure and derived from source entries (never stored):
+
+- **Dish identity**: `dishes.normalized_name` = NFKC, trimmed, repeated spaces collapsed, lower-cased (`src/lib/dish-name.ts`). "Chicken Katsu" and "chicken  katsu" are one dish; "Chicken Cutlet" never matches. The displayed name is the first one typed.
+- **Preparation key**: dish id + normalized variant + normalized instructions. Entries with the same key add up; different sizes or instructions stay separate lines under the dish heading ("Regular ×2", "No sauce ×1").
+- **Consolidated quantity** = sum of active (not removed) entry quantities per preparation; the dish total is the sum of its preparations.
+- **Order**: dishes in the order first added; within a dish the plain preparation first, then others as they first appeared.
+- Editing never happens on a consolidated line: steppers act on one source entry, so nobody's entry changes because of someone else's (brief 6.4).

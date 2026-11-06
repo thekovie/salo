@@ -29,3 +29,31 @@ Running record of decisions, issues, tests and deviations, one section per PR. N
 - The start button calls `POST /api/sessions`, which ships in M1.
 
 **Open**: DESIGN.md is written from the built world after M1 ships the workspace (impeccable finish step).
+
+**Merged** 2026-11-06 as PR #2 (PR #1 closed: GitGuardian flagged a throwaway CI database password; the work was squashed onto a fresh branch and local/CI PostgreSQL now uses password-less trust auth).
+
+## M1 · Standalone ordering (`feat/m1-standalone-ordering`)
+
+**Built**
+- `POST /api/sessions` (host, host credential cookie, draft Round 1, rate limit), entry add/update/remove/restore, rename, `/sync` snapshot (repeatable read).
+- `runMutation`: per-session row lock, idempotent replay, revision bump, durable event, `pg_notify`, all in one transaction.
+- Conservative dish normalization and pure consolidation (preparation = dish + variant + instructions), ticket text for copying.
+- Workspace: tomato header with rename and sync pill, consolidated ticket with per-source steppers, composer with suggestions and progressive details (for whom, size, instructions), toasts with Undo, failure box with Retry/Discard.
+- Waiter preview with fluid large type, copy as text and screen wake lock.
+- Landing "Pick up where you left off" from session cookies.
+- DESIGN.md written from the built world.
+
+**Tests**: 50 unit/integration (incl. 12 concurrent adds giving exact totals and one event per revision, stale-revision conflict, cross-session ids, guest ownership, idempotent retry) + 6 Playwright e2e (scenarios 1, 5, 6, 7, 8, 9, stranger 404, axe WCAG 2.2 AA on landing, workspace light/dark and waiter). CI gains an e2e job.
+
+**Decisions / deviations**
+- Restore endpoint added (`POST …/entries/:id/restore`) for Undo; not in brief section 10.
+- A typed name ("Miguel") is stored as an INDIVIDUAL batch with `collective_label` when that person has not joined; guests' own entries default to themselves.
+- The client refetches the full snapshot after each change (fine at ≤ 300 entries); SSE in M2 replaces manual refresh for other devices.
+- Contrast fixes found by axe: tomato darkened to oklch(0.5 0.185 30) so white text passes 4.5:1; sync pill uses `bg-ink/20`; toast colours tokenised per theme.
+- Dark mode now follows the system preference in CSS alone (the 404 render path skipped the theme script).
+- Browser check note: the automation browser wiped its own cookie jar when the server restarted (a script-set cookie vanished too); not an app behaviour.
+
+**Independent reviews (before PR)**
+- Security review: no critical/high. Fixed: lifetime caps (1,000 entries ever, 300 dishes) and 120 changes/min per participant; revoked/expired credentials ignored on resume and identity; NUL refused at validation; body limit counts bytes; idempotency key bound to the mutation type; proxy matcher exclusions anchored. Documented: rate limits trust exactly one proxy hop.
+- Code review: 1 high, 3 medium fixed by rewriting the client queue (`use-session.ts`): changes go one at a time in order (Undo can't overtake its removal), repeated stepper taps coalesce to the final number with the revision read at send time, steppers never unmount mid-tap, a committed change stays drawn until a snapshot containing it arrives (resync on online, focus and every 5 s while waiting), network failures retry automatically with backoff and the same key, refused changes are not drawn and are listed by name. Server: removing/restoring into the same state is a no-op, restore re-checks the entry cap. "Show waiter" is unfocusable at zero items.
+- Tests after fixes: 57 unit/integration, 7 e2e (adds rapid-tap test).

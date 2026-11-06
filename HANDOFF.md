@@ -6,8 +6,8 @@ Read this first when resuming. Specification: `docs/brief.md`. Decisions per PR:
 
 | Milestone | Brief phase | State |
 |---|---|---|
-| M0 Foundation | 0 | In review (`feat/m0-foundation`) |
-| M1 Standalone ordering | 1 | Not started |
+| M0 Foundation | 0 | Merged (PR #2) |
+| M1 Standalone ordering | 1 | In review (`feat/m1-standalone-ordering`) |
 | M2 Collaboration (QR, SSE) | 2 | Not started |
 | M3 Groups & hybrid | 3 | Not started |
 | M4 Review, confirm, rounds | 4 | Not started |
@@ -27,9 +27,9 @@ Read this first when resuming. Specification: `docs/brief.md`. Decisions per PR:
 
 ## Known limitations
 
-- Only the landing page exists; starting an order needs M1.
+- Other devices see changes only after a reload until SSE lands (M2). Guests cannot join yet (M2).
 - Backups, cleanup job, rate limits on endpoints and SSE proxy testing are Phase 5 items.
 
 ## Next steps
 
-M1: session creation (host credential cookie), workspace with composer, autocomplete, steppers, soft delete + Undo, optional attribution, consolidation, waiter preview.
+M2: invite sheet (QR, link, code) with the invite-link preview card, guest join, SSE stream with Last-Event-ID replay and resync, pending-change queue with retry/backoff, reconnecting state.

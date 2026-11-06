@@ -18,6 +18,8 @@ Salo runs as two independent resources on the Coolify VPS (brief 13.2). Never po
 | `CLOSED_RETENTION_DAYS` | no (7) | Days a closed session stays readable before deletion. |
 | `INACTIVE_RETENTION_DAYS` | no (30) | Days without activity before an unclosed session is deleted. |
 
+Rate limits identify clients by the **last** `X-Forwarded-For` entry, which assumes exactly one trusted reverse proxy (Coolify's) appends it. Never expose the container port directly, and do not put a CDN in front without revisiting `src/server/auth/client-ip.ts`.
+
 Untick "Available at Buildtime" for `DATABASE_URL` (it is a secret and is only needed at runtime).
 
 ## Resource B: PostgreSQL

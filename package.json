@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint src tests next.config.ts drizzle.config.ts vitest.config.mts playwright.config.ts eslint.config.mjs",
+    "lint": "eslint src tests e2e next.config.ts drizzle.config.ts vitest.config.mts playwright.config.ts eslint.config.mjs",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
