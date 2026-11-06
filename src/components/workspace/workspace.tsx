@@ -9,6 +9,8 @@ import { consolidate } from "@/lib/consolidate";
 import type { SessionSnapshot } from "@/lib/snapshot";
 import { normalizeText } from "@/lib/dish-name";
 import { liveTicket } from "@/lib/ticket";
+import { withViewTransition } from "@/lib/view-transition";
+import { Ticker } from "@/components/motion/ticker";
 import { cn } from "@/lib/utils";
 import { canEditEntry } from "@/lib/permissions";
 import { byGroup, readinessSummary } from "@/lib/views";
@@ -112,9 +114,13 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
     canEdit: (entry) => canEditEntry(snapshot.me, entry),
     setQuantity: (entry: OverlayEntry, quantity) => void mutate({ kind: "update", entry, quantity }),
     remove: (entry: OverlayEntry) => {
-      void mutate({ kind: "remove", entry });
+      // The row fades and the rest of the ticket closes the gap (View Transition where supported).
+      withViewTransition(() => void mutate({ kind: "remove", entry }));
       // Queued behind the removal, so Undo can never reach the server before it.
-      show({ message: `Removed ${entry.dishName} ×${entry.quantity}.`, action: { label: "Undo", run: () => void mutate({ kind: "restore", entry }) } });
+      show({
+        message: `Removed ${entry.dishName} ×${entry.quantity}.`,
+        action: { label: "Undo", run: () => withViewTransition(() => void mutate({ kind: "restore", entry })) },
+      });
     },
   };
 
@@ -127,6 +133,8 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
     if (result) {
       setJustConfirmed(round.id);
       setModeState({ mode: "waiter", key: `${round.id}:CONFIRMED` });
+      // A tiny buzz as the stamp hits the paper (Android; ignored elsewhere and with reduced motion).
+      if (!matchMedia("(prefers-reduced-motion: reduce)").matches) setTimeout(() => navigator.vibrate?.(12), 590);
       // Let the stamp land first; the message follows it.
       setTimeout(() => show({ message: `Round ${round.number} confirmed. Kain na!` }), 900);
       return null;
@@ -263,7 +271,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
           <div className="flex items-center justify-between gap-3 px-2">
             <div className="min-w-0">
               <p className="whitespace-nowrap text-ink-soft" data-testid="round-total">
-                <span className="tally text-xl text-ink">{total}</span> {total === 1 ? "item" : "items"}
+                <Ticker value={total} className="tally text-xl text-ink" /> {total === 1 ? "item" : "items"}
                 <span className="hidden sm:inline"> this round</span>
               </p>
               {isHost && isOpen && ready.total > 0 ? (

@@ -150,6 +150,17 @@
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Motion tokens: every enter uses ease-out-expo; exits use ease-in-exit at about 60% of the enter. */
+:root {
+  --dur-press: 100ms;
+  --dur-quick: 160ms;
+  --dur-base: 240ms;
+  --dur-sheet: 300ms;
+  --dur-stamp: 520ms;
+  --dur-wash: 900ms;
+  --ease-in-exit: cubic-bezier(0.4, 0, 1, 1);
+}
+
 @layer base {
   * {
     border-color: var(--rule);
@@ -237,6 +248,15 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+  /* The wash is a colour change that says "this just changed", not movement: keep it. */
+  .wash {
+    animation-duration: var(--dur-wash) !important;
+  }
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
 }
 
 @keyframes toast-in {
@@ -256,7 +276,7 @@
   }
 }
 .wash {
-  animation: landed 900ms var(--ease-out-expo) both;
+  animation: landed var(--dur-wash) var(--ease-out-expo) both;
 }
 
 /* The signature moment: a rubber stamp lands on a confirmed round. */
@@ -276,4 +296,122 @@
     rotate: -8deg;
     scale: 1;
   }
+}
+
+/* Quantity tick: the new number slides in from the direction it moved. */
+@keyframes tick-up {
+  from {
+    translate: 0 0.28em;
+    opacity: 0.25;
+  }
+}
+@keyframes tick-down {
+  from {
+    translate: 0 -0.28em;
+    opacity: 0.25;
+  }
+}
+.tick[data-dir="up"] {
+  animation: tick-up var(--dur-quick) var(--ease-out-expo);
+}
+.tick[data-dir="down"] {
+  animation: tick-down var(--dur-quick) var(--ease-out-expo);
+}
+
+/* The ticket takes the stamp's weight at impact. */
+@keyframes thunk {
+  50% {
+    translate: 0 2px;
+  }
+}
+.thunk {
+  animation: thunk 90ms ease-out 590ms;
+}
+
+/* Dialogs (confirm, invite, members, corrections) rise in and fade out; the backdrop fades. */
+dialog {
+  transition:
+    opacity var(--dur-base) var(--ease-out-expo),
+    translate var(--dur-base) var(--ease-out-expo),
+    scale var(--dur-base) var(--ease-out-expo),
+    display var(--dur-base) allow-discrete,
+    overlay var(--dur-base) allow-discrete;
+}
+dialog:not([open]) {
+  opacity: 0;
+  translate: 0 8px;
+  transition-duration: 150ms;
+  transition-timing-function: var(--ease-in-exit);
+}
+@starting-style {
+  dialog[open] {
+    opacity: 0;
+    translate: 0 12px;
+    scale: 0.98;
+  }
+}
+dialog::backdrop {
+  transition:
+    opacity 200ms ease-out,
+    display 200ms allow-discrete,
+    overlay 200ms allow-discrete;
+}
+dialog:not([open])::backdrop {
+  opacity: 0;
+}
+@starting-style {
+  dialog[open]::backdrop {
+    opacity: 0;
+  }
+}
+
+/* Full-screen sheets (review, waiter ticket) rise from below. */
+dialog.sheet {
+  transition-duration: var(--dur-sheet);
+}
+@starting-style {
+  dialog.sheet[open] {
+    opacity: 0;
+    translate: 0 24px;
+    scale: 1;
+  }
+}
+
+/* Panels and chips that appear in place ease in. */
+.ease-in-panel {
+  transition:
+    opacity 200ms var(--ease-out-expo),
+    translate 200ms var(--ease-out-expo);
+}
+@starting-style {
+  .ease-in-panel {
+    opacity: 0;
+    translate: 0 8px;
+  }
+}
+.fade-in {
+  transition: opacity 120ms ease-out;
+}
+@starting-style {
+  .fade-in {
+    opacity: 0;
+  }
+}
+
+/* Toast leaving. */
+.toast-leaving {
+  opacity: 0;
+  translate: 0 6px;
+  transition:
+    opacity var(--dur-quick) var(--ease-in-exit),
+    translate var(--dur-quick) var(--ease-in-exit);
+}
+
+/* Rows moving when a dish is removed or restored (View Transitions): siblings glide, the removed one fades. */
+::view-transition-group(*) {
+  animation-duration: var(--dur-base);
+  animation-timing-function: var(--ease-out-expo);
+}
+::view-transition-old(*) {
+  animation-duration: var(--dur-quick);
 }

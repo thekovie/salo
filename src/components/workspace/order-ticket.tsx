@@ -6,7 +6,9 @@ import type { OverlayEntry } from "@/hooks/use-session";
 import { consolidate, hasSubLines, preparationLabel, type ConsolidatedDish } from "@/lib/consolidate";
 import { normalizeText } from "@/lib/dish-name";
 import { attributionLabel, type SessionSnapshot } from "@/lib/snapshot";
+import { Ticker } from "@/components/motion/ticker";
 import { cn } from "@/lib/utils";
+import { transitionName } from "@/lib/view-transition";
 import { Stepper } from "./stepper";
 
 export interface TicketActions {
@@ -63,7 +65,7 @@ function DishRow({ dish, people, actions, readOnly, washKey, fresh }: { dish: Co
   const panelId = `dish-${dish.dishId}`;
 
   return (
-    <li className="relative px-5 py-2.5" data-testid="dish-row" data-dish={normalizeText(dish.name)}>
+    <li className="relative px-5 py-2.5" data-testid="dish-row" data-dish={normalizeText(dish.name)} style={{ viewTransitionName: transitionName("dish", dish.dishId) }}>
       {/* Remounts (and replays) whenever someone adds this dish again, here or on another phone. */}
       {fresh ? <span key={washKey} aria-hidden className="wash pointer-events-none absolute inset-0" /> : null}
       <div className="flex min-h-11 items-center justify-between gap-3">
@@ -76,7 +78,7 @@ function DishRow({ dish, people, actions, readOnly, washKey, fresh }: { dish: Co
           <Stepper size="lg" value={single.quantity} disabled={isUnsavedAdd(single)} label={dish.name} onChange={(q) => actions.setQuantity(single, q)} onRemove={() => actions.remove(single)} />
         ) : single ? (
           <span className="tally text-3xl text-tomato-ink" aria-label={`${single.quantity} ${dish.name}`}>
-            ×{single.quantity}
+            <Ticker value={single.quantity} prefix="×" />
           </span>
         ) : (
           <button
@@ -86,9 +88,9 @@ function DishRow({ dish, people, actions, readOnly, washKey, fresh }: { dish: Co
             aria-controls={panelId}
             className="-mr-2 inline-flex min-h-11 cursor-pointer items-center gap-1 rounded-full px-2 hover:bg-ink/6"
           >
-            <span className="tally text-3xl text-tomato-ink">×{dish.quantity}</span>
+            <Ticker value={dish.quantity} prefix="×" className="tally text-3xl text-tomato-ink" />
             <span className="sr-only">{open ? `Hide who ordered ${dish.name}` : `Show who ordered ${dish.name}`}</span>
-            <ChevronDown className={cn("size-5 text-ink-soft transition-transform duration-200", open && "rotate-180")} aria-hidden />
+            <ChevronDown className={cn("size-5 text-ink-soft transition-transform duration-200 ease-[var(--ease-out-expo)]", open && "rotate-180")} aria-hidden />
           </button>
         )}
       </div>
@@ -105,7 +107,7 @@ function DishRow({ dish, people, actions, readOnly, washKey, fresh }: { dish: Co
       ) : null}
 
       {!single && open ? (
-        <div id={panelId} className="mt-1 space-y-2">
+        <div id={panelId} className="ease-in-panel mt-1 space-y-2">
           {dish.preparations.map((line) => (
             <div key={line.key}>
               {hasSubLines(dish) ? (
@@ -140,7 +142,7 @@ export function OrderTicket({ entries, people, roundNumber, copy, actions, readO
           Round {roundNumber}
         </h2>
         <span className="tally text-sm text-ink-soft">
-          {consolidated.totalItems} {consolidated.totalItems === 1 ? "item" : "items"}
+          <Ticker value={consolidated.totalItems} /> {consolidated.totalItems === 1 ? "item" : "items"}
         </span>
       </div>
       {consolidated.dishes.length === 0 ? (

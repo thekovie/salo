@@ -58,7 +58,7 @@ test("capture every screen", async ({ page, browser, request }) => {
   await addDish(guest.page, "Iced Tea", 3);
   await expect(page.getByText("Iced Tea")).toBeVisible();
   await page.reload();
-  await expect(page.getByText("Saved")).toBeVisible();
+  await expect(page.locator('[data-sync="saved"]')).toBeVisible();
   await shot(page, "cap-02-workspace-light");
   await page.emulateMedia({ reducedMotion: "reduce", colorScheme: "dark" });
   await shot(page, "cap-03-workspace-dark");

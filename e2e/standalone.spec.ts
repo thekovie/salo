@@ -23,7 +23,7 @@ test("host-only ordering: start, add dishes, consolidate, waiter ticket (scenari
   await addDish(page, "Chicken Katsu", 2);
   await addDish(page, "chicken katsu");
   await addDish(page, "Chicken Cutlet");
-  await expect(page.getByText("Saved")).toBeVisible();
+  await expect(page.locator('[data-sync="saved"]')).toBeVisible();
 
   const rows = page.getByTestId("dish-row");
   await expect(rows).toHaveCount(2);
@@ -75,9 +75,9 @@ test("removing and Undo; quantity steps (scenario 7)", async ({ page }) => {
   await addDish(page, "Gyoza");
   await page.getByRole("button", { name: "One more Gyoza" }).click();
   await expect(page.getByTestId("dish-row")).toContainText("2");
-  await expect(page.getByText("Saved")).toBeVisible();
+  await expect(page.locator('[data-sync="saved"]')).toBeVisible();
   await page.getByRole("button", { name: "One less Gyoza" }).click();
-  await expect(page.getByText("Saved")).toBeVisible();
+  await expect(page.locator('[data-sync="saved"]')).toBeVisible();
   await page.getByRole("button", { name: "Remove Gyoza" }).click();
   await expect(page.getByTestId("dish-row")).toHaveCount(0);
   await page.getByRole("button", { name: "Undo" }).click();
@@ -90,10 +90,10 @@ test("removing and Undo; quantity steps (scenario 7)", async ({ page }) => {
 test("rapid taps on a stepper all count", async ({ page }) => {
   await startOrder(page);
   await addDish(page, "Gyoza");
-  await expect(page.getByText("Saved")).toBeVisible();
+  await expect(page.locator('[data-sync="saved"]')).toBeVisible();
   const plus = page.getByRole("button", { name: "One more Gyoza" });
   for (let i = 0; i < 4; i++) await plus.click();
-  await expect(page.getByText("Saved")).toBeVisible();
+  await expect(page.locator('[data-sync="saved"]')).toBeVisible();
   await page.reload();
   await expect(items(page)).toContainText("5");
 });

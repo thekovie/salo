@@ -22,7 +22,7 @@ interface WaiterTicketProps {
 export function WaiterTicket({ ticket, confirmed, justConfirmed, size = "waiter", className, removableCorrections }: WaiterTicketProps) {
   const big = size === "waiter";
   return (
-    <section aria-label={`Round ${ticket.roundNumber}${confirmed ? ", confirmed with the waiter" : ""}`} className={cn("ticket px-6", big && "sm:px-10", copyClass(ticket.roundNumber), className)}>
+    <section aria-label={`Round ${ticket.roundNumber}${confirmed ? ", confirmed with the waiter" : ""}`} className={cn("ticket px-6", big && "sm:px-10", copyClass(ticket.roundNumber), justConfirmed && "thunk", className)}>
       <div className="flex items-baseline justify-between gap-4 pt-2">
         <h2 className={cn("font-mono font-medium tracking-[0.16em] text-tomato-ink uppercase", big ? "text-lg" : "text-sm")}>Round {ticket.roundNumber}</h2>
         {confirmed ? (

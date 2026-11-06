@@ -2,9 +2,11 @@
 
 import { X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
 
 export interface Toast {
   id: number;
+  leaving?: boolean;
   message: string;
   action?: { label: string; run: () => void };
 }
@@ -14,7 +16,12 @@ const TOAST_MS = 6000;
 export function useToasts() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const nextId = useRef(1);
-  const dismiss = useCallback((id: number) => setToasts((list) => list.filter((t) => t.id !== id)), []);
+  const LEAVE_MS = 160;
+  // Fade out, then remove (reduced motion collapses the fade but keeps the order of events).
+  const dismiss = useCallback((id: number) => {
+    setToasts((list) => list.map((t) => (t.id === id ? { ...t, leaving: true } : t)));
+    setTimeout(() => setToasts((list) => list.filter((t) => t.id !== id)), LEAVE_MS);
+  }, []);
   const show = useCallback((toast: Omit<Toast, "id">) => {
     const id = nextId.current++;
     // One at a time: the newest message replaces the last, so Undo always refers to what just happened.
@@ -30,7 +37,7 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: (id: number)
     return () => clearTimeout(timer);
   }, [toast.id, onDismiss]);
   return (
-    <div className="pointer-events-auto flex items-center gap-2 rounded-2xl bg-toast py-1.5 pr-1.5 pl-4 text-toast-fg shadow-ticket motion-safe:animate-[toast-in_220ms_var(--ease-out-expo)]">
+    <div className={cn("pointer-events-auto flex items-center gap-2 rounded-2xl bg-toast py-1.5 pr-1.5 pl-4 text-toast-fg shadow-ticket motion-safe:animate-[toast-in_220ms_var(--ease-out-expo)]", toast.leaving && "toast-leaving")}>
       <span className="flex-1 text-sm">{toast.message}</span>
       {toast.action ? (
         <button

@@ -8,7 +8,8 @@ export function Stamp({ label = "Confirmed", className, animate = false }: { lab
       className={cn(
         "pointer-events-none inline-block rotate-[-8deg] rounded-md border-[3px] border-double border-tomato-ink px-[0.6em] py-[0.15em]",
         "font-mono font-medium tracking-[0.18em] text-tomato-ink uppercase opacity-85 [mix-blend-mode:var(--stamp-blend)]",
-        animate && "motion-safe:animate-[stamp-in_520ms_var(--ease-out-expo)_both]",
+        // Lands a beat after the ticket arrives, so the eye is already there.
+        animate && "motion-safe:animate-[stamp-in_var(--dur-stamp)_var(--ease-out-expo)_280ms_both]",
         className,
       )}
     >

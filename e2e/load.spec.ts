@@ -32,7 +32,7 @@ test("100 entries for 20 people stay quick to load and to change", async ({ page
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.getByText("Calamansi Juice")).toBeVisible();
   const addVisibleMs = Date.now() - tapStart;
-  await expect(page.getByText("Saved")).toBeVisible();
+  await expect(page.locator('[data-sync="saved"]')).toBeVisible();
   const addSavedMs = Date.now() - tapStart;
 
   await page.getByRole("tab", { name: /People/ }).click();
