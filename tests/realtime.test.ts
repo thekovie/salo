@@ -130,8 +130,8 @@ describe("event stream", () => {
 
     const a = new AbortController();
     const b = new AbortController();
-    const hostStream = (await openEventStream(db, host, 1, a.signal))!.getReader();
-    const guestStream = (await openEventStream(db, guest, 3, b.signal))!.getReader();
+    const hostStream = (await openEventStream(db, host, "test", 1, a.signal))!.getReader();
+    const guestStream = (await openEventStream(db, guest, "test", 3, b.signal))!.getReader();
     const replayed = await readUntil(hostStream, (t) => t.includes("id: 3"));
     expect(replayed).toContain("retry: 3000");
     expect(replayed).toMatch(/id: 2\nevent: change\ndata: .*participant\.joined/);
@@ -148,7 +148,7 @@ describe("event stream", () => {
     await add(db, host, { dishName: "Gyoza", quantity: 1 });
     await db.delete(sessionEvents).where(eq(sessionEvents.sessionId, sessionId));
     const abort = new AbortController();
-    const reader = (await openEventStream(db, host, 0, abort.signal))!.getReader();
+    const reader = (await openEventStream(db, host, "test", 0, abort.signal))!.getReader();
     expect(await readUntil(reader, (t) => t.includes("event: resync"))).toContain("id: 2\nevent: resync");
     abort.abort();
   });

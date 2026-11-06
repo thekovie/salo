@@ -2,7 +2,7 @@
 
 import { Check, Copy, Share2, UserPlus, X } from "lucide-react";
 import QRCode from "qrcode";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
 import { BRAND_HEX } from "@/lib/site";
 import { inviteMessage, inviteUrl } from "@/lib/invite";
@@ -18,14 +18,19 @@ interface InviteSheetProps {
  * Invite (brief 5.6): QR for the people at the table, a link for the group chat, a short code to read out.
  * A native <dialog>: focus is trapped and Escape closes it without extra code.
  */
+const noSubscribe = () => () => {};
+
 export function InviteSheet({ appUrl, joinCode, title, peopleCount }: InviteSheetProps) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [qr, setQr] = useState<string | null>(null);
   const [copied, setCopied] = useState<"link" | "failed" | null>(null);
   const url = inviteUrl(appUrl, joinCode);
-  const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
+  // Same answer on the server and in the first client render (false), then the real one: no hydration mismatch.
+  const canShare = useSyncExternalStore(noSubscribe, () => typeof navigator.share === "function", () => false);
+  const [opened, setOpened] = useState(false);
 
   useEffect(() => {
+    if (!opened) return; // Only draw the QR once someone actually opens the sheet.
     let alive = true;
     QRCode.toDataURL(url, { margin: 1, width: 560, errorCorrectionLevel: "M", color: { dark: BRAND_HEX.ink, light: "#ffffff" } })
       .then((data) => alive && setQr(data))
@@ -33,7 +38,7 @@ export function InviteSheet({ appUrl, joinCode, title, peopleCount }: InviteShee
     return () => {
       alive = false;
     };
-  }, [url]);
+  }, [url, opened]);
 
   async function copy() {
     try {
@@ -57,7 +62,10 @@ export function InviteSheet({ appUrl, joinCode, title, peopleCount }: InviteShee
     <>
       <button
         type="button"
-        onClick={() => dialog.current?.showModal()}
+        onClick={() => {
+          setOpened(true);
+          dialog.current?.showModal();
+        }}
         className="inline-flex min-h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-on-tomato px-3.5 text-sm font-semibold text-tomato-ink shadow-sm hover:brightness-95"
       >
         <UserPlus className="size-4" aria-hidden />
@@ -91,8 +99,9 @@ export function InviteSheet({ appUrl, joinCode, title, peopleCount }: InviteShee
 
           <div className="mt-4 text-center">
             <p className="text-sm text-ink-soft">Or enter this code on Salo</p>
-            <p className="tally mt-1 text-3xl tracking-[0.25em] text-ink" aria-label={`Code ${joinCode.split("").join(" ")}`}>
-              {joinCode}
+            <p className="tally mt-1 text-3xl tracking-[0.25em] text-ink">
+              <span aria-hidden>{joinCode}</span>
+              <span className="sr-only">Code {joinCode.split("").join(" ")}</span>
             </p>
           </div>
 
@@ -107,8 +116,8 @@ export function InviteSheet({ appUrl, joinCode, title, peopleCount }: InviteShee
               {copied === "link" ? <Check className="size-5" aria-hidden /> : <Copy className="size-5" aria-hidden />}
               {copied === "link" ? "Link copied" : "Copy link"}
             </Button>
-            <p role="status" className="min-h-5 text-center text-sm text-bad">
-              {copied === "failed" ? `Couldn’t copy. The link is ${url}` : ""}
+            <p role="status" className={copied === "failed" ? "min-h-5 text-center text-sm text-bad" : "min-h-5 text-center text-sm text-ok"}>
+              {copied === "failed" ? `Couldn’t copy. The link is ${url}` : copied === "link" ? "Link copied. Paste it in your group chat." : ""}
             </p>
           </div>
           <p className="text-center text-xs text-ink-soft">Guests add and change their own dishes. Only the host confirms the order with the waiter.</p>

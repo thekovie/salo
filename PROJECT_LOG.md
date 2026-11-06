@@ -57,3 +57,27 @@ Running record of decisions, issues, tests and deviations, one section per PR. N
 - Security review: no critical/high. Fixed: lifetime caps (1,000 entries ever, 300 dishes) and 120 changes/min per participant; revoked/expired credentials ignored on resume and identity; NUL refused at validation; body limit counts bytes; idempotency key bound to the mutation type; proxy matcher exclusions anchored. Documented: rate limits trust exactly one proxy hop.
 - Code review: 1 high, 3 medium fixed by rewriting the client queue (`use-session.ts`): changes go one at a time in order (Undo can't overtake its removal), repeated stepper taps coalesce to the final number with the revision read at send time, steppers never unmount mid-tap, a committed change stays drawn until a snapshot containing it arrives (resync on online, focus and every 5 s while waiting), network failures retry automatically with backoff and the same key, refused changes are not drawn and are listed by name. Server: removing/restoring into the same state is a no-op, restore re-checks the entry cap. "Show waiter" is unfocusable at zero items.
 - Tests after fixes: 57 unit/integration, 7 e2e (adds rapid-tap test).
+
+**Merged** 2026-11-06 as PR #3.
+
+## M2 · Collaboration (`feat/m2-collaboration`)
+
+**Built**
+- Guest joining: `/j/:code` invite page (forgiving code input from the landing page), name only, GUEST credential cookie, `participant.joined` event; 30 people per order; joins rate limited 30/hour per address; the join endpoint requires the session id to match the code.
+- Invite sheet in the header: QR (client-generated data URL), large code, system share with a self-explaining message, copy link.
+- Invite link preview: server-rendered metadata and OG card ("Join the order at <name>", "Tap to add your dishes…", "Add your order"; "This order has ended" when closed). Never dishes or names; preview fetches cannot join (POST only); noindex.
+- SSE `GET /api/sessions/:id/events`: one LISTEN per process fanning out, replay from the durable log with `Last-Event-ID` / `?after=`, `resync` when history is missing or longer than 200, 20 s heartbeat, cleanup on abort, caps 500 streams / 4 per participant.
+- Client: EventSource with coalesced snapshot refresh, refresh after reconnect, restart after an outright refusal, "Reconnecting…" pill state. Guests' composer defaults to "Me".
+
+**Tests**: 67 unit/integration (join rules, duplicate names, table cap, invite preview fields, replay order, gap/empty/too-long resync, stream delivering commits to two subscribers) + 11 e2e (adds two-browser QR/code collaboration with live consolidation, offline recovery in both directions, invite preview leaking nothing, unknown code/stranger stream 404).
+
+**Decisions / deviations**
+- The join code doubles as the invitation credential (brief: "optional short join code"); no separate invite token. Codes are rate limited and the preview reveals only name, status and round.
+- Join endpoint is `POST /api/sessions/:id/join` with the code in the body (brief path kept).
+- Fixed during testing: replay returned "nothing new" when a session's whole history was missing; it now asks for a resync.
+- Header round label shortened to "Round n · Open" so the Invite button fits at 390 px.
+
+**Independent reviews (before PR)**
+- Security: 1 high fixed: invite lookups (page, metadata, OG image) were an unthrottled code-guessing oracle; now 40 misses/hour per address, unknown and ended orders both 404. Mediums fixed: per-address stream cap (12) and 15-minute stream lifetime (reconnect re-authorises); OG image for unknown codes is a cached static card and fonts load once. Lows fixed: join keeps an existing identity instead of overwriting the cookie; a stream whose client left during setup is cleaned up.
+- Code review: approve with 3 mediums, all fixed: Web Share detection no longer causes a hydration mismatch; the heartbeat re-reads the event log so a failed read heals; failed snapshot fetches retry. Lows fixed: stream restart backs off to 60 s; hub reserves slots before awaiting LISTEN; QR drawn on first open; copy success announced; code read out letter by letter.
+- Left as known limitation: if a join's response is lost, retrying creates a second guest with the same name (cookie never arrived); low impact, revisit with claims in M3.

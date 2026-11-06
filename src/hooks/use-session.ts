@@ -47,6 +47,8 @@ const RETRY_MAX_MS = 30_000;
 const RESYNC_INTERVAL_MS = 5000;
 /** When the stream was refused outright (EventSource gives up), try a fresh connection after this long. */
 const STREAM_RESTART_MS = 5000;
+const STREAM_RESTART_MAX_MS = 60_000;
+const REFRESH_RETRY_MS = 3000;
 
 function request(sessionId: string, op: Op, latest: SessionSnapshot) {
   const base = `/api/sessions/${sessionId}`;
@@ -139,18 +141,29 @@ export function useSession(initial: SessionSnapshot) {
       return;
     }
     refreshing.current = true;
+    let failed = false;
     try {
       do {
         refreshAgain.current = false;
-        await refresh().catch(() => undefined);
-      } while (refreshAgain.current);
+        failed = await refresh().then(
+          () => false,
+          () => true,
+        );
+      } while (refreshAgain.current && !failed);
     } finally {
       refreshing.current = false;
     }
+    // The event that asked for this fetch will not be replayed, so a failed fetch must retry on its own.
+    if (failed) setTimeout(() => void scheduleRefreshRef.current(), REFRESH_RETRY_MS);
   }, [refresh]);
+  const scheduleRefreshRef = useRef(scheduleRefresh);
+  useEffect(() => {
+    scheduleRefreshRef.current = scheduleRefresh;
+  }, [scheduleRefresh]);
 
   const [stream, setStream] = useState<"connecting" | "live" | "reconnecting">("connecting");
   const [streamGeneration, setStreamGeneration] = useState(0);
+  const restarts = useRef(0);
 
   // Live updates (brief 7.5–7.6): events say "something changed at revision N"; the snapshot says what. EventSource
   // reconnects by itself and sends Last-Event-ID, so the server replays what was missed (or asks for a resync).
@@ -163,6 +176,7 @@ export function useSession(initial: SessionSnapshot) {
     });
     source.addEventListener("resync", () => void scheduleRefresh());
     source.onopen = () => {
+      restarts.current = 0;
       setStream("live");
       // Back after a drop: make sure nothing was missed even if replay was partial.
       if (dropped) void scheduleRefresh();
@@ -171,7 +185,12 @@ export function useSession(initial: SessionSnapshot) {
     source.onerror = () => {
       dropped = true;
       setStream("reconnecting");
-      if (source.readyState === EventSource.CLOSED) restart = setTimeout(() => setStreamGeneration((g) => g + 1), STREAM_RESTART_MS);
+      if (source.readyState === EventSource.CLOSED) {
+        // Refused outright (busy, gone, not allowed): back off instead of hammering the server.
+        const delay = Math.min(STREAM_RESTART_MS * 2 ** restarts.current, STREAM_RESTART_MAX_MS);
+        restarts.current += 1;
+        restart = setTimeout(() => setStreamGeneration((g) => g + 1), delay);
+      }
     };
     return () => {
       source.close();

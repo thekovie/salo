@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { z } from "zod";
 import { getEnv } from "@/env";
+import { resolveActor } from "@/server/auth/actor";
 import { clientIp } from "@/server/auth/client-ip";
 import { credentialCookieName, credentialCookieOptions } from "@/server/auth/credentials";
 import { createRateLimiter } from "@/server/auth/rate-limit";
@@ -33,6 +34,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { id } = await params;
     const { code, displayName } = await readJson(request, bodySchema);
     const store = await cookies();
+    // Already in this order on this browser (a second tab, a double tap): keep that identity, host or guest.
+    if (await resolveActor(getDb(), id, store.get(credentialCookieName(id))?.value)) return ok({ id }, 200);
     const joined = await joinSession(getDb(), code, displayName, id);
     store.set(credentialCookieName(joined.sessionId), joined.token, credentialCookieOptions(getEnv().APP_URL));
     return ok({ id: joined.sessionId }, 201);

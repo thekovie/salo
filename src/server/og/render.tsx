@@ -7,7 +7,11 @@ export const OG_SIZE = { width: 1200, height: 630 } as const;
 
 const FONT_DIR = path.join(process.cwd(), "assets", "fonts");
 
-async function fonts() {
+let fontCache: ReturnType<typeof loadFonts> | undefined;
+/** Read once per process: previews are fetched by crawlers, so every request must stay cheap. */
+const fonts = () => (fontCache ??= loadFonts());
+
+async function loadFonts() {
   const load = (file: string) => readFile(path.join(FONT_DIR, file));
   const [display, body, bodyBold, mono] = await Promise.all([
     load("fredoka-latin-500-normal.woff"),

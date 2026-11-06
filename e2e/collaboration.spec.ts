@@ -18,7 +18,7 @@ async function inviteCode(page: Page): Promise<string> {
   await page.getByRole("button", { name: "Invite" }).click();
   const dialog = page.getByRole("dialog", { name: "Invite the table" });
   await expect(dialog.getByRole("img", { name: /QR code to join/ })).toBeVisible();
-  const code = (await dialog.getByLabel(/^Code /).textContent())!.trim();
+  const code = ((await dialog.getByText(/^Code /).textContent()) ?? "").replace(/^Code /, "").replace(/\s/g, "");
   await dialog.getByRole("button", { name: "Close" }).click();
   return code;
 }

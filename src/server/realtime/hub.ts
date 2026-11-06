@@ -8,6 +8,8 @@ type Listener = (revision: number) => void;
 /** Caps so one table or one script cannot exhaust the single app instance (brief 7.8). */
 export const MAX_STREAMS = 500;
 export const MAX_STREAMS_PER_PARTICIPANT = 4;
+/** One phone may hold several orders open, but a single address cannot take the whole instance. */
+export const MAX_STREAMS_PER_ADDRESS = 12;
 
 /**
  * One LISTEN connection per process, fanned out to the open streams of each session. NOTIFY is only the doorbell:
@@ -16,6 +18,7 @@ export const MAX_STREAMS_PER_PARTICIPANT = 4;
 class Hub {
   private listeners = new Map<string, Set<Listener>>();
   private perParticipant = new Map<string, number>();
+  private perAddress = new Map<string, number>();
   private total = 0;
   private listening: Promise<void> | null = null;
 
@@ -43,26 +46,38 @@ class Hub {
   }
 
   /** Returns an unsubscribe function, or null when a connection cap is reached. */
-  async subscribe(sessionId: string, participantId: string, listener: Listener): Promise<(() => void) | null> {
+  async subscribe(sessionId: string, participantId: string, address: string, listener: Listener): Promise<(() => void) | null> {
     const mine = this.perParticipant.get(participantId) ?? 0;
-    if (this.total >= MAX_STREAMS || mine >= MAX_STREAMS_PER_PARTICIPANT) return null;
-    await this.ensureListening();
+    const fromAddress = this.perAddress.get(address) ?? 0;
+    if (this.total >= MAX_STREAMS || mine >= MAX_STREAMS_PER_PARTICIPANT || fromAddress >= MAX_STREAMS_PER_ADDRESS) return null;
+    // Reserve the slot before waiting for LISTEN, so a burst at cold start cannot overshoot the caps.
     this.total += 1;
     this.perParticipant.set(participantId, mine + 1);
+    this.perAddress.set(address, fromAddress + 1);
     const set = this.listeners.get(sessionId) ?? new Set<Listener>();
     set.add(listener);
     this.listeners.set(sessionId, set);
     let active = true;
-    return () => {
+    const release = () => {
       if (!active) return;
       active = false;
       this.total -= 1;
       const left = (this.perParticipant.get(participantId) ?? 1) - 1;
       if (left <= 0) this.perParticipant.delete(participantId);
       else this.perParticipant.set(participantId, left);
+      const addressLeft = (this.perAddress.get(address) ?? 1) - 1;
+      if (addressLeft <= 0) this.perAddress.delete(address);
+      else this.perAddress.set(address, addressLeft);
       set.delete(listener);
       if (set.size === 0) this.listeners.delete(sessionId);
     };
+    try {
+      await this.ensureListening();
+    } catch (error) {
+      release();
+      throw error;
+    }
+    return release;
   }
 
   stats() {

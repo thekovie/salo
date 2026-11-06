@@ -7,8 +7,8 @@ Read this first when resuming. Specification: `docs/brief.md`. Decisions per PR:
 | Milestone | Brief phase | State |
 |---|---|---|
 | M0 Foundation | 0 | Merged (PR #2) |
-| M1 Standalone ordering | 1 | In review (`feat/m1-standalone-ordering`) |
-| M2 Collaboration (QR, SSE) | 2 | Not started |
+| M1 Standalone ordering | 1 | Merged (PR #3) |
+| M2 Collaboration (QR, SSE) | 2 | In review (`feat/m2-collaboration`) |
 | M3 Groups & hybrid | 3 | Not started |
 | M4 Review, confirm, rounds | 4 | Not started |
 | M5 Hardening | 5 | Not started |
@@ -27,9 +27,9 @@ Read this first when resuming. Specification: `docs/brief.md`. Decisions per PR:
 
 ## Known limitations
 
-- Other devices see changes only after a reload until SSE lands (M2). Guests cannot join yet (M2).
+- SSE has not yet been tested through Coolify's real proxy (Phase 5).
 - Backups, cleanup job, rate limits on endpoints and SSE proxy testing are Phase 5 items.
 
 ## Next steps
 
-M2: invite sheet (QR, link, code) with the invite-link preview card, guest join, SSE stream with Last-Event-ID replay and resync, pending-change queue with retry/backoff, reconnecting state.
+M3: collective group orders with optional members, People and Groups views, claims of host-recorded entries with host approval, duplicate hints, per-round readiness (stale after changes).
