@@ -11,7 +11,7 @@ Read this first when resuming. Specification: `docs/brief.md`. Decisions per PR:
 | M2 Collaboration (QR, SSE) | 2 | Merged (PR #4) |
 | M3 Groups & hybrid | 3 | Merged (PR #5) |
 | M4 Review, confirm, rounds | 4 | Merged (PR #6) |
-| M5 Hardening | 5 | In review (`feat/m5-hardening`) |
+| M5 Hardening | 5 | Merged (PR #7) |
 
 All 14 brief end-to-end scenarios are covered by Playwright (see `docs/testing.md`).
 
