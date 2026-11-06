@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { describeOp, useSession, type AddInput, type OverlayEntry } from "@/hooks/use-session";
 import { consolidate } from "@/lib/consolidate";
 import { arrivalsBetween, type Arrival } from "@/lib/arrivals";
+import { setAnalyticsContext, track } from "@/lib/analytics";
 import { everyone, type SessionSnapshot } from "@/lib/snapshot";
 import { normalizeText } from "@/lib/dish-name";
 import { liveTicket } from "@/lib/ticket";
@@ -67,9 +68,23 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
     const timer = setTimeout(() => setOfferHeld(false), 5000);
     return () => clearTimeout(timer);
   }, [offerHeld]);
-  const startTour = () => {
+  const startTour = (source: "offer" | "replay" = "replay") => {
     markTourSeen(role);
     setTouring(true);
+    track({ name: "tour_started", props: { source } });
+  };
+  const offerVisible = sessionOpen && !seen && !offerHeld && !touring;
+  useEffect(() => {
+    if (offerVisible) track({ name: "tour_offer_shown" });
+  }, [offerVisible]);
+  useEffect(() => setAnalyticsContext({ role: role === "HOST" ? "host" : "guest" }), [role]);
+  // Sync trouble is where people get confused; note each time the pill turns to a problem state.
+  useEffect(() => {
+    if (sync === "failed" || sync === "unsynced" || sync === "conflict") track({ name: "sync_state", props: { state: sync } });
+  }, [sync]);
+  const openSummary = (source: "auto" | "button") => {
+    setSummaryOpen(true);
+    track({ name: "summary_opened", props: { source } });
   };
   const endTour = useCallback(() => setTouring(false), []);
 
@@ -170,6 +185,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
         }),
       );
       const result = await pendingResult;
+      if (!result) track({ name: "add_failed", props: { code: "refused" } });
       if (result?.entryId) {
         const entryId = result.entryId;
         show({
@@ -208,6 +224,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
       { onError: (message) => (failure = message) },
     );
     if (result) {
+      track({ name: "round_confirmed", props: { round: round.number } });
       setJustConfirmed(round.id);
       setModeState({ mode: "waiter", key: `${round.id}:CONFIRMED` });
       // A tiny buzz as the stamp hits the paper (Android; ignored elsewhere and with reduced motion).
@@ -216,6 +233,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
       setTimeout(() => show({ message: `Round ${round.number} confirmed. Kain na!` }), 900);
       return null;
     }
+    track({ name: "confirm_refused", props: { code: failure ? "refused" : "network" } });
     return failure || "Not confirmed. Check your connection and try again.";
   }
 
@@ -232,18 +250,29 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
   async function removeGuest(participantId: string, name: string, reason: string | null): Promise<boolean> {
     const accepted = Boolean(await mutate({ kind: "removeGuest", participantId, name, reason }));
     if (accepted) {
-      show({ message: `${name} removed.`, action: { label: "Undo", run: () => void mutate({ kind: "restoreGuest", participantId, name }) } });
+      track({ name: "guest_removed", props: { with_reason: Boolean(reason) } });
+      show({
+        message: `${name} removed.`,
+        action: {
+          label: "Undo",
+          run: () => {
+            track({ name: "guest_restored" });
+            void mutate({ kind: "restoreGuest", participantId, name });
+          },
+        },
+      });
     }
     return accepted;
   }
 
   async function closeOrder(): Promise<boolean> {
     const accepted = Boolean(await mutate({ kind: "close" }));
+    if (accepted) track({ name: "order_ended", props: { cancelled: !anyConfirmed } });
     // An ended order opens on its tickets, and the host gets "who ordered what" to keep for settling up. A cancelled
     // one has neither, so it stays on the (now read-only) order.
     if (accepted && anyConfirmed) {
       setView("rounds");
-      setSummaryOpen(true);
+      openSummary("auto");
     }
     return accepted;
   }
@@ -257,7 +286,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
         ended={ended}
         sync={sync}
         onOptions={isHost && sessionOpen ? () => setOptionsOpen(true) : undefined}
-        onHelp={!isHost && sessionOpen ? startTour : undefined}
+        onHelp={!isHost && sessionOpen ? () => startTour("replay") : undefined}
         actions={
           sessionOpen ? (
             <InviteSheet appUrl={appUrl} joinCode={snapshot.session.joinCode} title={snapshot.session.title} peopleCount={snapshot.participants.length} />
@@ -276,7 +305,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
           unsentRound={round.status === "DRAFT" && roundEntries.length > 0 ? round.number : null}
           onRename={(title) => void mutate({ kind: "rename", title })}
           onEnd={closeOrder}
-          onTour={startTour}
+          onTour={() => startTour("replay")}
         />
       ) : null}
 
@@ -310,7 +339,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
                 deleted on <LocalTime iso={snapshot.session.expiresAt} style="date" />.
               </p>
               {ended === "ended" ? (
-                <Button variant="outline" className="mt-3" onClick={() => setSummaryOpen(true)}>
+                <Button variant="outline" className="mt-3" onClick={() => openSummary("button")}>
                   <ReceiptText className="size-5" aria-hidden />
                   Who ordered what
                 </Button>
@@ -319,7 +348,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
           </div>
         ) : null}
         {claimsForHost.length > 0 ? (
-          <section aria-label="Requests from guests" className="mb-4 space-y-2 rounded-2xl bg-saffron-wash p-3">
+          <section aria-label="Requests from guests" data-ph-mask="" className="mb-4 space-y-2 rounded-2xl bg-saffron-wash p-3">
             {claimsForHost.map(({ claim, entry, who }) => (
               <div key={claim.id} className="flex flex-wrap items-center gap-2">
                 <Hand className="size-4 shrink-0 text-saffron-ink" aria-hidden />
@@ -338,7 +367,15 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
             ))}
           </section>
         ) : null}
-        {sessionOpen && !seen && !offerHeld && !touring ? <TourOffer onStart={startTour} onDismiss={() => markTourSeen(role)} /> : null}
+        {offerVisible ? (
+          <TourOffer
+            onStart={() => startTour("offer")}
+            onDismiss={() => {
+              markTourSeen(role);
+              track({ name: "tour_dismissed" });
+            }}
+          />
+        ) : null}
         <ViewTabs view={view} onChange={setView} counts={{ people: snapshot.participants.length, groups: groupCount, rounds: snapshot.rounds.length > 1 ? snapshot.rounds.length : 0 }} />
         <div role="tabpanel" id={`panel-${view}`} aria-labelledby={`tab-${view}`}>
           {view === "order" && confirmedTicket ? (
@@ -374,7 +411,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
               onRemoveDuplicate={(entry) => actions.remove(entry)}
               roundNumber={round.number}
               onRemoveGuest={isHost && sessionOpen ? removeGuest : undefined}
-              onSummary={anyConfirmed ? () => setSummaryOpen(true) : undefined}
+              onSummary={anyConfirmed ? () => openSummary("button") : undefined}
             />
           ) : (
             <GroupsView snapshot={snapshot} entries={roundEntries} onSetMembers={(label, memberIds) => void mutate({ kind: "groupMembers", label, memberIds })} />
@@ -414,12 +451,12 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
               </button>
             ) : null}
             {isOpen && isHost ? (
-              <Button variant="outline" data-tour="review" onClick={() => setMode("review")} disabled={total === 0 && correctionsThisRound === 0}>
+              <Button variant="outline" data-tour="review" onClick={() => (setMode("review"), track({ name: "review_opened" }))} disabled={total === 0 && correctionsThisRound === 0}>
                 <ReceiptText className="size-5" aria-hidden />
                 Review order
               </Button>
             ) : isOpen || confirmedTicket ? (
-              <Button variant="outline" data-tour="ticket" onClick={() => setMode("waiter")} disabled={!confirmedTicket && total === 0 && correctionsThisRound === 0}>
+              <Button variant="outline" data-tour="ticket" onClick={() => (setMode("waiter"), track({ name: "waiter_view_opened" }))} disabled={!confirmedTicket && total === 0 && correctionsThisRound === 0}>
                 <ReceiptText className="size-5" aria-hidden />
                 Ticket
               </Button>
@@ -438,7 +475,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
           unsaved={unsaved}
           notSaved={failed.length}
           onBack={() => setMode("edit")}
-          onShowWaiter={() => setMode("waiter")}
+          onShowWaiter={() => (setMode("waiter"), track({ name: "waiter_view_opened" }))}
           onConfirm={confirmRound}
           onRemoveDuplicate={(entry) => actions.remove(entry)}
         />

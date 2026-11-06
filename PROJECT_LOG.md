@@ -255,3 +255,22 @@ Fixed from the screenshots:
 1. The hero's first frame had empty gaps where later lines would appear. Rows now open with a grid-rows collapse, and an invisible full copy holds the final height, so the spare room sits at the bottom.
 2. At 320 px the composer's For button showed only "For". Under 360 px the word "For" hides and Add becomes an icon-only 44 px button (still named "Add").
 3. Spotlights on edge controls (⋯, Invite) had their frame cut off; the frame is now clamped inside the viewport.
+
+## Link previews, PostHog, privacy and cookie policies (`feat/analytics-previews`)
+
+**Messenger preview.** I diagnosed it live on salo.thekovie.com with one throwaway order (cancelled, deleted within a day). Fetched as Facebook, Facebot, meta-externalagent, Viber, WhatsApp and Telegram, the invite page returns 200 with every tag in `<head>`, an absolute https `og:image` that returns 200 PNG in 0.7 s, and room links 307 to the invite. Nothing sits in front of the VPS. Conclusion: Messenger is showing a cached failure, so the fix is the Sharing Debugger's Scrape Again (documented in HANDOFF). Hardening added anyway: `og:url` on invites, and `htmlLimitedBots` extended to chat-app crawlers (Viber, Telegram, Facebot, meta-externalagent, Pinterest, Embedly, Signal…) so Next never streams their metadata into the body.
+
+**PostHog (US cloud).**
+- `posthog-js`, loaded after paint by `PostHogProvider`, only when `POSTHOG_KEY` is set. Proxied through `/ingest` (Next rewrites); the CSP gains `worker-src 'self' blob:`.
+- On by default; session replay on every session, with inputs and anything inside `data-ph-mask` masked; autocapture `mask_all_text`; DNT respected; anonymous people.
+- Typed product events in `src/lib/analytics.ts`: start/join, dish added (recipient kind, quantity, notes), recipient panel, invite, review/waiter, confirm/refused, end/cancel, guest removed/restored, summary, tour, sync problems.
+- Checked locally with a dummy key: scripts load through `/ingest` and there are no CSP violations. Replay itself needs the real key plus replay switched on in the project.
+
+**Policies.**
+- `/privacy`: plain-language and true to the build. It covers order data, the order cookie, IPs in memory, logs, PostHog with masked replays, purposes, retention, processors, rights under the Philippine Data Privacy Act, and how to reach salo@projects.thekovie.com.
+- `/cookies`: a table of every cookie and storage key, plus an "Analytics on this device" switch (PostHog opt-out).
+- Links in the landing, invite, 404 and order-options footers; both pages are in the sitemap.
+- axe found the cookie table's sideways scroll unreachable by keyboard; it is now a focusable labelled region.
+
+Tests: 104 unit/integration (new: analytics no-op and safety, POSTHOG_KEY schema, CSP worker-src); 29 e2e (new `policies.spec.ts`).
+

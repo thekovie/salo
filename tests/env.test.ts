@@ -14,6 +14,13 @@ describe("parseEnv", () => {
     expect(() => parseEnv({ ...base, APP_URL: "" })).toThrow(/APP_URL/);
   });
 
+  it("treats PostHog as optional and checks the key's shape", () => {
+    expect(parseEnv(base).POSTHOG_KEY).toBeUndefined();
+    expect(parseEnv({ ...base, POSTHOG_KEY: "" }).POSTHOG_KEY).toBeUndefined();
+    expect(parseEnv({ ...base, POSTHOG_KEY: "phc_abc123XYZ" }).POSTHOG_KEY).toBe("phc_abc123XYZ");
+    expect(() => parseEnv({ ...base, POSTHOG_KEY: "sk_live_nope" })).toThrow(/POSTHOG_KEY/);
+  });
+
   it("requires https in production except on localhost", () => {
     expect(() => parseEnv({ ...base, NODE_ENV: "production", APP_URL: "http://salo.example.com" })).toThrow(/https/);
     expect(parseEnv({ ...base, NODE_ENV: "production" }).APP_URL).toBe("http://localhost:3000");

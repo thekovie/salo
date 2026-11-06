@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { LogoMark } from "@/components/brand/logo";
 import { JoinNameForm } from "@/components/join/join-name-form";
+import { PolicyLinks } from "@/components/policy/policy-links";
 import { INVITE_DESCRIPTION, inviteTitle } from "@/lib/invite";
 import { resolveActor } from "@/server/auth/actor";
 import { credentialCookieName } from "@/server/auth/credentials";
@@ -17,7 +18,8 @@ type Props = { params: Promise<{ code: string }> };
  * is for, never dishes or people. Joining needs a POST, so a preview fetch never creates a participant.
  */
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const lookup = await lookupInvite((await params).code);
+  const { code } = await params;
+  const lookup = await lookupInvite(code);
   const invite = lookup.kind === "found" ? lookup.invite : null;
   const ended = !invite || invite.status === "CLOSED";
   const title = ended ? "This order has ended" : inviteTitle(invite.title);
@@ -26,7 +28,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title: { absolute: `${title} · Salo` },
     description,
     robots: { index: false, follow: false },
-    openGraph: { title, description, type: "website", siteName: "Salo" },
+    // og:url names the invite itself, so a preview cached for this link is the card for this order.
+    openGraph: { title, description, type: "website", siteName: "Salo", url: `/j/${encodeURIComponent(code)}` },
     twitter: { card: "summary_large_image", title, description },
   };
 }
@@ -55,7 +58,9 @@ export default async function JoinPage({ params }: Props) {
     <main className="mx-auto flex min-h-dvh max-w-md flex-col gap-6 px-4 pt-[max(env(safe-area-inset-top),2.5rem)] pb-10">
       <div className="ticket px-6">
         <LogoMark className="size-10" />
-        <h1 className="mt-5 text-3xl">{inviteTitle(invite.title)}</h1>
+        <h1 className="mt-5 text-3xl" data-ph-mask="">
+          {inviteTitle(invite.title)}
+        </h1>
         <p className="mt-2 text-ink-soft">Add your dishes to the table&rsquo;s order. Everyone sees the same ticket, and the host gives it to the waiter.</p>
         <p className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-ok">
           <span className="size-2 rounded-full bg-ok" aria-hidden />
@@ -64,6 +69,7 @@ export default async function JoinPage({ params }: Props) {
         <JoinNameForm sessionId={invite.sessionId} code={code} />
       </div>
       <p className="text-center text-sm text-ink-soft">No app or account. Your name is only shown to this table.</p>
+      <PolicyLinks className="justify-center" />
     </main>
   );
 }

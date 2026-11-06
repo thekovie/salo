@@ -5,6 +5,7 @@ import QRCode from "qrcode";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer";
+import { track } from "@/lib/analytics";
 import { BRAND_HEX } from "@/lib/site";
 import { inviteMessage, inviteUrl } from "@/lib/invite";
 
@@ -44,6 +45,7 @@ export function InviteSheet({ appUrl, joinCode, title, peopleCount }: InviteShee
     try {
       await navigator.clipboard.writeText(url);
       setCopied("link");
+      track({ name: "invite_shared", props: { method: "copy" } });
     } catch {
       setCopied("failed");
     }
@@ -53,13 +55,20 @@ export function InviteSheet({ appUrl, joinCode, title, peopleCount }: InviteShee
   async function share() {
     try {
       await navigator.share({ title: "Salo", text: inviteMessage(title, url), url });
+      track({ name: "invite_shared", props: { method: "share" } });
     } catch {
       // Cancelled by the user, or not allowed: nothing to report.
     }
   }
 
   return (
-    <Drawer onOpenChange={(open) => open && setOpened(true)}>
+    <Drawer
+      onOpenChange={(open) => {
+        if (!open) return;
+        setOpened(true);
+        track({ name: "invite_opened" });
+      }}
+    >
       <DrawerTrigger data-tour="invite" className="inline-flex min-h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-on-band px-3.5 text-sm font-semibold text-band shadow-sm hover:brightness-95">
         <UserPlus className="size-4" aria-hidden />
         Invite

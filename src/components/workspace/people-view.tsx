@@ -99,7 +99,7 @@ export function PeopleView({ snapshot, entries, canClaim, onClaim, onRemoveDupli
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-ph-mask="">
       {onSummary ? (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-paper px-4 py-2.5">
           <p className="text-sm text-ink-soft">For settling up: everyone&rsquo;s confirmed dishes.</p>

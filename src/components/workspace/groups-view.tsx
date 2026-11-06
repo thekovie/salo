@@ -78,7 +78,7 @@ export function GroupsView({ snapshot, entries, onSetMembers }: GroupsViewProps)
     );
   }
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-ph-mask="">
       {groups.map((group) => (
         <section key={group.key} className="ticket px-5">
           <div className="flex items-center justify-between gap-3">

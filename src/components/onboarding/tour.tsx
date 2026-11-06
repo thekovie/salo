@@ -5,6 +5,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { useReducedMotion } from "@/hooks/use-scene";
+import { track } from "@/lib/analytics";
 import type { TourStep } from "./tour-steps";
 
 const GAP = 12;
@@ -72,7 +73,14 @@ export function Tour({ steps, onClose }: { steps: readonly TourStep[]; onClose: 
   }, [step, measure, reduce, onClose]);
 
   const last = index === live.length - 1;
-  const next = () => (last ? onClose() : setIndex((i) => i + 1));
+  useEffect(() => {
+    if (live.length > 0) track({ name: "tour_step", props: { index: index + 1, total: live.length } });
+  }, [index, live.length]);
+  const next = () => {
+    if (!last) return setIndex((i) => i + 1);
+    track({ name: "tour_completed" });
+    onClose();
+  };
   const back = () => setIndex((i) => Math.max(0, i - 1));
 
   function onKeyDown(event: React.KeyboardEvent) {

@@ -165,7 +165,7 @@ export function RoundsView({ snapshot, entries, justConfirmedRoundId, onOpenRoun
   const rounds = [...snapshot.rounds].reverse();
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" data-ph-mask="">
       {isHost && isOpen && !draft ? (
         <Button size="lg" className="w-full" onClick={onOpenRound}>
           <Plus className="size-5" aria-hidden /> Start round {last.number + 1}

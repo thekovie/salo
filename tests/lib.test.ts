@@ -46,6 +46,8 @@ describe("buildCsp", () => {
     const csp = buildCsp({ nonce: "abc", isDev: false, isHttps: true });
     expect(csp).toContain("img-src 'self' data: blob:;");
     expect(csp).toContain("connect-src 'self'");
+    // PostHog's replay recorder compresses in a blob worker; analytics itself goes through this origin (/ingest).
+    expect(csp).toContain("worker-src 'self' blob:");
   });
 
   it("allows eval only in development and upgrades only over https", () => {

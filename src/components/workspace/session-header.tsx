@@ -33,7 +33,7 @@ export function SessionHeader({ title, roundNumber, roundStatus, ended = null, s
           <LogoMark inverse className="size-8" />
         </Link>
         <div className="min-w-0 flex-1 px-1">
-          <h1 className="truncate font-display text-lg leading-tight">
+          <h1 className="truncate font-display text-lg leading-tight" data-ph-mask="">
             {onOptions ? (
               // A bigger tap target for the same options; keyboard and screen-reader users get the labelled button.
               <button type="button" tabIndex={-1} onClick={onOptions} className="block max-w-full cursor-pointer truncate text-left">

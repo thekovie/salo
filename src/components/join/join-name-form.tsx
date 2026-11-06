@@ -6,6 +6,7 @@ import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api, ApiError } from "@/lib/api-client";
+import { track } from "@/lib/analytics";
 
 export function JoinNameForm({ sessionId, code }: { sessionId: string; code: string }) {
   const router = useRouter();
@@ -23,6 +24,7 @@ export function JoinNameForm({ sessionId, code }: { sessionId: string; code: str
     setBusy(true);
     try {
       const { id: joined } = await api<{ id: string }>(`/api/sessions/${sessionId}/join`, { method: "POST", body: { code, displayName: name } });
+      track({ name: "guest_joined" });
       router.replace(`/s/${joined}?joined=1`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Something went wrong. Try again.");

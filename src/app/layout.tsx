@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { headers } from "next/headers";
 import { getEnv } from "@/env";
+import { PostHogProvider } from "@/components/analytics/posthog-provider";
 import { BRAND_HEX, SITE } from "@/lib/site";
 import "./globals.css";
 
@@ -63,7 +64,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <head>
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        <PostHogProvider apiKey={getEnv().POSTHOG_KEY}>{children}</PostHogProvider>
+      </body>
     </html>
   );
 }
