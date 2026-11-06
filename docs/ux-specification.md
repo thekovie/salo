@@ -5,7 +5,7 @@ What is built, screen by screen. Design world and tokens: `PRODUCT.md`, the dire
 ## Landing (`/`)
 - Primary action **Start an order** (one tap: creates the session and opens the workspace). Errors appear under the button in plain words.
 - **Pick up where you left off**: orders this browser is part of (from its session cookies), newest first, up to five.
-- **Join with a code**: six characters; lower case, spaces, dashes and look-alikes (I, L → 1; O → 0; U → V) are forgiven. Joining itself ships in M2.
+- **Join with a code**: six characters; lower case, spaces, dashes and look-alikes (I, L → 1; O → 0; U → V) are forgiven; opens the invite page.
 - Sample ticket (labelled "Sample order") and a three-step how-it-works.
 
 ## Workspace (`/s/:id`)
@@ -17,6 +17,15 @@ What is built, screen by screen. Design world and tokens: `PRODUCT.md`, the dire
 - **Remove** (stepper at 1): no dialog; toast with Undo restores it.
 - **Failures**: a red box lists each change that did not save, with Retry and Discard. A conflict ("Someone changed this dish just now") refreshes to the latest version.
 - **Bottom bar**: item count for the round and **Show waiter**.
+
+## Invite sheet (header "Invite")
+- Native modal dialog (focus trapped, Escape closes): QR code (ink on white), the 6-character code in large mono, **Share invite** (system share sheet with the text "Join our order at … on Salo: <link>") when available, **Copy link**, and a note that guests change only their own dishes and only the host confirms with the waiter.
+
+## Invite page (`/j/:code`)
+- A ticket with the logo, round, "Join the order (at <name>)", one sentence on how it works, **Your name** and **Join the order**. Closed orders say "This order has ended". The link preview card shows the same title, "Tap to add your dishes…", and an "Add your order" pill.
+
+## Guests in the workspace
+- Same screen; the composer's *Ordered for* defaults to **Me** (the host's defaults to Anyone). Steppers appear only on the guest's own entries; the order name is not editable. Changes from everyone appear live; "Reconnecting…" shows while the live connection is down.
 
 ## Waiter ticket (`/s/:id/waiter`)
 - Large dish names and counts (fluid type), preparations indented, total. Works read aloud or handed over; the screen is kept awake while open (where supported).

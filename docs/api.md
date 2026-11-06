@@ -24,10 +24,18 @@ JSON over HTTPS. Implemented in `src/app/api/**` with shared helpers in `src/ser
 | `PATCH /api/sessions/:id/entries/:entryId` | host, or the guest who added it | `{ expectedRevision, quantity?, variant?, instructions? }` | Optimistic locking: a stale `expectedRevision` → `409 CONFLICT`. |
 | `DELETE /api/sessions/:id/entries/:entryId` | host, or the guest who added it | — | Soft delete (reversible). |
 | `POST /api/sessions/:id/entries/:entryId/restore` | host, or the guest who added it | — | Undo a removal. Deviation: the brief lists no restore endpoint; Undo needs one. |
+| `POST /api/sessions/:id/join` | anyone with the code | `{ code, displayName }` | Creates a guest and their cookie. The code must belong to `:id`. `404 INVITE_NOT_FOUND`, `409 SESSION_CLOSED`, `422 TABLE_FULL` (30 people). Rate limit 30/hour per client address. |
+| `GET /api/sessions/:id/events` | participant | — | Server-Sent Events; see realtime.md. `503 TOO_MANY_STREAMS`. |
 | `GET /api/health` | anyone | — | `200 { ok, database }` or `503`. |
 
 ## Error codes
 
-`NOT_FOUND`, `ENTRY_NOT_FOUND`, `FORBIDDEN`, `FORBIDDEN_ORIGIN`, `SESSION_CLOSED`, `NO_OPEN_ROUND`, `ROUND_CONFIRMED`, `ENTRY_REMOVED`, `CONFLICT`, `UNKNOWN_PERSON`, `TOO_MANY_ENTRIES`, `TOO_MANY_DISHES`, `IDEMPOTENCY_KEY_REUSED`, `IDEMPOTENCY_KEY`, `BAD_JSON`, `TOO_LARGE`, `INVALID`, `RATE_LIMITED`, `INTERNAL`.
+`NOT_FOUND`, `ENTRY_NOT_FOUND`, `FORBIDDEN`, `FORBIDDEN_ORIGIN`, `SESSION_CLOSED`, `NO_OPEN_ROUND`, `ROUND_CONFIRMED`, `ENTRY_REMOVED`, `CONFLICT`, `UNKNOWN_PERSON`, `TOO_MANY_ENTRIES`, `TOO_MANY_DISHES`, `IDEMPOTENCY_KEY_REUSED`, `IDEMPOTENCY_KEY`, `BAD_JSON`, `TOO_LARGE`, `INVALID`, `RATE_LIMITED`, `INVITE_NOT_FOUND`, `TABLE_FULL`, `TOO_MANY_STREAMS`, `INTERNAL`.
 
-Endpoints for joining, events, rounds, claims and corrections arrive with M2–M4.
+Endpoints for rounds, claims and corrections arrive with M3–M4.
+
+## Pages
+
+| Path | Notes |
+|---|---|
+| `/j/:code` | Invite page. Server-rendered metadata and an Open Graph image (`/j/:code/opengraph-image`) with the order's name only; "This order has ended" when closed. Visitors who already belong to the order go straight to it. |

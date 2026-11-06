@@ -1,10 +1,11 @@
-import { Check, CloudOff, LoaderCircle, TriangleAlert, GitCompareArrows } from "lucide-react";
+import { Check, CloudOff, GitCompareArrows, LoaderCircle, RefreshCw, TriangleAlert } from "lucide-react";
 import type { SyncState } from "@/hooks/use-session";
 import { cn } from "@/lib/utils";
 
 const STATES: Record<SyncState, { label: string; Icon: typeof Check; spin?: boolean }> = {
   saving: { label: "Saving…", Icon: LoaderCircle, spin: true },
   saved: { label: "Saved", Icon: Check },
+  reconnecting: { label: "Reconnecting…", Icon: RefreshCw, spin: true },
   unsynced: { label: "Offline · not saved yet", Icon: CloudOff },
   conflict: { label: "Changed elsewhere", Icon: GitCompareArrows },
   failed: { label: "Not saved", Icon: TriangleAlert },

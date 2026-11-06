@@ -10,13 +10,14 @@ import type { SessionSnapshot } from "@/lib/snapshot";
 import { cn } from "@/lib/utils";
 import { canEditEntry } from "@/lib/permissions";
 import { Composer } from "./composer";
+import { InviteSheet } from "./invite-sheet";
 import { OrderTicket, type TicketActions } from "./order-ticket";
 import { SessionHeader } from "./session-header";
 import { Toasts, useToasts } from "./toasts";
 
 const copyFor = (roundNumber: number): 1 | 2 | 3 => (roundNumber >= 3 ? 3 : roundNumber === 2 ? 2 : 1);
 
-export function Workspace({ initial }: { initial: SessionSnapshot }) {
+export function Workspace({ initial, appUrl }: { initial: SessionSnapshot; appUrl: string }) {
   const { snapshot, entries, failed, sync, mutate, dismiss, entryById } = useSession(initial);
   const { toasts, show, dismiss: dismissToast } = useToasts();
   const round = snapshot.rounds.find((r) => r.id === snapshot.activeRoundId) ?? snapshot.rounds[0];
@@ -69,6 +70,11 @@ export function Workspace({ initial }: { initial: SessionSnapshot }) {
         sync={sync}
         canRename={isHost && snapshot.session.status === "OPEN"}
         onRename={(title) => void mutate({ kind: "rename", title })}
+        actions={
+          snapshot.session.status === "OPEN" ? (
+            <InviteSheet appUrl={appUrl} joinCode={snapshot.session.joinCode} title={snapshot.session.title} peopleCount={snapshot.participants.length} />
+          ) : null
+        }
       />
 
       <main className="mx-auto max-w-2xl px-3 pt-5">
@@ -92,7 +98,7 @@ export function Workspace({ initial }: { initial: SessionSnapshot }) {
 
       <div className="fixed inset-x-0 bottom-0 z-30 bg-gradient-to-t from-paper from-70% to-transparent pt-6 pb-[calc(env(safe-area-inset-bottom)+0.5rem)]">
         <div className="mx-auto max-w-2xl space-y-2 px-3">
-          {isOpen ? <Composer dishNames={snapshot.dishNames} knownLabels={knownLabels} onAdd={(input) => void add(input)} /> : null}
+          {isOpen ? <Composer dishNames={snapshot.dishNames} knownLabels={knownLabels} defaultFor={isHost ? "UNASSIGNED" : "ME"} onAdd={(input) => void add(input)} /> : null}
           <div className="flex items-center justify-between gap-3 px-2">
             <p className="text-ink-soft">
               <span className="tally text-xl text-ink">{total}</span> {total === 1 ? "item" : "items"} this round

@@ -7,9 +7,10 @@ import { normalizeText } from "@/lib/dish-name";
 import { cn } from "@/lib/utils";
 import { Stepper } from "./stepper";
 
-type ForKind = "UNASSIGNED" | "TABLE" | "INDIVIDUAL" | "GROUP";
+type ForKind = "ME" | "UNASSIGNED" | "TABLE" | "INDIVIDUAL" | "GROUP";
 
 const FOR_OPTIONS: { kind: ForKind; label: string }[] = [
+  { kind: "ME", label: "Me" },
   { kind: "UNASSIGNED", label: "Anyone" },
   { kind: "TABLE", label: "Whole table" },
   { kind: "INDIVIDUAL", label: "A person" },
@@ -23,6 +24,8 @@ interface ComposerProps {
   /** Names already used for people and groups, offered as suggestions. */
   knownLabels: string[];
   disabled?: boolean;
+  /** Guests usually order for themselves; the host usually for whoever is speaking. */
+  defaultFor?: ForKind;
   onAdd: (input: AddInput) => void;
 }
 
@@ -38,13 +41,15 @@ function suggestionsFor(query: string, names: string[]): string[] {
  * Quick entry (brief 5.4): dish, quantity, Add. Who it's for, size and instructions hide behind "Details".
  * After adding: dish, quantity, size and instructions reset; the recipient stays for the next dish.
  */
-export function Composer({ dishNames, knownLabels, disabled, onAdd }: ComposerProps) {
+export type { ForKind };
+
+export function Composer({ dishNames, knownLabels, disabled, defaultFor = "UNASSIGNED", onAdd }: ComposerProps) {
   const id = useId();
   const dishRef = useRef<HTMLInputElement>(null);
   const [dish, setDish] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [open, setOpen] = useState(false);
-  const [forKind, setForKind] = useState<ForKind>("UNASSIGNED");
+  const [forKind, setForKind] = useState<ForKind>(defaultFor);
   const [forLabel, setForLabel] = useState("");
   const [variant, setVariant] = useState("");
   const [instructions, setInstructions] = useState("");
@@ -52,6 +57,7 @@ export function Composer({ dishNames, knownLabels, disabled, onAdd }: ComposerPr
   const suggestions = useMemo(() => suggestionsFor(dish, dishNames), [dish, dishNames]);
 
   function attribution(): AddInput["attribution"] | null {
+    if (forKind === "ME") return { type: "INDIVIDUAL" };
     if (forKind === "UNASSIGNED" || forKind === "TABLE") return { type: forKind };
     const label = forLabel.trim();
     if (!label) return null;
@@ -80,7 +86,7 @@ export function Composer({ dishNames, knownLabels, disabled, onAdd }: ComposerPr
     dishRef.current?.focus();
   }
 
-  const recipientSummary = forKind === "UNASSIGNED" ? null : forKind === "TABLE" ? "Whole table" : forLabel.trim() || null;
+  const recipientSummary = forKind === "UNASSIGNED" || forKind === "ME" ? null : forKind === "TABLE" ? "Whole table" : forLabel.trim() || null;
 
   return (
     <form onSubmit={submit} noValidate className="rounded-[1.4rem] bg-ticket p-2 shadow-ticket ring-[1.5px] ring-rule" aria-label="Add a dish">

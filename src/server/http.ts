@@ -21,7 +21,7 @@ export function fail(status: number, code: string, message: string): NextRespons
 }
 
 /** Consistent error envelope for every route: known errors say what happened; unknown ones are logged, never leaked. */
-export async function handle(run: () => Promise<NextResponse>): Promise<NextResponse> {
+export async function handle(run: () => Promise<Response>): Promise<Response> {
   try {
     return await run();
   } catch (error) {

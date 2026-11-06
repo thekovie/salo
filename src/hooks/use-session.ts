@@ -38,13 +38,15 @@ export interface Pending {
   attempts: number;
 }
 
-export type SyncState = "saving" | "saved" | "unsynced" | "conflict" | "failed";
+export type SyncState = "saving" | "saved" | "reconnecting" | "unsynced" | "conflict" | "failed";
 
 type MutationResponse = { result: { entryId?: string; revision?: number }; revision: number };
 
 const RETRY_BASE_MS = 2000;
 const RETRY_MAX_MS = 30_000;
 const RESYNC_INTERVAL_MS = 5000;
+/** When the stream was refused outright (EventSource gives up), try a fresh connection after this long. */
+const STREAM_RESTART_MS = 5000;
 
 function request(sessionId: string, op: Op, latest: SessionSnapshot) {
   const base = `/api/sessions/${sessionId}`;
@@ -127,6 +129,55 @@ export function useSession(initial: SessionSnapshot) {
     applySnapshot(next);
     return next;
   }, [sessionId, applySnapshot]);
+
+  // Many events can arrive at once (a burst of taps elsewhere): fetch the snapshot once, then once more if needed.
+  const refreshing = useRef(false);
+  const refreshAgain = useRef(false);
+  const scheduleRefresh = useCallback(async () => {
+    if (refreshing.current) {
+      refreshAgain.current = true;
+      return;
+    }
+    refreshing.current = true;
+    try {
+      do {
+        refreshAgain.current = false;
+        await refresh().catch(() => undefined);
+      } while (refreshAgain.current);
+    } finally {
+      refreshing.current = false;
+    }
+  }, [refresh]);
+
+  const [stream, setStream] = useState<"connecting" | "live" | "reconnecting">("connecting");
+  const [streamGeneration, setStreamGeneration] = useState(0);
+
+  // Live updates (brief 7.5–7.6): events say "something changed at revision N"; the snapshot says what. EventSource
+  // reconnects by itself and sends Last-Event-ID, so the server replays what was missed (or asks for a resync).
+  useEffect(() => {
+    const source = new EventSource(`/api/sessions/${sessionId}/events?after=${snapshotRef.current.session.revision}`);
+    let dropped = false;
+    let restart: ReturnType<typeof setTimeout> | undefined;
+    source.addEventListener("change", (event) => {
+      if (Number((event as MessageEvent).lastEventId) > snapshotRef.current.session.revision) void scheduleRefresh();
+    });
+    source.addEventListener("resync", () => void scheduleRefresh());
+    source.onopen = () => {
+      setStream("live");
+      // Back after a drop: make sure nothing was missed even if replay was partial.
+      if (dropped) void scheduleRefresh();
+      dropped = false;
+    };
+    source.onerror = () => {
+      dropped = true;
+      setStream("reconnecting");
+      if (source.readyState === EventSource.CLOSED) restart = setTimeout(() => setStreamGeneration((g) => g + 1), STREAM_RESTART_MS);
+    };
+    return () => {
+      source.close();
+      if (restart) clearTimeout(restart);
+    };
+  }, [sessionId, scheduleRefresh, streamGeneration]);
 
   const pump = useCallback(async () => {
     if (pumping.current) return;
@@ -222,7 +273,9 @@ export function useSession(initial: SessionSnapshot) {
         ? "unsynced"
         : pending.length > 0
           ? "saving"
-          : "saved";
+          : stream === "reconnecting"
+            ? "reconnecting"
+            : "saved";
 
   /** The latest committed version of an entry (for Undo after an add). */
   const entryById = useCallback((id: string) => snapshotRef.current.entries.find((e) => e.id === id), []);

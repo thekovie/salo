@@ -67,9 +67,9 @@ export function SessionHeader({ title, roundNumber, roundStatus, sync, canRename
           ) : (
             <h1 className="truncate px-1 font-display text-lg leading-tight">{title ?? "Table order"}</h1>
           )}
-          <div className="mt-0.5 flex items-center gap-2 px-1">
+          <div className="mt-0.5 flex items-center gap-2 truncate px-1">
             <span className="font-mono text-xs tracking-[0.12em] uppercase opacity-90">
-              Round {roundNumber} · {roundStatus === "DRAFT" ? "Taking orders" : "Confirmed"}
+              Round {roundNumber} · {roundStatus === "DRAFT" ? "Open" : "Confirmed"}
             </span>
           </div>
         </div>
