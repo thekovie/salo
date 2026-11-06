@@ -106,7 +106,7 @@ export function Composer({ dishNames, knownLabels, disabled, defaultFor = "UNASS
                 setDish(name);
                 dishRef.current?.focus();
               }}
-              className="min-h-11 cursor-pointer rounded-full bg-saffron-wash px-3.5 text-sm font-semibold text-saffron-ink hover:brightness-95"
+              className="fade-in min-h-11 cursor-pointer rounded-full bg-saffron-wash px-3.5 text-sm font-semibold text-saffron-ink hover:brightness-95"
             >
               {name}
             </button>
@@ -115,7 +115,7 @@ export function Composer({ dishNames, knownLabels, disabled, defaultFor = "UNASS
       ) : null}
 
       {open ? (
-        <fieldset className="mb-2 space-y-3 rounded-2xl bg-paper p-3">
+        <fieldset className="ease-in-panel mb-2 space-y-3 rounded-2xl bg-paper p-3">
           <legend className="sr-only">Details</legend>
           <div>
             <span className="text-sm font-semibold" id={`${id}-for`}>
@@ -211,7 +211,7 @@ export function Composer({ dishNames, knownLabels, disabled, defaultFor = "UNASS
         <button
           type="submit"
           disabled={disabled}
-          className="inline-flex min-h-11 shrink-0 cursor-pointer items-center gap-1 rounded-full bg-tomato pr-4 pl-3 font-semibold text-on-tomato transition-transform active:scale-95 disabled:opacity-45"
+          className="inline-flex min-h-11 shrink-0 cursor-pointer items-center gap-1 rounded-full bg-tomato pr-4 pl-3 font-semibold text-on-tomato transition-[background-color,transform] duration-100 ease-out hover:bg-tomato/90 active:scale-[0.97] disabled:opacity-45"
         >
           <Plus className="size-5" aria-hidden />
           Add

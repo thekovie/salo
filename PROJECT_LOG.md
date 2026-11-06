@@ -165,3 +165,7 @@ Owner asked for a full UI/UX and motion audit (design review only). Verdict: the
 8. Confirm, invite, members and correction dialogs are ticket strips; review heading sits under Back.
 
 Tests: 89 unit/integration, 18 e2e (join helper asserts the live line and the tip; claim test uses the merged card).
+
+## Motion system (`feat/motion`, stacked on the UX fixes)
+
+From the same audit's motion review (only three moments animated before). Added motion tokens; `Ticker` for every count; wash on re-add and live arrivals (kept under reduced motion as information); View Transitions for remove/Undo; confirm sequence (sheet rise → stamp at +280 ms → thunk → Android buzz → toast); sheets and dialogs enter/exit with `@starting-style` and `allow-discrete`; toasts fade out; sync pill waits 400 ms before "Saving…"; consistent press feedback. No new dependencies. Tests: e2e `motion.spec.ts` pins tick direction, wash duration under reduced motion and the stamp delay; tests now wait on the pill's real state (`data-sync`). 89 unit + 19 e2e, three consecutive green runs.

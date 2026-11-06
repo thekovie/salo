@@ -16,7 +16,7 @@ test("keyboard only: add dishes, step quantities, switch views, open and close d
   await expect(page.getByTestId("dish-row")).toHaveCount(2);
 
   // Steppers are buttons: Tab to them and press Space (they wait until the new dish is saved).
-  await expect(page.getByText("Saved")).toBeVisible();
+  await expect(page.locator('[data-sync="saved"]')).toBeVisible();
   await page.getByRole("button", { name: "One more Gyoza" }).focus();
   await page.keyboard.press("Space");
   await expect(page.getByTestId("dish-row").first()).toContainText("2");

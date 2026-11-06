@@ -1,4 +1,5 @@
 import { Minus, Plus, Trash2 } from "lucide-react";
+import { Ticker } from "@/components/motion/ticker";
 import { cn } from "@/lib/utils";
 
 interface StepperProps {
@@ -16,7 +17,7 @@ interface StepperProps {
 /** − n + with 44px targets. At 1 the minus becomes a remove button when removal is allowed (brief 6.3). */
 export function Stepper({ value, label, onChange, onRemove, max = 99, disabled, size = "md" }: StepperProps) {
   const atMin = value <= 1;
-  const btn = "inline-flex size-11 cursor-pointer items-center justify-center rounded-full transition-colors hover:bg-ink/8 active:scale-95 disabled:cursor-not-allowed disabled:opacity-35";
+  const btn = "inline-flex size-11 cursor-pointer items-center justify-center rounded-full transition-[background-color,transform] duration-100 ease-out hover:bg-ink/8 active:scale-95 disabled:cursor-not-allowed disabled:opacity-35";
   return (
     <div className="inline-flex items-center" role="group" aria-label={`Quantity of ${label}`}>
       <button
@@ -29,7 +30,7 @@ export function Stepper({ value, label, onChange, onRemove, max = 99, disabled, 
         {atMin && onRemove ? <Trash2 className="size-[1.1rem]" aria-hidden /> : <Minus className="size-5" aria-hidden />}
       </button>
       <span className={cn("tally min-w-[2ch] text-center text-tomato-ink", size === "lg" ? "text-3xl" : "text-2xl")} aria-live="polite">
-        {value}
+        <Ticker value={value} />
       </span>
       <button type="button" className={btn} disabled={disabled || value >= max} onClick={() => onChange(value + 1)} aria-label={`One more ${label}`}>
         <Plus className="size-5" aria-hidden />

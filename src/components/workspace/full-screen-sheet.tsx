@@ -28,7 +28,7 @@ export function FullScreenSheet({ label, onClose, className, children }: FullScr
         e.preventDefault();
         onClose();
       }}
-      className={`fixed inset-0 m-0 h-dvh max-h-none w-full max-w-none overflow-y-auto overscroll-contain bg-paper p-0 text-ink backdrop:bg-paper ${className ?? ""}`}
+      className={`sheet fixed inset-0 m-0 h-dvh max-h-none w-full max-w-none overflow-y-auto overscroll-contain bg-paper p-0 text-ink backdrop:bg-paper ${className ?? ""}`}
     >
       {children}
     </dialog>

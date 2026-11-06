@@ -43,11 +43,11 @@ test("network recovery: changes made while offline elsewhere arrive after reconn
   await startOrder(page);
   const code = await inviteCode(page);
   const guest = await joinAsGuest(browser, code, "JD");
-  await expect(page.getByText("Saved")).toBeVisible();
+  await expect(page.locator('[data-sync="saved"]')).toBeVisible();
 
   await context.setOffline(true);
   await addDish(guest.page, "Gyoza", 3);
-  await expect(guest.page.getByText("Saved")).toBeVisible();
+  await expect(guest.page.locator('[data-sync="saved"]')).toBeVisible();
   await context.setOffline(false);
   await expect(page.getByText("Gyoza")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId("round-total")).toContainText("3");
@@ -66,7 +66,7 @@ test("invite link preview names the order but never its dishes or people", async
   await page.getByRole("button", { name: /rename/ }).click();
   await page.getByLabel("Order name").fill("Ramen Nagi");
   await page.getByLabel("Order name").press("Enter");
-  await expect(page.getByText("Saved")).toBeVisible();
+  await expect(page.locator('[data-sync="saved"]')).toBeVisible();
   await addDish(page, "Secret Dish");
   const code = await inviteCode(page);
 

@@ -48,8 +48,23 @@ The system preference sets dark mode in CSS alone; `.dark` / `.light` on `<html>
 - **Composer**: single row (Details, Dish, stepper, Add), details panel above it, suggestion chips (saffron-wash) above that.
 
 ## Motion
-- Signature: a newly added dish line lands with a brief saffron wash (900 ms ease-out). Toasts rise 8 px (220 ms, expo ease-out). Steppers and buttons press-scale.
-- Everything collapses under `prefers-reduced-motion`.
+Tokens (`globals.css`): press 100 ms · quick 160 ms · base 240 ms · sheet 300 ms · stamp 520 ms · wash 900 ms. Enters use `--ease-out-expo`; exits use `--ease-in-exit` at about 60 % of the enter.
+
+| Moment | Motion | Reduced motion |
+|---|---|---|
+| A dish lands or gets another entry (yours or live) | Saffron wash over the line, 900 ms; own adds scroll into view | Wash kept (it carries meaning), scroll instant |
+| Any count changes (steppers, ×n, totals) | New number slides in from the direction it moved, 160 ms (`Ticker`) | Number just changes |
+| Remove / Undo | Row fades, the rest of the ticket closes the gap (View Transition), 160/240 ms | Instant |
+| Confirmed with the waiter | Waiter sheet rises 300 ms → stamp lands at +280 ms (overshoot keyframe) → ticket "thunk" 2 px at impact → 12 ms buzz on Android → "Kain na!" toast at ~900 ms | Stamp appears, no buzz |
+| Review / waiter sheets | Rise 24 px + fade, 300 ms (`@starting-style`) | Instant |
+| Dialogs (confirm, invite, members, corrections) | Rise 12 px + scale .98 + fade, 240 ms; exit 150 ms; backdrop fades 200 ms | Instant |
+| Details panel, expanded source rows | Fade + 8 px rise, 200 ms | Instant |
+| Suggestion chips | Fade, 120 ms | Instant |
+| Toasts | Rise 8 px in 220 ms; fade + 6 px out 160 ms | Instant |
+| Sync pill | "Saving…" only after 400 ms; label fades; colour shifts 200 ms; never pulses | Same without fades |
+| Press | Buttons and pills scale .97, icon buttons .95, 100 ms | Same |
+
+Tabs switch instantly on purpose (speed). No decorative motion; everything above answers "what just changed?".
 
 ## Voice
 Plain warm English; light Taglish only in empty and success states ("Wala pang order.", "Ayos!", "Kain na!", "Wala dito."). Buttons, labels and errors stay plain English and name the action or the fix.
