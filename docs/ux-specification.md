@@ -33,7 +33,15 @@ What is built, screen by screen. Design world and tokens: `PRODUCT.md`, the dire
 ## Guests in the workspace
 - Same screen; the composer's *Ordered for* defaults to **Me** (the host's defaults to Anyone). Steppers appear only on the guest's own entries; the order name is not editable. Changes from everyone appear live; "Reconnecting…" shows while the live connection is down.
 
-## Waiter ticket (`/s/:id/waiter`)
+## Review, waiter ticket and confirmation
+- Bottom bar: the host has **Review order** (primary); guests have **Ticket**.
+- **Review round n** (full screen): checks with icons and words (everything saved / changes still saving / changes not saved; n of m guests ready and who is still choosing; possibly ordered twice with "Remove your copy"), then the round's ticket. **Show the waiter** opens the waiter ticket; **Confirmed with waiter** (host, enabled only when everything is saved) asks once: "Confirm round n with the waiter? This saves round n exactly as shown… Its dishes can't be changed afterwards." → **Yes, the waiter has it**.
+- **Waiter ticket** (full screen, in place so unsaved changes are never lost): huge counts, preparations indented, a separate **Corrections** block, total, Copy as text, screen kept awake; the host can confirm from here too. Showing it never confirms.
+- After confirming: the rubber **CONFIRMED** stamp lands in the ticket's header (the signature moment; static with reduced motion), toast "Round n confirmed. Kain na!". The Order tab shows the stamped ticket and, for the host, **Start round n+1**; guests read that the host confirmed the round.
+- **Rounds tab**: newest first; the open round prints on its carbon-copy colour (round 2 canary, round 3+ pink) with its corrections (host can Remove each); confirmed rounds show their stamped tickets and the time. **Correct a dish** (host, while a round is open) opens a dialog: dish/preparation, Cancel some (stepper) or Change it (text), optional note. **End order** (host) asks once and explains: nobody can change anything, the invite stops working, tickets stay readable for 7 days, then deleted; warns if the open round was never confirmed.
+- **Ended order**: banner "This order has ended… deleted on <weekday, date>", Rounds tab by default, no composer, no Invite.
+
+## Waiter ticket link (`/s/:id/waiter`)
 - Large dish names and counts (fluid type), preparations indented, total. Works read aloud or handed over; the screen is kept awake while open (where supported).
 - **Copy as text** produces the same ticket as plain text. Viewing never confirms or sends anything.
 

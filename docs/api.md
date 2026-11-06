@@ -30,14 +30,20 @@ JSON over HTTPS. Implemented in `src/app/api/**` with shared helpers in `src/ser
 | `POST /api/sessions/:id/claims` | guest | `{ batchId }` | "That's mine" for a dish the host added (for this guest by name, or for nobody). Not for other guests' dishes or dishes marked for someone else. `409 CLAIM_PENDING`, `409 ALREADY_YOURS`. |
 | `POST /api/sessions/:id/claims/:claimId/approve` | host | — | The dish becomes the guest's own (owner and "for" both change); other pending claims on it close. Refused if the dish was removed (`409 ENTRY_REMOVED`) or is now marked for someone else (`409 CLAIM_STALE`). |
 | `POST /api/sessions/:id/claims/:claimId/reject` | host | — | Declines; nothing changes. `409 CLAIM_RESOLVED` when already answered. |
+| `GET /api/sessions/:id/rounds` | participant | — | Rounds, confirmed tickets and corrections (also in the snapshot). |
+| `POST /api/sessions/:id/rounds` | host | — | Start the next round after the last one was confirmed. `409 ROUND_OPEN`. |
+| `POST /api/sessions/:id/rounds/:roundId/confirm` | host | `{ expectedRevision }` | "Confirmed with waiter". Refused if the session revision moved since the host looked (`409 STALE_REVISION`), if the round is not the open one (`409 ROUND_NOT_OPEN`), or if it has no dishes and no corrections (`422 EMPTY_ROUND`). Stores an immutable ticket snapshot, freezes the round's entries, closes pending claims on it. |
+| `POST /api/sessions/:id/corrections` | host | `{ sourceEntryId, type: "QUANTITY" \| "REPLACE", quantity?, replacement?, explanation? }` | A change to a confirmed dish, carried by the open round's ticket. `QUANTITY` cancels 1…entry quantity; `REPLACE` needs `replacement`. `409 NO_OPEN_ROUND`, `409 NOT_CONFIRMED`. |
+| `DELETE /api/sessions/:id/corrections/:correctionId` | host | — | Take a correction back before its round is confirmed. |
+| `POST /api/sessions/:id/close` | host | — | End session: read-only, invite stops working, deleted after `CLOSED_RETENTION_DAYS` (7). |
 | `GET /api/sessions/:id/events` | participant | — | Server-Sent Events; see realtime.md. `503 TOO_MANY_STREAMS`. |
 | `GET /api/health` | anyone | — | `200 { ok, database }` or `503`. |
 
 ## Error codes
 
-`NOT_FOUND`, `ENTRY_NOT_FOUND`, `FORBIDDEN`, `FORBIDDEN_ORIGIN`, `SESSION_CLOSED`, `NO_OPEN_ROUND`, `ROUND_CONFIRMED`, `ENTRY_REMOVED`, `CONFLICT`, `UNKNOWN_PERSON`, `TOO_MANY_ENTRIES`, `TOO_MANY_DISHES`, `IDEMPOTENCY_KEY_REUSED`, `IDEMPOTENCY_KEY`, `BAD_JSON`, `TOO_LARGE`, `INVALID`, `RATE_LIMITED`, `INVITE_NOT_FOUND`, `CLAIM_PENDING`, `ALREADY_YOURS`, `CLAIM_NOT_FOUND`, `CLAIM_RESOLVED`, `TABLE_FULL`, `TOO_MANY_STREAMS`, `INTERNAL`.
+`NOT_FOUND`, `ENTRY_NOT_FOUND`, `FORBIDDEN`, `FORBIDDEN_ORIGIN`, `SESSION_CLOSED`, `NO_OPEN_ROUND`, `ROUND_CONFIRMED`, `ENTRY_REMOVED`, `CONFLICT`, `UNKNOWN_PERSON`, `TOO_MANY_ENTRIES`, `TOO_MANY_DISHES`, `IDEMPOTENCY_KEY_REUSED`, `IDEMPOTENCY_KEY`, `BAD_JSON`, `TOO_LARGE`, `INVALID`, `RATE_LIMITED`, `INVITE_NOT_FOUND`, `CLAIM_PENDING`, `ALREADY_YOURS`, `CLAIM_NOT_FOUND`, `CLAIM_RESOLVED`, `STALE_REVISION`, `ROUND_NOT_OPEN`, `ROUND_OPEN`, `EMPTY_ROUND`, `NOT_CONFIRMED`, `CORRECTION_NOT_FOUND`, `TABLE_FULL`, `TOO_MANY_STREAMS`, `INTERNAL`.
 
-Endpoints for rounds, confirmation, corrections and closing arrive with M4.
+
 
 ## Pages
 

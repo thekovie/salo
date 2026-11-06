@@ -58,3 +58,13 @@ export type AttributionInput = z.infer<typeof attributionSchema>;
 export const readySchema = z.object({ ready: z.boolean() });
 export const groupMembersSchema = z.object({ label: text(LIMITS.label).min(1, "Give the group a name."), memberIds: z.array(z.uuid()).max(LIMITS.participantsPerSession) });
 export const claimSchema = z.object({ batchId: z.uuid() });
+
+export const confirmSchema = z.object({ expectedRevision: z.number().int().min(0) });
+export const correctionSchema = z.object({
+  sourceEntryId: z.uuid(),
+  type: z.enum(["QUANTITY", "REPLACE"]),
+  quantity: z.number().int().min(1).max(LIMITS.quantity).optional(),
+  replacement: optional(LIMITS.dishName),
+  explanation: optional(LIMITS.instructions),
+});
+export type CorrectionInput = z.infer<typeof correctionSchema>;

@@ -3,12 +3,13 @@
 import { useRef } from "react";
 import { cn } from "@/lib/utils";
 
-export type View = "order" | "people" | "groups";
+export type View = "order" | "people" | "groups" | "rounds";
 
 const VIEWS: { id: View; label: string }[] = [
   { id: "order", label: "Order" },
   { id: "people", label: "People" },
   { id: "groups", label: "Groups" },
+  { id: "rounds", label: "Rounds" },
 ];
 
 /** Segmented tabs (WAI-ARIA tabs pattern: arrow keys move between them). The consolidated order is the default. */
@@ -24,7 +25,7 @@ export function ViewTabs({ view, onChange, counts }: { view: View; onChange: (vi
     refs.current[next]?.focus();
   }
   return (
-    <div role="tablist" aria-label="Views" className="mb-4 grid grid-cols-3 gap-1 rounded-full bg-ink/6 p-1">
+    <div role="tablist" aria-label="Views" className="mb-4 grid grid-cols-4 gap-1 rounded-full bg-ink/6 p-1">
       {VIEWS.map((v, i) => (
         <button
           key={v.id}
@@ -39,7 +40,7 @@ export function ViewTabs({ view, onChange, counts }: { view: View; onChange: (vi
           onClick={() => onChange(v.id)}
           onKeyDown={(e) => onKey(e, i)}
           className={cn(
-            "min-h-11 cursor-pointer rounded-full text-sm font-semibold transition-colors",
+            "min-h-11 cursor-pointer rounded-full px-1 text-sm font-semibold whitespace-nowrap transition-colors",
             view === v.id ? "bg-ticket text-ink shadow-ticket" : "text-ink-soft hover:text-ink",
           )}
         >

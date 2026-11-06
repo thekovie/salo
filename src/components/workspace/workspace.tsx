@@ -1,18 +1,22 @@
 "use client";
 
-import { CircleCheck, Hand, ReceiptText, X } from "lucide-react";
-import Link from "next/link";
+import { CircleCheck, Hand, Lock, Plus, ReceiptText, X } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
-import { buttonVariants } from "@/components/ui/button";
+import { WaiterTicket } from "@/components/ticket/waiter-ticket";
+import { Button } from "@/components/ui/button";
 import { describeOp, useSession, type AddInput, type OverlayEntry } from "@/hooks/use-session";
 import { consolidate } from "@/lib/consolidate";
 import type { SessionSnapshot } from "@/lib/snapshot";
+import { liveTicket } from "@/lib/ticket";
 import { cn } from "@/lib/utils";
 import { canEditEntry } from "@/lib/permissions";
 import { byGroup, readinessSummary } from "@/lib/views";
 import { Composer } from "./composer";
 import { GroupsView } from "./groups-view";
 import { PeopleView } from "./people-view";
+import { ReviewPanel } from "./review-panel";
+import { RoundsView, type CorrectionRequest } from "./rounds-view";
+import { WaiterPanel } from "./waiter-panel";
 import { ViewTabs, type View } from "./view-tabs";
 import { InviteSheet } from "./invite-sheet";
 import { OrderTicket, type TicketActions } from "./order-ticket";
@@ -22,15 +26,22 @@ import { Toasts, useToasts } from "./toasts";
 const copyFor = (roundNumber: number): 1 | 2 | 3 => (roundNumber >= 3 ? 3 : roundNumber === 2 ? 2 : 1);
 
 export function Workspace({ initial, appUrl }: { initial: SessionSnapshot; appUrl: string }) {
-  const { snapshot, entries, failed, sync, mutate, dismiss, entryById } = useSession(initial);
+  const { snapshot, entries, pending, failed, sync, mutate, dismiss, entryById } = useSession(initial);
   const { toasts, show, dismiss: dismissToast } = useToasts();
   const round = snapshot.rounds.find((r) => r.id === snapshot.activeRoundId) ?? snapshot.rounds[0];
   const roundEntries = useMemo(() => entries.filter((e) => e.roundId === round.id), [entries, round.id]);
   const total = consolidate(roundEntries).totalItems;
   const isHost = snapshot.me.role === "HOST";
-  const isOpen = snapshot.session.status === "OPEN" && round.status === "DRAFT";
+  const sessionOpen = snapshot.session.status === "OPEN";
+  const isOpen = sessionOpen && round.status === "DRAFT";
+  const unsaved = pending.filter((p) => p.status !== "failed").length;
 
-  const [view, setView] = useState<View>("order");
+  const [view, setView] = useState<View>(sessionOpen ? "order" : "rounds");
+  const [mode, setMode] = useState<"edit" | "review" | "waiter">("edit");
+  const [justConfirmed, setJustConfirmed] = useState<string | null>(null);
+  const ticket = liveTicket({ roundNumber: round.number, title: snapshot.session.title, ticket: consolidate(roundEntries), corrections: snapshot.corrections, roundId: round.id });
+  const confirmedTicket = round.status === "CONFIRMED" ? snapshot.tickets[round.id] : undefined;
+  const correctionsThisRound = ticket.corrections.length;
   const ready = readinessSummary(snapshot);
   const iAmReady = ready.readyIds.has(snapshot.me.participantId);
   const groupCount = byGroup(roundEntries, snapshot.groups).length;
@@ -77,6 +88,31 @@ export function Workspace({ initial, appUrl }: { initial: SessionSnapshot; appUr
     },
   };
 
+  async function confirmRound() {
+    const result = await mutate({ kind: "confirm", roundId: round.id, roundNumber: round.number, expectedRevision: snapshot.session.revision });
+    if (result) {
+      setJustConfirmed(round.id);
+      setMode("waiter");
+      show({ message: `Round ${round.number} confirmed. Kain na!` });
+    } else {
+      setMode("review");
+    }
+  }
+
+  async function openRound() {
+    const next = round.number + 1;
+    if (await mutate({ kind: "openRound", roundNumber: next })) {
+      setView("order");
+      show({ message: `Round ${next} started. Add-ons go here.` });
+    }
+  }
+
+  const correct = (request: CorrectionRequest) => void mutate({ kind: "correction", ...request });
+
+  async function closeOrder() {
+    if (await mutate({ kind: "close" })) setView("rounds");
+  }
+
   return (
     <div className="min-h-dvh pb-[calc(env(safe-area-inset-bottom)+11rem)]">
       <SessionHeader
@@ -109,6 +145,15 @@ export function Workspace({ initial, appUrl }: { initial: SessionSnapshot; appUr
             ))}
           </div>
         ) : null}
+        {!sessionOpen ? (
+          <div role="status" className="mb-4 flex items-start gap-2.5 rounded-2xl bg-ink/6 p-4">
+            <Lock className="mt-0.5 size-5 shrink-0" aria-hidden />
+            <p>
+              This order has ended. Nothing can be changed. Everything is deleted on{" "}
+              {new Intl.DateTimeFormat("en-PH", { weekday: "long", month: "long", day: "numeric" }).format(new Date(snapshot.session.expiresAt))}.
+            </p>
+          </div>
+        ) : null}
         {claimsForHost.length > 0 ? (
           <section aria-label="Requests from guests" className="mb-4 space-y-2 rounded-2xl bg-saffron-wash p-3">
             {claimsForHost.map(({ claim, entry, who }) => (
@@ -129,10 +174,33 @@ export function Workspace({ initial, appUrl }: { initial: SessionSnapshot; appUr
             ))}
           </section>
         ) : null}
-        <ViewTabs view={view} onChange={setView} counts={{ people: snapshot.participants.length, groups: groupCount }} />
+        <ViewTabs view={view} onChange={setView} counts={{ people: snapshot.participants.length, groups: groupCount, rounds: snapshot.rounds.length > 1 ? snapshot.rounds.length : 0 }} />
         <div role="tabpanel" id={`panel-${view}`} aria-labelledby={`tab-${view}`}>
-          {view === "order" ? (
+          {view === "order" && confirmedTicket ? (
+            <div className="space-y-4">
+              <WaiterTicket ticket={confirmedTicket} size="compact" confirmed justConfirmed={justConfirmed === round.id} />
+              {sessionOpen ? (
+                isHost ? (
+                  <Button size="lg" className="w-full" onClick={() => void openRound()}>
+                    <Plus className="size-5" aria-hidden /> Start round {round.number + 1}
+                  </Button>
+                ) : (
+                  <p className="text-center text-ink-soft">The host confirmed round {round.number} with the waiter. Want more? The host can start a new round.</p>
+                )
+              ) : null}
+            </div>
+          ) : view === "order" ? (
             <OrderTicket entries={roundEntries} people={snapshot.participants} roundNumber={round.number} copy={copyFor(round.number)} actions={actions} readOnly={!isOpen} />
+          ) : view === "rounds" ? (
+            <RoundsView
+              snapshot={snapshot}
+              entries={entries}
+              justConfirmedRoundId={justConfirmed}
+              onOpenRound={() => void openRound()}
+              onCorrect={correct}
+              onRemoveCorrection={(correctionId, dishName) => void mutate({ kind: "removeCorrection", correctionId, dishName })}
+              onClose={() => void closeOrder()}
+            />
           ) : view === "people" ? (
             <PeopleView
               snapshot={snapshot}
@@ -176,19 +244,48 @@ export function Workspace({ initial, appUrl }: { initial: SessionSnapshot; appUr
                 {iAmReady ? "Ready" : "I’m ready"}
               </button>
             ) : null}
-            <Link
-              href={`/s/${snapshot.session.id}/waiter`}
-              aria-disabled={total === 0}
-              tabIndex={total === 0 ? -1 : undefined}
-              className={cn(buttonVariants({ variant: "outline" }), total === 0 && "pointer-events-none opacity-45")}
-            >
-              <ReceiptText className="size-5" aria-hidden />
-              Show waiter
-            </Link>
+            {isOpen && isHost ? (
+              <Button onClick={() => setMode("review")} disabled={total === 0 && correctionsThisRound === 0}>
+                <ReceiptText className="size-5" aria-hidden />
+                Review order
+              </Button>
+            ) : isOpen ? (
+              <Button variant="outline" onClick={() => setMode("waiter")} disabled={total === 0 && correctionsThisRound === 0}>
+                <ReceiptText className="size-5" aria-hidden />
+                Ticket
+              </Button>
+            ) : null}
           </div>
         </div>
       </div>
 
+      {mode === "review" && isOpen ? (
+        <ReviewPanel
+          snapshot={snapshot}
+          entries={roundEntries}
+          ticket={ticket}
+          roundId={round.id}
+          unsaved={unsaved}
+          notSaved={failed.length}
+          onBack={() => setMode("edit")}
+          onShowWaiter={() => setMode("waiter")}
+          onConfirm={() => void confirmRound()}
+          onRemoveDuplicate={(entry) => actions.remove(entry)}
+        />
+      ) : null}
+      {mode === "waiter" ? (
+        <WaiterPanel
+          ticket={confirmedTicket ?? ticket}
+          confirmed={Boolean(confirmedTicket)}
+          justConfirmed={justConfirmed === round.id}
+          canConfirm={isHost && isOpen && unsaved === 0 && failed.length === 0}
+          onBack={() => {
+            setMode(isHost && isOpen ? "review" : "edit");
+            setJustConfirmed(null);
+          }}
+          onConfirm={() => void confirmRound()}
+        />
+      ) : null}
       <Toasts toasts={toasts} onDismiss={dismissToast} />
     </div>
   );

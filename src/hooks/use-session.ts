@@ -22,7 +22,12 @@ export type Op =
   | { kind: "ready"; ready: boolean }
   | { kind: "claim"; batchId: string; dishName: string }
   | { kind: "resolveClaim"; claimId: string; approve: boolean; dishName: string }
-  | { kind: "groupMembers"; label: string; memberIds: string[] };
+  | { kind: "groupMembers"; label: string; memberIds: string[] }
+  | { kind: "confirm"; roundId: string; roundNumber: number; expectedRevision: number }
+  | { kind: "openRound"; roundNumber: number }
+  | { kind: "correction"; sourceEntryId: string; dishName: string; type: "QUANTITY" | "REPLACE"; quantity?: number; replacement?: string; explanation?: string }
+  | { kind: "removeCorrection"; correctionId: string; dishName: string }
+  | { kind: "close" };
 
 type Status =
   | "queued" // waiting its turn
@@ -78,6 +83,16 @@ function request(sessionId: string, op: Op, latest: SessionSnapshot) {
       return { path: `${base}/claims/${op.claimId}/${op.approve ? "approve" : "reject"}`, method: "POST", body: undefined };
     case "groupMembers":
       return { path: `${base}/groups`, method: "PUT", body: { label: op.label, memberIds: op.memberIds } };
+    case "confirm":
+      return { path: `${base}/rounds/${op.roundId}/confirm`, method: "POST", body: { expectedRevision: op.expectedRevision } };
+    case "openRound":
+      return { path: `${base}/rounds`, method: "POST", body: undefined };
+    case "correction":
+      return { path: `${base}/corrections`, method: "POST", body: { sourceEntryId: op.sourceEntryId, type: op.type, quantity: op.quantity, replacement: op.replacement, explanation: op.explanation } };
+    case "removeCorrection":
+      return { path: `${base}/corrections/${op.correctionId}`, method: "DELETE", body: undefined };
+    case "close":
+      return { path: `${base}/close`, method: "POST", body: undefined };
   }
 }
 
@@ -102,6 +117,16 @@ export function describeOp(op: Op): string {
       return `${op.approve ? "Approve" : "Decline"} the claim for ${op.dishName}`;
     case "groupMembers":
       return `Update ${op.label}`;
+    case "confirm":
+      return `Confirm round ${op.roundNumber}`;
+    case "openRound":
+      return `Start round ${op.roundNumber}`;
+    case "correction":
+      return `Correct ${op.dishName}`;
+    case "removeCorrection":
+      return `Remove the correction for ${op.dishName}`;
+    case "close":
+      return "End the order";
   }
 }
 
