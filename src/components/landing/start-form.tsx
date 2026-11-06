@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 
 /** "Start an order": creates the session (and the host's credential cookie), then opens the workspace. */
-export function StartForm() {
+export function StartForm({ label = "Start an order" }: { label?: string }) {
   const router = useRouter();
   const [state, setState] = useState<"idle" | "busy" | "error">("idle");
   const [message, setMessage] = useState("");
@@ -28,7 +28,7 @@ export function StartForm() {
     <div>
       <Button size="lg" onClick={start} disabled={state === "busy"} className="w-full sm:w-auto">
         {state === "busy" ? <LoaderCircle className="size-5 animate-spin" aria-hidden /> : null}
-        {state === "busy" ? "Starting…" : "Start an order"}
+        {state === "busy" ? "Starting…" : label}
         {state === "busy" ? null : <ArrowRight className="size-5" aria-hidden />}
       </Button>
       <p role="alert" className="mt-2 min-h-5 text-sm text-bad">

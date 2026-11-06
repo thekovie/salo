@@ -228,3 +228,20 @@ Owner asked for a prompt at the end of an order to copy every order as text or s
 
 Tests: 100 unit/integration (new: summary with corrections, groups, table, removed guest, unconfirmed round); 25 e2e (new: end, then summary, copy text checked on the clipboard, PNG download, guest access, strangers get 404).
 
+## Landing scenes and first-time tour (`feat/landing-onboarding`)
+
+Owner deployed the app, then asked for a landing page that shows what Salo does with visuals, plus an onboarding helper ("want to know how to use the app?"). Choices: animated coded scenes (not screenshots); a first-time offer plus a guided spotlight tour, with host and guest versions.
+
+- **Landing**:
+  - `HeroScene` replaces the static sample ticket: a looping round that fills, merges, totals and gets stamped.
+  - "How it works" has four rows, each with a scene that plays once in view (invite, add, waiter ticket, who ordered what).
+  - A "Why Salo" strip, a closing CTA, and a footer link.
+  - `useScene` drives the steps; reduced motion shows the final frame.
+  - No images and no new dependencies.
+- **Tour**:
+  - `TourOffer` appears once per browser and role, waits out the guest's "You're in!" tip, and is stored in localStorage (no offer if storage is blocked).
+  - `Tour` is a custom spotlight (fixed frame with a huge shadow, a card that flips above or below), with Back/Next/Skip/Done, arrows and Escape, a focus trap and focus return. It skips controls that aren't on screen.
+  - Replay: host from Order options → How Salo works, guest from the ? in the header.
+- **Bug found while building**: inline timeline arrays restarted every scene on each render. `useScene` now keys on the durations.
+- **Tests**: e2e storageState seeds the tour flags so the offer never shifts other specs. `onboarding.spec.ts` covers the host tour (5 steps, reload, replay, keyboard), the guest tour (Not now, ? replay) and the landing steps. 28 e2e total; unit tests unchanged.
+

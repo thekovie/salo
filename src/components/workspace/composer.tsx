@@ -258,7 +258,7 @@ export function Composer({ dishNames, people, names, groups, disabled, onAdd }: 
         </fieldset>
       ) : null}
 
-      <div className="rounded-xl bg-paper px-3 pt-1.5 pb-0.5 has-[input:focus-visible]:outline-2 has-[input:focus-visible]:outline-offset-1 has-[input:focus-visible]:outline-ink">
+      <div data-tour="dish" className="rounded-xl bg-paper px-3 pt-1.5 pb-0.5 has-[input:focus-visible]:outline-2 has-[input:focus-visible]:outline-offset-1 has-[input:focus-visible]:outline-ink">
         <label htmlFor={`${id}-dish`} className="block text-xs font-semibold text-ink-soft">
           Dish
         </label>
@@ -286,6 +286,7 @@ export function Composer({ dishNames, people, names, groups, disabled, onAdd }: 
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
           aria-controls={open ? `${id}-panel` : undefined}
+          data-tour="for"
           className={cn("relative inline-flex min-h-11 min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-full px-3 text-left hover:bg-ink/6", open && "bg-ink/8")}
         >
           <ForIcon className="size-4 shrink-0 text-ink-soft" aria-hidden />

@@ -7,7 +7,24 @@ export default defineConfig({
   fullyParallel: false,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? "github" : "list",
-  use: { baseURL: `http://localhost:${PORT}`, trace: "retain-on-failure" },
+  use: {
+    baseURL: `http://localhost:${PORT}`,
+    trace: "retain-on-failure",
+    // Every browser starts as someone who has already seen the first-time tour offer, so it never shifts what other
+    // tests click. onboarding.spec.ts opens clean contexts to test the offer itself.
+    storageState: {
+      cookies: [],
+      origins: [
+        {
+          origin: `http://localhost:${PORT}`,
+          localStorage: [
+            { name: "salo:tour:host:v1", value: "1" },
+            { name: "salo:tour:guest:v1", value: "1" },
+          ],
+        },
+      ],
+    },
+  },
   projects: [{ name: "mobile", use: { ...devices["Pixel 7"] } }],
   webServer: {
     command: `pnpm build && pnpm start -p ${PORT}`,

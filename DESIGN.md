@@ -46,7 +46,9 @@ The system preference sets dark mode in CSS alone; `.dark` / `.light` on `<html>
 - **Bottom bar**: Add is the single tomato button; Review order (host) and Ticket (guest) are outline. The confirm action reads "Mark confirmed with waiter" (a verb, not a status).
 - **Full-screen panels** (Review, Waiter ticket): native modal dialogs (`FullScreenSheet`).
 - **Bottom drawers** (Invite, Correct a dish): `src/components/ui/drawer.tsx` (shadcn's Drawer on `vaul`): slides up, swipe or drag the handle down to close, Escape and tapping outside close it, focus moves in and returns. Styled as a ticket torn off the pad (`.ticket-top`: perforated top edge only) with a grab handle. Confirm questions stay centred dialogs.
-- **Composer**: single row (Details, Dish, stepper, Add), details panel above it, suggestion chips (saffron-wash) above that.
+- **Composer**: two rows. A full-width labelled Dish field, then For ▾ · stepper · Add. The "Who's it for?" panel sits above, with suggestion chips (saffron-wash) above that.
+- **Landing scenes** (`src/components/landing/scenes.tsx`): phone-shaped paper cards built from the real tokens, driven by `useScene` (a step timeline; plays in view; final frame under reduced motion). Pictures, not UI: `aria-hidden`, sample names and dishes.
+- **Tour** (`src/components/onboarding`): spotlight frame (saffron ring, ink scrim made from one huge shadow) and a ticket card placed above or below the target; offer card in saffron-wash.
 
 ## Motion
 Tokens (`globals.css`): press 100 ms · quick 160 ms · base 240 ms · sheet 300 ms · stamp 520 ms · wash 900 ms. Enters use `--ease-out-expo`; exits use `--ease-in-exit` at about 60 % of the enter.

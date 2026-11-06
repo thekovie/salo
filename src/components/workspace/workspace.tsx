@@ -1,7 +1,7 @@
 "use client";
 
 import { CircleCheck, Hand, Lock, Plus, ReceiptText } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { WaiterTicket } from "@/components/ticket/waiter-ticket";
 import { Button } from "@/components/ui/button";
 import { describeOp, useSession, type AddInput, type OverlayEntry } from "@/hooks/use-session";
@@ -28,6 +28,9 @@ import { OrderTicket, type TicketActions } from "./order-ticket";
 import { ArrivalPills, ARRIVAL_MS } from "./arrival-pills";
 import { OrderOptionsSheet } from "./order-options-sheet";
 import { SummarySheet } from "./summary-sheet";
+import { Tour } from "@/components/onboarding/tour";
+import { TourOffer } from "@/components/onboarding/tour-offer";
+import { GUEST_TOUR, HOST_TOUR, markTourSeen, subscribeTourSeen, tourSeen } from "@/components/onboarding/tour-steps";
 import { SessionHeader } from "./session-header";
 import { Toasts, useToasts } from "./toasts";
 
@@ -53,6 +56,22 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
   const ended = sessionOpen ? null : anyConfirmed ? "ended" : "cancelled";
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
+  const [touring, setTouring] = useState(false);
+  const role = snapshot.me.role;
+  // Unknown on the server (no storage there): treat as seen, so the offer only ever appears after hydration.
+  const seen = useSyncExternalStore(subscribeTourSeen, () => tourSeen(role), () => true);
+  // A guest who just joined first reads the "You're in!" tip; the offer waits until it has gone.
+  const [offerHeld, setOfferHeld] = useState(justJoined);
+  useEffect(() => {
+    if (!offerHeld) return;
+    const timer = setTimeout(() => setOfferHeld(false), 5000);
+    return () => clearTimeout(timer);
+  }, [offerHeld]);
+  const startTour = () => {
+    markTourSeen(role);
+    setTouring(true);
+  };
+  const endTour = useCallback(() => setTouring(false), []);
 
   // Someone else's new dishes, noticed when a newer snapshot arrives (compared during render, React's "previous
   // value" pattern), shown as pills for a moment and tagged on their rows.
@@ -238,6 +257,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
         ended={ended}
         sync={sync}
         onOptions={isHost && sessionOpen ? () => setOptionsOpen(true) : undefined}
+        onHelp={!isHost && sessionOpen ? startTour : undefined}
         actions={
           sessionOpen ? (
             <InviteSheet appUrl={appUrl} joinCode={snapshot.session.joinCode} title={snapshot.session.title} peopleCount={snapshot.participants.length} />
@@ -245,6 +265,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
         }
       />
       {sessionOpen ? <ArrivalPills arrivals={arrivals} onSelect={jumpTo} /> : null}
+      {touring ? <Tour steps={isHost ? HOST_TOUR : GUEST_TOUR} onClose={endTour} /> : null}
       {anyConfirmed ? <SummarySheet open={summaryOpen} onOpenChange={setSummaryOpen} snapshot={snapshot} /> : null}
       {isHost && sessionOpen ? (
         <OrderOptionsSheet
@@ -255,6 +276,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
           unsentRound={round.status === "DRAFT" && roundEntries.length > 0 ? round.number : null}
           onRename={(title) => void mutate({ kind: "rename", title })}
           onEnd={closeOrder}
+          onTour={startTour}
         />
       ) : null}
 
@@ -316,6 +338,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
             ))}
           </section>
         ) : null}
+        {sessionOpen && !seen && !offerHeld && !touring ? <TourOffer onStart={startTour} onDismiss={() => markTourSeen(role)} /> : null}
         <ViewTabs view={view} onChange={setView} counts={{ people: snapshot.participants.length, groups: groupCount, rounds: snapshot.rounds.length > 1 ? snapshot.rounds.length : 0 }} />
         <div role="tabpanel" id={`panel-${view}`} aria-labelledby={`tab-${view}`}>
           {view === "order" && confirmedTicket ? (
@@ -379,6 +402,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
               <button
                 type="button"
                 aria-pressed={iAmReady}
+                data-tour="ready"
                 onClick={() => void mutate({ kind: "ready", ready: !iAmReady })}
                 className={cn(
                   "inline-flex min-h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-4 font-semibold transition-colors",
@@ -390,12 +414,12 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
               </button>
             ) : null}
             {isOpen && isHost ? (
-              <Button variant="outline" onClick={() => setMode("review")} disabled={total === 0 && correctionsThisRound === 0}>
+              <Button variant="outline" data-tour="review" onClick={() => setMode("review")} disabled={total === 0 && correctionsThisRound === 0}>
                 <ReceiptText className="size-5" aria-hidden />
                 Review order
               </Button>
             ) : isOpen || confirmedTicket ? (
-              <Button variant="outline" onClick={() => setMode("waiter")} disabled={!confirmedTicket && total === 0 && correctionsThisRound === 0}>
+              <Button variant="outline" data-tour="ticket" onClick={() => setMode("waiter")} disabled={!confirmedTicket && total === 0 && correctionsThisRound === 0}>
                 <ReceiptText className="size-5" aria-hidden />
                 Ticket
               </Button>
