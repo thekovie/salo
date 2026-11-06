@@ -8,8 +8,8 @@ Read this first when resuming. Specification: `docs/brief.md`. Decisions per PR:
 |---|---|---|
 | M0 Foundation | 0 | Merged (PR #2) |
 | M1 Standalone ordering | 1 | Merged (PR #3) |
-| M2 Collaboration (QR, SSE) | 2 | In review (`feat/m2-collaboration`) |
-| M3 Groups & hybrid | 3 | Not started |
+| M2 Collaboration (QR, SSE) | 2 | Merged (PR #4) |
+| M3 Groups & hybrid | 3 | In review (`feat/m3-groups-hybrid`) |
 | M4 Review, confirm, rounds | 4 | Not started |
 | M5 Hardening | 5 | Not started |
 
@@ -32,4 +32,4 @@ Read this first when resuming. Specification: `docs/brief.md`. Decisions per PR:
 
 ## Next steps
 
-M3: collective group orders with optional members, People and Groups views, claims of host-recorded entries with host approval, duplicate hints, per-round readiness (stale after changes).
+M4: review screen (duplicates, sync issues, readiness), waiter view from review, host-only "Confirmed with waiter" with revision check and immutable snapshot, new rounds (carbon-copy colours, CONFIRMED stamp), corrections, End session + read-only view, Rounds tab.

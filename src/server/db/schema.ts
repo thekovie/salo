@@ -132,7 +132,7 @@ export const participantRoundReadiness = pgTable(
     acknowledgedRevision: bigint("acknowledged_revision", { mode: "number" }).notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [primaryKey({ columns: [t.participantId, t.roundId] })],
+  (t) => [primaryKey({ columns: [t.participantId, t.roundId] }), index("readiness_round_idx").on(t.roundId)],
 );
 
 export const dishes = pgTable(
@@ -153,10 +153,12 @@ export const orderGroups = pgTable(
     id: id(),
     sessionId: sessionRef(),
     label: text("label").notNull(),
+    /** Groups are matched to collective orders by label, conservatively (same rules as dish names). */
+    normalizedLabel: text("normalized_label").notNull(),
     createdBy: uuid("created_by").references(() => participants.id, { onDelete: "set null" }),
     createdAt: createdAt(),
   },
-  (t) => [index("order_groups_session_idx").on(t.sessionId)],
+  (t) => [uniqueIndex("order_groups_label_uq").on(t.sessionId, t.normalizedLabel)],
 );
 
 export const orderGroupMembers = pgTable(
@@ -289,6 +291,7 @@ export const entryClaims = pgTable(
   (t) => [
     check("claims_status_ck", inList("status", CLAIM_STATUSES)),
     uniqueIndex("claims_one_pending_uq").on(t.batchId, t.requestedBy).where(sql`status = 'PENDING'`),
+    index("claims_pending_session_idx").on(t.sessionId).where(sql`status = 'PENDING'`),
   ],
 );
 

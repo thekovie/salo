@@ -6,6 +6,7 @@ import type { SessionSnapshot, SnapshotEntry } from "@/lib/snapshot";
 const entry = (id: string, dishName: string, quantity: number, createdAt: string): SnapshotEntry => ({
   id,
   roundId: "r1",
+  batchId: `b-${id}`,
   dishId: `d-${dishName}`,
   dishName,
   quantity,
@@ -26,6 +27,9 @@ const snapshot = {
   participants: [],
   entries: [gyoza],
   dishNames: ["Gyoza"],
+  claims: [],
+  readiness: [],
+  groups: [],
 } satisfies SessionSnapshot;
 
 const item = (fields: Partial<Pending> & Pick<Pending, "op">): Pending => ({ key: Math.random().toString(36), status: "queued", createdAt: "", attempts: 0, ...fields });

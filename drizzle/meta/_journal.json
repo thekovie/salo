@@ -15,6 +15,20 @@
       "when": 1793943278719,
       "tag": "0001_integrity_triggers",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793946047999,
+      "tag": "0002_group_labels",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793946699921,
+      "tag": "0003_review_indexes",
+      "breakpoints": true
     }
   ]
 }

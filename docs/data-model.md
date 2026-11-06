@@ -12,7 +12,7 @@ PostgreSQL, defined in `src/server/db/schema.ts`; migrations in `drizzle/` (appl
 | `rounds` | Ordering rounds, numbered from 1. DRAFT or CONFIRMED. At most one DRAFT per session. |
 | `participant_round_readiness` | "I'm ready" per participant per round, with the revision they acknowledged. |
 | `dishes` | Session-scoped dish names: `canonical_name` as first typed, `normalized_name` unique per session. |
-| `order_groups`, `order_group_members` | Optional collective-order labels and their optional members. |
+| `order_groups`, `order_group_members` | Optional members for a collective group, keyed by `normalized_label` (unique per session). Group orders are matched to a group by label; membership never assigns dishes. |
 | `order_batches` | Who an entry is for (`attribution_type` INDIVIDUAL/GROUP/TABLE/UNASSIGNED) and who submitted it (owner). |
 | `order_entries` | Source entries: dish, quantity 1–99, variant, instructions, own revision, soft delete (`deleted_at`) for Undo. |
 | `confirmed_round_snapshots` | Immutable JSON snapshot taken when the host confirms a round. |

@@ -81,3 +81,26 @@ Running record of decisions, issues, tests and deviations, one section per PR. N
 - Security: 1 high fixed: invite lookups (page, metadata, OG image) were an unthrottled code-guessing oracle; now 40 misses/hour per address, unknown and ended orders both 404. Mediums fixed: per-address stream cap (12) and 15-minute stream lifetime (reconnect re-authorises); OG image for unknown codes is a cached static card and fonts load once. Lows fixed: join keeps an existing identity instead of overwriting the cookie; a stream whose client left during setup is cleaned up.
 - Code review: approve with 3 mediums, all fixed: Web Share detection no longer causes a hydration mismatch; the heartbeat re-reads the event log so a failed read heals; failed snapshot fetches retry. Lows fixed: stream restart backs off to 60 s; hub reserves slots before awaiting LISTEN; QR drawn on first open; copy success announced; code read out letter by letter.
 - Left as known limitation: if a join's response is lost, retrying creates a second guest with the same name (cookie never arrived); low impact, revisit with claims in M3.
+
+**Merged** 2026-11-06 as PR #4.
+
+## M3 · Groups and hybrid ordering (`feat/m3-groups-hybrid`)
+
+**Built**
+- Views: Order · People · Groups tabs (WAI-ARIA tabs). Pure projections in `src/lib/views.ts` (by person incl. typed names / whole table / not assigned; by group label; likely duplicates; readiness summary).
+- Collective groups: optional members per label (`order_groups.normalized_label`, migration 0002), members dialog; nothing assumes who gets which dish.
+- Claims: guests mark host-recorded dishes (for them by name, or for nobody) as theirs; host approves or declines from a banner; approval moves owner and "for" to the guest; one pending claim per guest and dish.
+- Duplicate hint: host-recorded dish for a guest by name + the guest's own identical preparation; "Remove your copy" with Undo.
+- Readiness per round: guest toggle, host summary; reset in the same transaction when that guest changes their own entries.
+
+**Tests**: 76 unit/integration + 13 e2e (scenario 3 groups with members across two browsers, scenario 4 claim + approve + duplicate hint + readiness reset, axe on People/Groups for host and guest).
+
+**Decisions / deviations**
+- Groups are matched to orders by normalized label instead of a required `group_id`; a group with members exists only when someone adds members.
+- Any participant may name a group's members (low risk, optional metadata); claims and approvals follow brief 4.
+- Found by e2e: the members dialog's label id contained spaces (no accessible name); fixed with generated ids. Guest bottom bar no longer wraps at 390 px; empty host card hidden in People.
+
+**Independent reviews (before PR)**
+- Security: no critical/high. Fixed: 30 groups per order; group members changed only by the host or the group's creator; approving a claim on a removed dish or a dish now marked for someone else is refused (`ENTRY_REMOVED`, `CLAIM_STALE`).
+- Code review: no high; mediums fixed: People/Groups keep pending edits visible (only unsaved adds are claim-disabled); "That's mine" appears only on dishes the host added; readiness resets for the actor, the dish owner and whoever the dish is for (and on claim approval); new indexes for pending claims and readiness by round (migration 0003). Lows fixed: double-order hint requires the guest's own dish to be for themselves; Groups tab count matches the view; tabs support Home/End and point aria-controls only at the shown panel.
+- Tests after fixes: 79 unit/integration, 13 e2e.

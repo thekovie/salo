@@ -1,0 +1,2 @@
+CREATE INDEX "claims_pending_session_idx" ON "entry_claims" USING btree ("session_id") WHERE status = 'PENDING';--> statement-breakpoint
+CREATE INDEX "readiness_round_idx" ON "participant_round_readiness" USING btree ("round_id");

@@ -18,6 +18,12 @@ What is built, screen by screen. Design world and tokens: `PRODUCT.md`, the dire
 - **Failures**: a red box lists each change that did not save, with Retry and Discard. A conflict ("Someone changed this dish just now") refreshes to the latest version.
 - **Bottom bar**: item count for the round and **Show waiter**.
 
+## Views (tabs under the header)
+- **Order** (default): the consolidated ticket. **People** (count of joined people): one card per joined person (the host's only when it has dishes), then names the host typed for people who did not join ("added by the host"), then Whole table and Not assigned; guests show "Ready" or "Still choosing". **Groups** (count of group labels): each collective order with its total, dishes, member chips and "Add/Edit members" (a dialog with checkboxes; optional, never assigns dishes). Arrow keys move between tabs.
+- **Claims**: in People, a guest sees "That's mine" next to each dish the host added under a typed name or for nobody; after tapping, "Asked the host". The host sees a saffron banner at the top: "Rafa says Halo-halo ×1 is theirs." with Decline / Approve. Approving makes it the guest's own dish.
+- **Possibly ordered twice** (host, People): when the host added a dish for a guest by name and that guest also added the same dish preparation, a hint offers "Remove your copy" (with Undo). Nothing merges on its own.
+- **Readiness**: guests have an "I'm ready" toggle in the bottom bar (pressed state "Ready"); changing their own dishes afterwards resets it. The host sees "n of m guests ready" under the item count. It never blocks anything.
+
 ## Invite sheet (header "Invite")
 - Native modal dialog (focus trapped, Escape closes): QR code (ink on white), the 6-character code in large mono, **Share invite** (system share sheet with the text "Join our order at … on Salo: <link>") when available, **Copy link**, and a note that guests change only their own dishes and only the host confirms with the waiter.
 

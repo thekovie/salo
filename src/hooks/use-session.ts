@@ -18,7 +18,11 @@ export type Op =
   | { kind: "update"; entry: SnapshotEntry; quantity: number }
   | { kind: "remove"; entry: SnapshotEntry }
   | { kind: "restore"; entry: SnapshotEntry }
-  | { kind: "rename"; title: string | null };
+  | { kind: "rename"; title: string | null }
+  | { kind: "ready"; ready: boolean }
+  | { kind: "claim"; batchId: string; dishName: string }
+  | { kind: "resolveClaim"; claimId: string; approve: boolean; dishName: string }
+  | { kind: "groupMembers"; label: string; memberIds: string[] };
 
 type Status =
   | "queued" // waiting its turn
@@ -66,6 +70,14 @@ function request(sessionId: string, op: Op, latest: SessionSnapshot) {
       return { path: `${base}/entries/${op.entry.id}/restore`, method: "POST", body: undefined };
     case "rename":
       return { path: base, method: "PATCH", body: { title: op.title } };
+    case "ready":
+      return { path: `${base}/readiness`, method: "PUT", body: { ready: op.ready } };
+    case "claim":
+      return { path: `${base}/claims`, method: "POST", body: { batchId: op.batchId } };
+    case "resolveClaim":
+      return { path: `${base}/claims/${op.claimId}/${op.approve ? "approve" : "reject"}`, method: "POST", body: undefined };
+    case "groupMembers":
+      return { path: `${base}/groups`, method: "PUT", body: { label: op.label, memberIds: op.memberIds } };
   }
 }
 
@@ -82,6 +94,14 @@ export function describeOp(op: Op): string {
       return `Bring back ${op.entry.dishName}`;
     case "rename":
       return "Rename the order";
+    case "ready":
+      return op.ready ? "Mark yourself ready" : "Mark yourself not ready";
+    case "claim":
+      return `Claim ${op.dishName}`;
+    case "resolveClaim":
+      return `${op.approve ? "Approve" : "Decline"} the claim for ${op.dishName}`;
+    case "groupMembers":
+      return `Update ${op.label}`;
   }
 }
 
@@ -345,6 +365,7 @@ function pendingAdd(snapshot: SessionSnapshot, input: AddInput, key: string, lat
   return {
     id: `pending:${key}`,
     roundId: snapshot.activeRoundId,
+    batchId: `pending:${key}`,
     dishId: existing?.dishId ?? `pending-dish:${normalizeText(name)}`,
     dishName: existing?.dishName ?? name,
     quantity: input.quantity,
