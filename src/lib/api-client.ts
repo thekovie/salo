@@ -13,6 +13,21 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * The host removed this guest: the page itself explains it (and offers to join again). Once per page view, so a page
+ * that somehow still gets REMOVED after reloading cannot loop.
+ */
+function reloadOnce() {
+  const flag = `salo:removed-reload:${window.location.pathname}`;
+  try {
+    if (sessionStorage.getItem(flag)) return;
+    sessionStorage.setItem(flag, "1");
+  } catch {
+    // Storage blocked: reload anyway; the removed page makes no API calls of its own.
+  }
+  window.location.reload();
+}
+
 export function newKey(): string {
   return crypto.randomUUID();
 }
@@ -33,10 +48,7 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
     throw new ApiError(0, "NETWORK", "No connection. Your change is kept and will be retried.");
   }
   const body = (await response.json().catch(() => null)) as { data?: T; error?: { code: string; message: string } } | null;
-  if (body?.error?.code === "REMOVED" && typeof window !== "undefined") {
-    // The host removed this guest: the page itself explains it (and offers to join again).
-    window.location.reload();
-  }
+  if (body?.error?.code === "REMOVED" && typeof window !== "undefined") reloadOnce();
   if (!response.ok || body?.data === undefined) {
     throw new ApiError(response.status, body?.error?.code ?? "UNKNOWN", body?.error?.message ?? "Something went wrong. Try again.");
   }

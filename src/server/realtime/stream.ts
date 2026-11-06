@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { log } from "@/lib/logger";
 import type { Actor } from "@/lib/permissions";
 import type { Db } from "@/server/db/client";
-import { sessions } from "@/server/db/schema";
+import { participants, sessions } from "@/server/db/schema";
 import { eventsAfter, formatEvent } from "./events";
 import { hub } from "./hub";
 
@@ -13,6 +13,12 @@ const RETRY_MS = 3000;
  * the credential and the connection caps regularly and frees slots held by forgotten tabs.
  */
 export const MAX_STREAM_MS = 15 * 60 * 1000;
+
+/** False once the host has removed this guest (or the person is gone). */
+async function stillIn(db: Db, participantId: string): Promise<boolean> {
+  const [row] = await db.select({ removedAt: participants.removedAt }).from(participants).where(eq(participants.id, participantId));
+  return Boolean(row) && !row.removedAt;
+}
 
 async function currentRevision(db: Db, sessionId: string): Promise<number> {
   const [row] = await db.select({ revision: sessions.revision }).from(sessions).where(eq(sessions.id, sessionId));
@@ -96,6 +102,11 @@ export async function openEventStream(db: Db, actor: Actor, address: string, cur
         push(": ping\n\n");
         // Also re-read the log: if an earlier read failed (a database hiccup), nothing else would retry it.
         void flush();
+        // The removal event ends the stream, but a resync can skip it: check directly too.
+        void stillIn(db, actor.participantId).then(
+          (inside) => inside || end(),
+          () => {}, // a database hiccup: keep the stream, the next beat checks again
+        );
       }, HEARTBEAT_MS);
       end = () => {
         cleanup();

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildCsp } from "@/lib/csp";
 import { formatLog } from "@/lib/logger";
-import { createRateLimiter } from "@/server/auth/rate-limit";
+import { createRateLimiter, createTieredLimiter } from "@/server/auth/rate-limit";
 
 describe("logger", () => {
   it("writes one JSON line and redacts sensitive keys at any depth", () => {
@@ -72,5 +72,21 @@ describe("createRateLimiter", () => {
     const limiter = createRateLimiter({ limit: 1, windowMs: 1000, maxKeys: 3 });
     for (const key of ["a", "b", "c", "d", "e"]) limiter.hit(key);
     expect(limiter.size()).toBe(3);
+  });
+});
+
+describe("createTieredLimiter", () => {
+  it("still stops a client that rotates through more addresses than the table can hold", () => {
+    const limiter = createTieredLimiter({ limit: 2, windowMs: 60_000, maxKeys: 10 }, { limit: 50, windowMs: 60_000 });
+    let allowed = 0;
+    for (let i = 0; i < 1000; i++) if (limiter.hit(`2001:db8:${i}::/64`).allowed) allowed++;
+    expect(allowed).toBe(50);
+    expect(limiter.isLimited("198.51.100.7")).toBe(true);
+  });
+
+  it("does not let one noisy client spend the shared budget", () => {
+    const limiter = createTieredLimiter({ limit: 2, windowMs: 60_000 }, { limit: 5, windowMs: 60_000 });
+    for (let i = 0; i < 100; i++) limiter.hit("203.0.113.1");
+    expect(limiter.hit("203.0.113.2").allowed).toBe(true);
   });
 });

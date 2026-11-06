@@ -16,7 +16,7 @@ const DEFAULT_MAX_KEYS = 2000;
 /**
  * Fixed-window limiter held in process memory, bounded to `maxKeys` entries (O(1) eviction of the
  * oldest), so a flood of distinct keys can neither grow memory nor make every request scan the map.
- * ponytail: single-process only; move to the SQLite DB if the app ever runs more than one instance.
+ * ponytail: single-process only; move the counters into PostgreSQL (a small table, upserted per hit) if the app ever runs more than one instance.
  */
 export function createRateLimiter({ limit, windowMs, now = Date.now, maxKeys = DEFAULT_MAX_KEYS }: Options) {
   const entries = new Map<string, Entry>();
@@ -40,6 +40,25 @@ export function createRateLimiter({ limit, windowMs, now = Date.now, maxKeys = D
       if (entry.count >= limit) return { allowed: false, retryAfterMs: entry.resetAt - t };
       entries.set(key, { ...entry, count: entry.count + 1 });
       return { allowed: true, retryAfterMs: 0 };
+    },
+  };
+}
+
+const EVERYONE = "*";
+
+/**
+ * A per-client limit plus a ceiling for the whole instance. Someone rotating through thousands of addresses (an IPv6
+ * block, a botnet) pushes per-client counters out of the bounded table before any of them fills up; the shared
+ * counter has one key and cannot be evicted. A client already over its own limit does not spend the shared budget.
+ */
+export function createTieredLimiter(perClient: Options, everyone: Options) {
+  const one = createRateLimiter(perClient);
+  const all = createRateLimiter(everyone);
+  return {
+    isLimited: (key: string) => one.isLimited(key) || all.isLimited(EVERYONE),
+    hit(key: string): { allowed: boolean; retryAfterMs: number } {
+      const own = one.hit(key);
+      return own.allowed ? all.hit(EVERYONE) : own;
     },
   };
 }

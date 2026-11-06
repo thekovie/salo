@@ -1,4 +1,5 @@
 import { renderAppIcon } from "@/server/og/app-icon";
+import { cachedImage } from "@/server/og/cache";
 
 const VARIANTS: Record<string, { size: number; maskable: boolean }> = {
   "192": { size: 192, maskable: false },
@@ -7,9 +8,8 @@ const VARIANTS: Record<string, { size: number; maskable: boolean }> = {
 };
 
 export async function GET(_request: Request, { params }: { params: Promise<{ variant: string }> }) {
-  const variant = VARIANTS[(await params).variant];
+  const name = (await params).variant;
+  const variant = VARIANTS[name];
   if (!variant) return new Response("Not found", { status: 404 });
-  const image = renderAppIcon(variant.size, { maskable: variant.maskable });
-  image.headers.set("Cache-Control", "public, max-age=86400, immutable");
-  return image;
+  return cachedImage(`icon:${name}`, () => renderAppIcon(variant.size, { maskable: variant.maskable }), "public, max-age=86400, immutable");
 }

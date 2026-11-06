@@ -52,7 +52,7 @@ export async function setGroupMembers(tx: Tx, session: SessionRow, actor: Actor,
   if (!label || label.length > LIMITS.label) throw new AppError(422, "INVALID", "Give the group a name under 40 characters.");
   const unique = [...new Set(memberIds)];
   if (unique.length > 0) {
-    const found = await tx.select({ id: participants.id }).from(participants).where(and(eq(participants.sessionId, session.id), inArray(participants.id, unique)));
+    const found = await tx.select({ id: participants.id }).from(participants).where(and(eq(participants.sessionId, session.id), inArray(participants.id, unique), isNull(participants.removedAt)));
     if (found.length !== unique.length) throw new AppError(422, "UNKNOWN_PERSON", "Someone in that list isn’t in this order.");
   }
   const [existing] = await tx

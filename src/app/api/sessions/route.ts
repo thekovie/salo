@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { getEnv } from "@/env";
 import { clientIp } from "@/server/auth/client-ip";
 import { credentialCookieName, credentialCookieOptions } from "@/server/auth/credentials";
-import { createRateLimiter } from "@/server/auth/rate-limit";
+import { createTieredLimiter } from "@/server/auth/rate-limit";
 import { getDb } from "@/server/db/client";
 import { AppError } from "@/server/errors";
 import { handle, ok, readJson } from "@/server/http";
@@ -14,7 +14,7 @@ import { singleton } from "@/server/singleton";
 const HOUR_MS = 60 * 60 * 1000;
 /** Generous for a real table, tight for a script (brief 11.3). */
 // Built on first use, not at import: the build has no runtime environment to read the limit from.
-const limiter = () => singleton("create-session-limiter", () => createRateLimiter({ limit: getEnv().NEW_ORDERS_PER_HOUR, windowMs: HOUR_MS }));
+const limiter = () => singleton("create-session-limiter", () => createTieredLimiter({ limit: getEnv().NEW_ORDERS_PER_HOUR, windowMs: HOUR_MS }, { limit: getEnv().NEW_ORDERS_PER_HOUR * 15, windowMs: HOUR_MS }));
 
 const bodySchema = z.object({ title: z.string().trim().max(LIMITS.title).nullish() });
 

@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { cache } from "react";
 import { isJoinCode, normalizeJoinCode } from "@/lib/join-code";
 import { clientIp } from "@/server/auth/client-ip";
-import { createRateLimiter } from "@/server/auth/rate-limit";
+import { createTieredLimiter } from "@/server/auth/rate-limit";
 import { getDb } from "@/server/db/client";
 import { singleton } from "@/server/singleton";
 import { findInvite, type InviteInfo } from "./join";
@@ -14,7 +14,9 @@ const HOUR_MS = 60 * 60 * 1000;
  * Only misses count, so a table sharing one Wi-Fi stays far below it; once an address is over, every lookup from it
  * waits (a hit must not keep answering, or guessing would continue).
  */
-const missLimiter = singleton("invite-miss-limiter", () => createRateLimiter({ limit: 40, windowMs: HOUR_MS }));
+// Plus 2000 misses an hour across everyone: a guess spread over many addresses still runs into a wall. The price: during
+// such an attack every invite page waits out the hour (people already in an order are unaffected).
+const missLimiter = singleton("invite-miss-limiter", () => createTieredLimiter({ limit: 40, windowMs: HOUR_MS }, { limit: 2000, windowMs: HOUR_MS }));
 
 export type InviteLookup = { kind: "found"; invite: InviteInfo } | { kind: "missing" } | { kind: "limited" };
 

@@ -1,7 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { getEnv } from "@/env";
 import type { Db, Tx } from "@/server/db/client";
-import { mutationRecords, sessionEvents, sessions } from "@/server/db/schema";
+import { mutationRecords, participants, sessionEvents, sessions } from "@/server/db/schema";
 import { AppError, closed, notFound } from "@/server/errors";
 import { limitMutations } from "@/server/limits";
 import type { Actor } from "@/lib/permissions";
@@ -50,6 +50,11 @@ export async function runMutation<T>(
   return db.transaction(async (tx) => {
     const [session] = await tx.select().from(sessions).where(eq(sessions.id, actor.sessionId)).for("update");
     if (!session) throw notFound();
+    // Checked again under the lock: a change sent just before the host removed this guest waits behind the removal
+    // and must not land after it.
+    const [me] = await tx.select({ removedAt: participants.removedAt }).from(participants).where(eq(participants.id, actor.participantId));
+    if (!me) throw notFound();
+    if (me.removedAt) throw new AppError(403, "REMOVED", "The host removed you from this order.");
 
     const [previous] = await tx
       .select({ result: mutationRecords.result, mutationType: mutationRecords.mutationType })

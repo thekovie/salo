@@ -14,6 +14,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!isUuid(pid)) throw new AppError(404, "PERSON_NOT_FOUND", "That person isn’t in this order.");
     const key = idempotencyKey(request);
     const { reason } = await readJson(request, removeParticipantSchema);
-    return ok(await runMutation(getDb(), actor, { idempotencyKey: key, type: "participant.remove" }, (tx, s) => removeParticipant(tx, s, actor, pid, reason ?? null)));
+    return ok(await runMutation(getDb(), actor, { idempotencyKey: key, type: `participant.remove:${pid}` }, (tx, s) => removeParticipant(tx, s, actor, pid, reason ?? null)));
   });
 }

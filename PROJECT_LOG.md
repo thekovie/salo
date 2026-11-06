@@ -201,3 +201,19 @@ Owner feedback: times were not local; the host's ordering was awkward (defaulted
 - `NEW_ORDERS_PER_HOUR` env (default 20) so the e2e suite can start more orders than the production limit allows.
 
 Tests: 95 unit/integration (new: removal, arrivals, relative time), 24 e2e (new: host default Me + one-tap guest, live pill, remove with reason + rejoin + Undo, device time zone), two consecutive green runs.
+
+**Security review (PR #14)**, fixed in the same PR:
+- HIGH: per-address limiters could be evicted by rotating 2,000+ addresses (an IPv6 /48 is enough). Added all-addresses ceilings (`createTieredLimiter`) for new orders (15×), joins (600/h) and wrong invite codes (2,000/h).
+- MEDIUM:
+  - A change sent just before a removal could land after it: `runMutation` re-checks removal under the session lock.
+  - Dishes or group members could point at a removed guest: lookups now skip removed people.
+  - Preview cards and app icons are memoized per process.
+  - `/sync` is limited to 120/min per participant.
+  - Deployment note for the CDN case.
+- LOW:
+  - The heartbeat ends a removed guest's stream even if a resync skipped the event.
+  - Idempotency types include the target guest.
+  - The reload-on-REMOVED runs once per page view.
+
+Left as accepted: guests may attribute dishes to other people in the order (by design: ordering for a friend); host-written reasons are plain text; a large table behind one carrier-grade NAT shares the 30 joins/hour.
+

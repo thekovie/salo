@@ -12,6 +12,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const actor = await requireActor(id);
     if (!isUuid(pid)) throw new AppError(404, "PERSON_NOT_FOUND", "That person isn’t in this order.");
     const key = idempotencyKey(request);
-    return ok(await runMutation(getDb(), actor, { idempotencyKey: key, type: "participant.restore" }, (tx, s) => restoreParticipant(tx, s, actor, pid)));
+    return ok(await runMutation(getDb(), actor, { idempotencyKey: key, type: `participant.restore:${pid}` }, (tx, s) => restoreParticipant(tx, s, actor, pid)));
   });
 }

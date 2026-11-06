@@ -89,3 +89,20 @@ describe("removing a guest (host only)", () => {
     expect(await db.select().from(participants).where(eq(participants.sessionId, sessionId))).toHaveLength(3);
   });
 });
+
+describe("after a removal", () => {
+  it("refuses a change from the removed guest that was already past the cookie check", async () => {
+    const { host, sessionId } = await newSession(db);
+    const { guest: jd } = await guestWithToken(sessionId, "JD");
+    await run(host, (tx, s) => removeParticipant(tx, s, host, jd.participantId, null));
+    // `jd` is the Actor resolved before the removal: runMutation must still say no.
+    expect(await errorOf(add(db, jd, { dishName: "Rice", quantity: 1 }))).toMatchObject({ status: 403, code: "REMOVED" });
+  });
+
+  it("does not let anyone mark a dish for the removed guest", async () => {
+    const { host, sessionId } = await newSession(db);
+    const { guest: jd } = await guestWithToken(sessionId, "JD");
+    await run(host, (tx, s) => removeParticipant(tx, s, host, jd.participantId, null));
+    expect(await errorOf(add(db, host, { dishName: "Rice", quantity: 1, attribution: { type: "INDIVIDUAL", participantId: jd.participantId } }))).toMatchObject({ code: "UNKNOWN_PERSON" });
+  });
+});

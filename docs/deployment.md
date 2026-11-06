@@ -37,7 +37,7 @@ Coolify routes traffic through Traefik. Salo's event stream works through it wit
 - `scripts/sse-proxy-check.mjs` runs the app behind Traefik v3 (`docker compose --profile proxy`, see below) in CI: events arrive in well under a second (75 ms locally), 20-second heartbeats keep an idle stream open past 75 s, and reconnecting with `Last-Event-ID` replays missed events.
 - Each stream ends after 15 minutes on purpose; browsers reconnect at once and lose nothing. Redeploys drop streams the same way.
 - After the first deploy, run the check against production: `node scripts/sse-proxy-check.mjs https://salo.example.com 75` (it creates a throwaway order; it is deleted after 30 days like any quiet order).
-- Rate limits key on the **last** `X-Forwarded-For` hop, which Traefik appends. Do not expose the container port directly, and revisit `src/server/auth/client-ip.ts` before putting a CDN in front.
+- Rate limits key on the **last** `X-Forwarded-For` hop, which Traefik appends. Do not expose the container port directly, and revisit `src/server/auth/client-ip.ts` before putting a CDN in front (behind Cloudflare every visitor would share the edge address: key on `CF-Connecting-IP` instead).
 
 ## Operations
 

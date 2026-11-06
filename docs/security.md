@@ -22,18 +22,19 @@
 ## Abuse limits (brief 11.3)
 | Limit | Value |
 |---|---|
-| New orders | 20 / hour / client address |
-| Joins | 30 / hour / client address |
-| Changes | 120 / minute / participant |
+| New orders | 20 / hour / client address (`NEW_ORDERS_PER_HOUR`), and 15× that across all addresses |
+| Joins | 30 / hour / client address, and 600 / hour across all addresses |
+| Changes | 120 / minute / participant; re-checked under the session lock, so a guest removed mid-flight cannot land a change |
+| Snapshots (`/sync`) | 120 / minute / participant |
 | Event streams | 500 per instance, 12 per client address, 4 per participant; each ends after 15 minutes (the browser reconnects and replays) |
-| Invite lookups | 40 wrong codes / hour / client address |
+| Invite lookups | 40 wrong codes / hour / client address, and 2,000 / hour across all addresses (then invite pages wait out the hour) |
 | Request body | 8 KB |
 | People per order | 30 |
 | Entries | 300 active, 1,000 ever, 300 distinct dishes per order |
 | Rounds / corrections | 30 rounds and 100 corrections per order; cancellations never exceed what was ordered |
 | Groups | 30 per order; members changed only by the host or whoever set the group up |
 | Text | dish 60, size 40, instructions 140, names 40, order name 60; no NUL |
-Rate limits live in process memory (one instance) and key on the last `X-Forwarded-For` hop (one trusted proxy; see deployment.md).
+Rate limits live in process memory (one instance) and key on the last `X-Forwarded-For` hop (one trusted proxy; see deployment.md). Each per-address table holds 2,000 addresses (IPv6 grouped by /64); the all-addresses ceilings exist because rotating through more addresses than that would otherwise evict every counter before it filled. Preview cards and app icons are drawn once per process and served from memory. A Traefik rate limit in front is a sensible extra backstop.
 
 ## Data minimization and retention
 Preview images for unknown or ended invites are a cached static card (fonts read once per process).
