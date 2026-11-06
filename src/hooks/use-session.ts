@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { api, ApiError, newKey } from "@/lib/api-client";
 import { normalizeText, optionalText, tidyText } from "@/lib/dish-name";
 import type { SessionSnapshot, SnapshotEntry } from "@/lib/snapshot";
@@ -13,156 +13,280 @@ export type AddInput = {
   attribution: { type: "UNASSIGNED" | "TABLE" } | { type: "INDIVIDUAL"; label?: string | null; participantId?: string | null } | { type: "GROUP"; label: string };
 };
 
-type Op =
+export type Op =
   | { kind: "add"; input: AddInput }
-  | { kind: "update"; entryId: string; expectedRevision: number; quantity: number }
-  | { kind: "remove"; entryId: string }
-  | { kind: "restore"; entryId: string }
+  | { kind: "update"; entry: SnapshotEntry; quantity: number }
+  | { kind: "remove"; entry: SnapshotEntry }
+  | { kind: "restore"; entry: SnapshotEntry }
   | { kind: "rename"; title: string | null };
+
+type Status =
+  | "queued" // waiting its turn
+  | "sending" // request in flight
+  | "waiting" // no connection: retried automatically with backoff (same idempotency key, so never applied twice)
+  | "committed" // the server applied it; kept on screen until a snapshot at least this new arrives
+  | "failed"; // refused by the server; not drawn, listed with the reason until dismissed
 
 export interface Pending {
   key: string;
   op: Op;
-  status: "saving" | "failed";
-  error?: string;
+  status: Status;
   createdAt: string;
+  error?: string;
+  code?: string;
+  committedRevision?: number;
+  attempts: number;
 }
 
 export type SyncState = "saving" | "saved" | "unsynced" | "conflict" | "failed";
 
-function request(sessionId: string, op: Op) {
+type MutationResponse = { result: { entryId?: string; revision?: number }; revision: number };
+
+const RETRY_BASE_MS = 2000;
+const RETRY_MAX_MS = 30_000;
+const RESYNC_INTERVAL_MS = 5000;
+
+function request(sessionId: string, op: Op, latest: SessionSnapshot) {
   const base = `/api/sessions/${sessionId}`;
   switch (op.kind) {
     case "add":
-      return { path: `${base}/entries`, method: "POST", body: op.input };
-    case "update":
-      return { path: `${base}/entries/${op.entryId}`, method: "PATCH", body: { expectedRevision: op.expectedRevision, quantity: op.quantity } };
+      return { path: `${base}/entries`, method: "POST", body: op.input as unknown };
+    case "update": {
+      // The revision is read when the request is sent, after earlier changes to this entry have settled.
+      const current = latest.entries.find((e) => e.id === op.entry.id);
+      return { path: `${base}/entries/${op.entry.id}`, method: "PATCH", body: { expectedRevision: current?.revision ?? op.entry.revision, quantity: op.quantity } };
+    }
     case "remove":
-      return { path: `${base}/entries/${op.entryId}`, method: "DELETE", body: undefined };
+      return { path: `${base}/entries/${op.entry.id}`, method: "DELETE", body: undefined };
     case "restore":
-      return { path: `${base}/entries/${op.entryId}/restore`, method: "POST", body: undefined };
+      return { path: `${base}/entries/${op.entry.id}/restore`, method: "POST", body: undefined };
     case "rename":
       return { path: base, method: "PATCH", body: { title: op.title } };
   }
 }
 
+/** What a change was, in words, for the "not saved" list. */
+export function describeOp(op: Op): string {
+  switch (op.kind) {
+    case "add":
+      return `Add ${tidyText(op.input.dishName)} ×${op.input.quantity}`;
+    case "update":
+      return `Change ${op.entry.dishName} to ×${op.quantity}`;
+    case "remove":
+      return `Remove ${op.entry.dishName}`;
+    case "restore":
+      return `Bring back ${op.entry.dishName}`;
+    case "rename":
+      return "Rename the order";
+  }
+}
+
 /**
- * The client's view of a session: the last committed server snapshot plus the changes still on their way. Pending
- * changes are drawn on top (marked as pending) and never silently dropped: a failure stays visible with Retry.
+ * The client's view of a session: the last committed snapshot plus changes still on their way, drawn on top and
+ * marked pending. Changes go to the server one at a time, in the order they were made (so Undo can never overtake
+ * the change it undoes); a quantity tapped several times while waiting is sent once, with the final number. A
+ * change leaves the screen only when a snapshot that includes it has arrived, so nothing silently disappears.
  * ponytail: refetches the whole snapshot after each change; per-event patches if payloads ever grow.
  */
 export function useSession(initial: SessionSnapshot) {
-  const [snapshot, setSnapshot] = useState(initial);
-  const [pending, setPending] = useState<Pending[]>([]);
-  const [online, setOnline] = useState(true);
-  const revisionRef = useRef(initial.session.revision);
+  const sessionId = initial.session.id;
+  const [snapshot, setSnapshotState] = useState(initial);
+  const snapshotRef = useRef(initial);
+  const [pending, setPendingState] = useState<Pending[]>([]);
+  const queueRef = useRef<Pending[]>([]);
+  const resolvers = useRef(new Map<string, (result: MutationResponse["result"] | null) => void>());
+  const pumping = useRef(false);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const online = useSyncExternalStore(subscribeOnline, () => navigator.onLine, () => true);
+
+  const setQueue = useCallback((update: (list: Pending[]) => Pending[]) => {
+    queueRef.current = update(queueRef.current);
+    setPendingState(queueRef.current);
+  }, []);
+
+  const patch = useCallback((key: string, fields: Partial<Pending>) => setQueue((list) => list.map((p) => (p.key === key ? { ...p, ...fields } : p))), [setQueue]);
+
+  const finish = useCallback((key: string, result: MutationResponse["result"] | null) => {
+    resolvers.current.get(key)?.(result);
+    resolvers.current.delete(key);
+  }, []);
+
+  /** Apply a snapshot (never an older one) and drop the committed changes it already contains. */
+  const applySnapshot = useCallback(
+    (next: SessionSnapshot) => {
+      if (next.session.revision < snapshotRef.current.session.revision) return;
+      snapshotRef.current = next;
+      setSnapshotState(next);
+      setQueue((list) => list.filter((p) => !(p.status === "committed" && (p.committedRevision ?? Infinity) <= next.session.revision)));
+    },
+    [setQueue],
+  );
 
   const refresh = useCallback(async () => {
-    const next = await api<SessionSnapshot>(`/api/sessions/${initial.session.id}/sync`);
-    // Never step backwards: a slow response for an older revision is ignored.
-    if (next.session.revision >= revisionRef.current) {
-      revisionRef.current = next.session.revision;
-      setSnapshot(next);
-    }
+    const next = await api<SessionSnapshot>(`/api/sessions/${sessionId}/sync`);
+    applySnapshot(next);
     return next;
-  }, [initial.session.id]);
+  }, [sessionId, applySnapshot]);
 
-  const send = useCallback(
-    async (item: Pending) => {
-      setPending((list) => list.map((p) => (p.key === item.key ? { ...p, status: "saving", error: undefined } : p)));
-      const { path, method, body } = request(initial.session.id, item.op);
-      try {
-        const result = await api<{ result: { entryId?: string; revision?: number }; revision: number }>(path, { method, body, idempotencyKey: item.key });
-        await refresh().catch(() => undefined);
-        setPending((list) => list.filter((p) => p.key !== item.key));
-        return result.result;
-      } catch (error) {
-        const err = error instanceof ApiError ? error : new ApiError(0, "UNKNOWN", "Something went wrong.");
-        if (err.code === "CONFLICT" || err.code === "ENTRY_NOT_FOUND") {
-          // The server moved on: show the latest state and drop the stale change, saying why.
+  const pump = useCallback(async () => {
+    if (pumping.current) return;
+    pumping.current = true;
+    try {
+      for (;;) {
+        const item = queueRef.current.find((p) => p.status === "queued");
+        if (!item) break;
+        patch(item.key, { status: "sending" });
+        const { path, method, body } = request(sessionId, item.op, snapshotRef.current);
+        try {
+          const response = await api<MutationResponse>(path, { method, body, idempotencyKey: item.key });
+          patch(item.key, { status: "committed", committedRevision: response.revision });
+          finish(item.key, response.result);
+          // If this refresh fails, the change stays drawn as committed and the resync timer catches up.
           await refresh().catch(() => undefined);
+        } catch (error) {
+          const err = error instanceof ApiError ? error : new ApiError(0, "NETWORK", "No connection.");
+          if (err.isNetwork) {
+            // Pause the whole queue: later changes may depend on this one. Retried with the same key.
+            const attempts = item.attempts + 1;
+            patch(item.key, { status: "waiting", attempts, error: err.message, code: err.code });
+            const delay = Math.min(RETRY_BASE_MS * 2 ** (attempts - 1), RETRY_MAX_MS);
+            if (retryTimer.current) clearTimeout(retryTimer.current);
+            retryTimer.current = setTimeout(() => {
+              setQueue((list) => list.map((p) => (p.status === "waiting" ? { ...p, status: "queued" } : p)));
+              void pump();
+            }, delay);
+            break;
+          }
+          // Refused (conflict, removed, confirmed, invalid…): show the latest state and say what was not saved.
+          if (err.status === 409 || err.status === 404) await refresh().catch(() => undefined);
+          patch(item.key, { status: "failed", error: err.message, code: err.code });
+          finish(item.key, null);
         }
-        setPending((list) => list.map((p) => (p.key === item.key ? { ...p, status: "failed", error: err.message } : p)));
-        return null;
       }
-    },
-    [initial.session.id, refresh],
-  );
+    } finally {
+      pumping.current = false;
+    }
+  }, [sessionId, patch, finish, refresh, setQueue]);
 
   const mutate = useCallback(
-    (op: Op) => {
-      const item: Pending = { key: newKey(), op, status: "saving", createdAt: new Date().toISOString() };
-      setPending((list) => [...list, item]);
-      return send(item);
+    (op: Op): Promise<MutationResponse["result"] | null> => {
+      // Several taps on one stepper while the first is still queued: keep only the final number.
+      if (op.kind === "update") {
+        const queued = queueRef.current.find((p) => p.status === "queued" && p.op.kind === "update" && p.op.entry.id === op.entry.id);
+        if (queued) {
+          patch(queued.key, { op: { ...op, entry: (queued.op as Extract<Op, { kind: "update" }>).entry } });
+          return Promise.resolve(null);
+        }
+      }
+      const item: Pending = { key: newKey(), op, status: "queued", createdAt: new Date().toISOString(), attempts: 0 };
+      const promise = new Promise<MutationResponse["result"] | null>((resolve) => resolvers.current.set(item.key, resolve));
+      setQueue((list) => [...list, item]);
+      void pump();
+      return promise;
     },
-    [send],
+    [patch, pump, setQueue],
   );
 
-  const retry = useCallback((key: string) => {
-    const item = pending.find((p) => p.key === key);
-    if (item) void send(item);
-  }, [pending, send]);
+  const dismiss = useCallback((key: string) => setQueue((list) => list.filter((p) => p.key !== key)), [setQueue]);
 
-  const dismiss = useCallback((key: string) => setPending((list) => list.filter((p) => p.key !== key)), []);
-
+  // Catch up whenever we may have missed something: back online, tab visible again, and while changes await a snapshot.
   useEffect(() => {
-    const update = () => setOnline(navigator.onLine);
-    update();
-    window.addEventListener("online", update);
-    window.addEventListener("offline", update);
-    return () => {
-      window.removeEventListener("online", update);
-      window.removeEventListener("offline", update);
+    const resume = () => {
+      if (!navigator.onLine) return;
+      setQueue((list) => list.map((p) => (p.status === "waiting" ? { ...p, status: "queued" } : p)));
+      void pump();
+      void refresh().catch(() => undefined);
     };
-  }, []);
+    const visible = () => document.visibilityState === "visible" && resume();
+    window.addEventListener("online", resume);
+    document.addEventListener("visibilitychange", visible);
+    const timer = setInterval(() => {
+      if (queueRef.current.some((p) => p.status === "committed")) void refresh().catch(() => undefined);
+    }, RESYNC_INTERVAL_MS);
+    return () => {
+      window.removeEventListener("online", resume);
+      document.removeEventListener("visibilitychange", visible);
+      clearInterval(timer);
+      if (retryTimer.current) clearTimeout(retryTimer.current);
+    };
+  }, [pump, refresh, setQueue]);
 
   const entries = useMemo(() => overlay(snapshot, pending), [snapshot, pending]);
 
-  const sync: SyncState = pending.some((p) => p.status === "failed")
-    ? pending.some((p) => p.error?.includes("changed")) ? "conflict" : online ? "failed" : "unsynced"
-    : !online
-      ? "unsynced"
-      : pending.length > 0
-        ? "saving"
-        : "saved";
+  const failed = pending.filter((p) => p.status === "failed");
+  const sync: SyncState = failed.some((p) => p.code === "CONFLICT")
+    ? "conflict"
+    : failed.length > 0
+      ? "failed"
+      : !online || pending.some((p) => p.status === "waiting")
+        ? "unsynced"
+        : pending.length > 0
+          ? "saving"
+          : "saved";
 
-  return { snapshot, entries, pending, sync, mutate, retry, dismiss, refresh };
+  /** The latest committed version of an entry (for Undo after an add). */
+  const entryById = useCallback((id: string) => snapshotRef.current.entries.find((e) => e.id === id), []);
+
+  return { snapshot, entries, pending, failed, sync, mutate, dismiss, refresh, entryById };
+}
+
+function subscribeOnline(onChange: () => void) {
+  window.addEventListener("online", onChange);
+  window.addEventListener("offline", onChange);
+  return () => {
+    window.removeEventListener("online", onChange);
+    window.removeEventListener("offline", onChange);
+  };
 }
 
 export type OverlayEntry = SnapshotEntry & { pending?: boolean };
 
-/** Committed entries with pending changes drawn on top. A pending add joins its dish when the name already exists. */
-function overlay(snapshot: SessionSnapshot, pending: Pending[]): OverlayEntry[] {
+/**
+ * Committed entries with unconfirmed changes drawn on top. Refused changes are not drawn. A pending add joins its dish
+ * when the name already exists and sorts after everything the server has (no client-clock reordering).
+ */
+export function overlay(snapshot: SessionSnapshot, pending: Pending[]): OverlayEntry[] {
   let list: OverlayEntry[] = snapshot.entries;
-  for (const { op, key, createdAt } of pending) {
-    if (op.kind === "update") list = list.map((e) => (e.id === op.entryId ? { ...e, quantity: op.quantity, pending: true } : e));
-    if (op.kind === "remove") list = list.filter((e) => e.id !== op.entryId);
+  const latest = snapshot.entries.reduce((max, e) => (e.createdAt > max ? e.createdAt : max), "");
+  let order = 0;
+  for (const { op, key, status } of pending) {
+    if (status === "failed") continue;
+    if (op.kind === "update") list = list.map((e) => (e.id === op.entry.id ? { ...e, quantity: op.quantity, pending: true } : e));
+    if (op.kind === "remove") list = list.filter((e) => e.id !== op.entry.id);
+    if (op.kind === "restore" && !list.some((e) => e.id === op.entry.id)) list = [...list, { ...op.entry, pending: true }];
     if (op.kind === "add") {
-      const name = tidyText(op.input.dishName);
-      const existing = list.find((e) => normalizeText(e.dishName) === normalizeText(name));
-      const attribution = op.input.attribution;
-      list = [
-        ...list,
-        {
-          id: `pending:${key}`,
-          roundId: snapshot.activeRoundId,
-          dishId: existing?.dishId ?? `pending-dish:${normalizeText(name)}`,
-          dishName: existing?.dishName ?? name,
-          quantity: op.input.quantity,
-          variant: optionalText(op.input.variant),
-          instructions: optionalText(op.input.instructions),
-          createdAt,
-          revision: 0,
-          submittedBy: snapshot.me.participantId,
-          attribution: {
-            type: attribution.type,
-            label: "label" in attribution ? (attribution.label ?? null) : null,
-            participantId: "participantId" in attribution ? (attribution.participantId ?? null) : null,
-          },
-          pending: true,
-        },
-      ];
+      if (status === "committed") continue; // the snapshot that includes it is on its way; drawn below until then
+      list = [...list, pendingAdd(snapshot, op.input, key, latest, order++)];
     }
   }
+  // Committed adds whose snapshot has not arrived yet stay visible.
+  for (const { op, key, status } of pending) {
+    if (op.kind === "add" && status === "committed") list = [...list, pendingAdd(snapshot, op.input, key, latest, order++)];
+  }
   return list;
+}
+
+function pendingAdd(snapshot: SessionSnapshot, input: AddInput, key: string, latest: string, order: number): OverlayEntry {
+  const name = tidyText(input.dishName);
+  const existing = snapshot.entries.find((e) => normalizeText(e.dishName) === normalizeText(name));
+  const attribution = input.attribution;
+  return {
+    id: `pending:${key}`,
+    roundId: snapshot.activeRoundId,
+    dishId: existing?.dishId ?? `pending-dish:${normalizeText(name)}`,
+    dishName: existing?.dishName ?? name,
+    quantity: input.quantity,
+    variant: optionalText(input.variant),
+    instructions: optionalText(input.instructions),
+    // Sorts after every server entry, in the order the adds were made.
+    createdAt: `${latest || "0"}~${String(order).padStart(4, "0")}`,
+    revision: 0,
+    submittedBy: snapshot.me.participantId,
+    attribution: {
+      type: attribution.type,
+      label: "label" in attribution ? (attribution.label ?? null) : null,
+      participantId: "participantId" in attribution ? (attribution.participantId ?? null) : null,
+    },
+    pending: true,
+  };
 }

@@ -144,9 +144,26 @@ describe("entries", () => {
     expect(await errorOf(add(db, host, { dishName: "Rice", quantity: 1 }))).toMatchObject({ status: 409, code: "SESSION_CLOSED" });
   });
 
+  it("treats removing a removed entry (or restoring an active one) as a no-op that keeps its revision", async () => {
+    const { host } = await newSession(db);
+    const { result } = await add(db, host, { dishName: "Gyoza", quantity: 1 });
+    const toggle = (removed: boolean) => runMutation(db, host, { idempotencyKey: key(), type: "x" }, (tx, s) => setEntryRemoved(tx, s, host, result.entryId, removed));
+    expect((await toggle(false)).result.revision).toBe(1);
+    expect((await toggle(true)).result.revision).toBe(2);
+    expect((await toggle(true)).result.revision).toBe(2);
+  });
+
+  it("refuses an idempotency key reused for a different kind of change", async () => {
+    const { host } = await newSession(db);
+    const k = key();
+    const { result } = await add(db, host, { dishName: "Gyoza", quantity: 1 }, k);
+    const reuse = runMutation(db, host, { idempotencyKey: k, type: "entry.remove" }, (tx, s) => setEntryRemoved(tx, s, host, result.entryId, true));
+    expect(await errorOf(reuse)).toMatchObject({ status: 422, code: "IDEMPOTENCY_KEY_REUSED" });
+  });
+
   it("validates input at the boundary", async () => {
     const { host } = await newSession(db);
-    for (const bad of [{ dishName: "", quantity: 1 }, { dishName: "x", quantity: 0 }, { dishName: "x", quantity: 100 }, { dishName: "x".repeat(61), quantity: 1 }]) {
+    for (const bad of [{ dishName: "", quantity: 1 }, { dishName: "x", quantity: 0 }, { dishName: "x", quantity: 100 }, { dishName: "x".repeat(61), quantity: 1 }, { dishName: "Gyo\u0000za", quantity: 1 }]) {
       expect(() => add(db, host, bad)).toThrow();
     }
   });

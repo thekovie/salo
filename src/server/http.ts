@@ -36,7 +36,7 @@ export async function readJson<S extends z.ZodType>(request: Request, schema: S)
   const declared = Number(request.headers.get("content-length") ?? 0);
   if (declared > MAX_BODY_BYTES) throw new AppError(413, "TOO_LARGE", "That request is too large.");
   const text = await request.text();
-  if (text.length > MAX_BODY_BYTES) throw new AppError(413, "TOO_LARGE", "That request is too large.");
+  if (Buffer.byteLength(text, "utf8") > MAX_BODY_BYTES) throw new AppError(413, "TOO_LARGE", "That request is too large.");
   let body: unknown;
   try {
     body = text === "" ? {} : JSON.parse(text);

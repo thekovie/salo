@@ -84,6 +84,17 @@ test("removing and Undo; quantity steps (scenario 7)", async ({ page }) => {
   await expect(page.getByTestId("dish-row")).toContainText("Gyoza");
 });
 
+test("rapid taps on a stepper all count", async ({ page }) => {
+  await startOrder(page);
+  await addDish(page, "Gyoza");
+  await expect(page.getByText("Saved")).toBeVisible();
+  const plus = page.getByRole("button", { name: "One more Gyoza" });
+  for (let i = 0; i < 4; i++) await plus.click();
+  await expect(page.getByText("Saved")).toBeVisible();
+  await page.reload();
+  await expect(items(page)).toContainText("5");
+});
+
 test("a retried submission is applied once (scenario 8)", async ({ page }) => {
   await startOrder(page);
   const sessionId = page.url().split("/s/")[1];

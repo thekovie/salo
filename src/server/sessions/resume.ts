@@ -1,5 +1,5 @@
 import "server-only";
-import { desc, eq, inArray, and } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { hashToken, sessionIdFromCookieName } from "@/server/auth/credentials";
 import { isUuid } from "@/server/auth/actor";
@@ -31,7 +31,13 @@ export async function listResumable(): Promise<Resumable[]> {
     .from(participantCredentials)
     .innerJoin(participants, eq(participants.id, participantCredentials.participantId))
     .innerJoin(sessions, eq(sessions.id, participantCredentials.sessionId))
-    .where(inArray(participantCredentials.credentialHash, pairs.map((p) => p.hash)))
+    .where(
+      and(
+        inArray(participantCredentials.credentialHash, pairs.map((p) => p.hash)),
+        isNull(participantCredentials.revokedAt),
+        or(isNull(participantCredentials.expiresAt), gt(participantCredentials.expiresAt, sql`now()`)),
+      ),
+    )
     .orderBy(desc(sessions.updatedAt))
     .limit(MAX_RESUME);
   const valid = rows.filter((r) => pairs.some((p) => p.sessionId === r.id && p.hash === r.hash));
@@ -39,7 +45,7 @@ export async function listResumable(): Promise<Resumable[]> {
   const roundRows = await db
     .select({ sessionId: rounds.sessionId, number: rounds.roundNumber })
     .from(rounds)
-    .where(and(inArray(rounds.sessionId, valid.map((r) => r.id))));
+    .where(inArray(rounds.sessionId, valid.map((r) => r.id)));
   return valid.map((r) => ({
     id: r.id,
     title: r.title,

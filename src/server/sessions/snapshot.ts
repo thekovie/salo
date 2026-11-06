@@ -3,6 +3,7 @@ import type { SessionSnapshot } from "@/lib/snapshot";
 import type { Db } from "@/server/db/client";
 import { dishes, orderBatches, orderEntries, participants, rounds, sessions } from "@/server/db/schema";
 import { notFound } from "@/server/errors";
+import { LIMITS } from "@/server/orders/validation";
 import type { Actor } from "@/lib/permissions";
 
 const iso = (date: Date | null) => (date ? date.toISOString() : null);
@@ -26,7 +27,8 @@ export async function getSnapshot(db: Db, actor: Actor): Promise<SessionSnapshot
           .innerJoin(dishes, eq(dishes.id, orderEntries.dishId))
           .where(and(eq(orderBatches.sessionId, session.id), isNull(orderEntries.deletedAt)))
           .orderBy(asc(orderEntries.createdAt)),
-        tx.select({ name: dishes.canonicalName }).from(dishes).where(eq(dishes.sessionId, session.id)).orderBy(asc(dishes.canonicalName)),
+        tx.select({ name: dishes.canonicalName }).from(dishes).where(eq(dishes.sessionId, session.id)).orderBy(asc(dishes.canonicalName))
+          .limit(LIMITS.dishesPerSession),
       ]);
       const draft = roundRows.find((r) => r.status === "DRAFT") ?? roundRows[roundRows.length - 1];
       const me = people.find((p) => p.id === actor.participantId);

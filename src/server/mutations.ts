@@ -2,7 +2,8 @@ import { and, eq, sql } from "drizzle-orm";
 import { getEnv } from "@/env";
 import type { Db, Tx } from "@/server/db/client";
 import { mutationRecords, sessionEvents, sessions } from "@/server/db/schema";
-import { closed, notFound } from "@/server/errors";
+import { AppError, closed, notFound } from "@/server/errors";
+import { limitMutations } from "@/server/limits";
 import type { Actor } from "@/lib/permissions";
 
 export type SessionRow = typeof sessions.$inferSelect;
@@ -44,13 +45,14 @@ export async function runMutation<T>(
   options: Options,
   apply: (tx: Tx, session: SessionRow) => Promise<Applied<T>>,
 ): Promise<MutationOutcome<T>> {
+  limitMutations(actor);
   const inactiveDays = getEnv().INACTIVE_RETENTION_DAYS;
   return db.transaction(async (tx) => {
     const [session] = await tx.select().from(sessions).where(eq(sessions.id, actor.sessionId)).for("update");
     if (!session) throw notFound();
 
     const [previous] = await tx
-      .select({ result: mutationRecords.result })
+      .select({ result: mutationRecords.result, mutationType: mutationRecords.mutationType })
       .from(mutationRecords)
       .where(
         and(
@@ -60,6 +62,8 @@ export async function runMutation<T>(
         ),
       );
     if (previous) {
+      // A key belongs to one change; reusing it for a different kind of change is a client bug, not a retry.
+      if (previous.mutationType !== options.type) throw new AppError(422, "IDEMPOTENCY_KEY_REUSED", "This request key was already used for a different change.");
       const stored = previous.result as { result: T; revision: number };
       return { result: stored.result, revision: stored.revision, replayed: true };
     }

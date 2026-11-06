@@ -1,4 +1,4 @@
-import { and, count, eq, isNull } from "drizzle-orm";
+import { and, count, eq, sql } from "drizzle-orm";
 import { normalizeText, optionalText, tidyText } from "@/lib/dish-name";
 import type { Tx } from "@/server/db/client";
 import { dishes, orderBatches, orderEntries, participants, rounds } from "@/server/db/schema";
@@ -21,6 +21,10 @@ async function draftRound(tx: Tx, sessionId: string) {
 /** The session's dish for this name, created on first use with the name as typed (conservative match, brief 5.5). */
 async function dishFor(tx: Tx, sessionId: string, name: string) {
   const normalized = normalizeText(name);
+  const [known] = await tx.select({ id: dishes.id }).from(dishes).where(and(eq(dishes.sessionId, sessionId), eq(dishes.normalizedName, normalized)));
+  if (known) return known;
+  const [{ value: dishCount }] = await tx.select({ value: count() }).from(dishes).where(eq(dishes.sessionId, sessionId));
+  if (dishCount >= LIMITS.dishesPerSession) throw new AppError(422, "TOO_MANY_DISHES", `An order can hold up to ${LIMITS.dishesPerSession} different dishes.`);
   await tx.insert(dishes).values({ sessionId, canonicalName: tidyText(name), normalizedName: normalized }).onConflictDoNothing();
   const [dish] = await tx.select({ id: dishes.id }).from(dishes).where(and(eq(dishes.sessionId, sessionId), eq(dishes.normalizedName, normalized)));
   return dish;
@@ -45,15 +49,22 @@ async function batchValues(tx: Tx, session: SessionRow, actor: Actor, attributio
   }
 }
 
+/** Active entries are capped, and so are entries ever created (so add/remove loops cannot grow a session forever). */
+async function assertRoomForEntry(tx: Tx, sessionId: string, isNew = false) {
+  const [counts] = await tx
+    .select({ ever: count(), active: count(sql`CASE WHEN ${orderEntries.deletedAt} IS NULL THEN 1 END`) })
+    .from(orderEntries)
+    .innerJoin(orderBatches, eq(orderBatches.id, orderEntries.batchId))
+    .where(eq(orderBatches.sessionId, sessionId));
+  if (counts.active >= LIMITS.entriesPerSession || (isNew && counts.ever >= LIMITS.entriesEverPerSession)) {
+    throw new AppError(422, "TOO_MANY_ENTRIES", `An order can hold up to ${LIMITS.entriesPerSession} entries.`);
+  }
+}
+
 export async function addEntry(tx: Tx, session: SessionRow, actor: Actor, input: AddEntryInput): Promise<Applied<EntryRef>> {
   if (!can(actor, "entry.add")) throw forbidden();
   const round = await draftRound(tx, session.id);
-  const [{ value: active }] = await tx
-    .select({ value: count() })
-    .from(orderEntries)
-    .innerJoin(orderBatches, eq(orderBatches.id, orderEntries.batchId))
-    .where(and(eq(orderBatches.sessionId, session.id), isNull(orderEntries.deletedAt)));
-  if (active >= LIMITS.entriesPerSession) throw new AppError(422, "TOO_MANY_ENTRIES", `An order can hold up to ${LIMITS.entriesPerSession} entries.`);
+  await assertRoomForEntry(tx, session.id, true);
 
   const dish = await dishFor(tx, session.id, input.dishName);
   const [batch] = await tx
@@ -117,6 +128,11 @@ export async function updateEntry(tx: Tx, session: SessionRow, actor: Actor, ent
 export async function setEntryRemoved(tx: Tx, session: SessionRow, actor: Actor, entryId: string, removed: boolean): Promise<Applied<EntryRef>> {
   const entry = await loadEntry(tx, session.id, entryId);
   assertEditable(actor, entry);
+  if (Boolean(entry.deletedAt) === removed) {
+    // Already in the requested state: nothing changes, so other devices' revisions stay valid.
+    return { result: { entryId, revision: entry.revision }, event: { type: removed ? "entry.removed" : "entry.restored", payload: { entryId, unchanged: true } } };
+  }
+  if (!removed) await assertRoomForEntry(tx, session.id);
   const revision = entry.revision + 1;
   await tx
     .update(orderEntries)

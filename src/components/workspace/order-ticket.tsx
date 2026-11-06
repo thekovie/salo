@@ -29,10 +29,14 @@ function describe(entry: OverlayEntry, people: SessionSnapshot["participants"], 
   return [attributionLabel(entry, people), ...(withPreparation ? [entry.variant, entry.instructions] : [])].filter(Boolean).join(" · ");
 }
 
+/** A dish still on its way to the server has no id yet: its stepper stays in place but waits (it never unmounts under the finger). */
+const isUnsavedAdd = (entry: OverlayEntry) => entry.id.startsWith("pending:");
+
 /** One source entry with its own stepper: editing never touches anyone else's entry (brief 6.4). */
 function SourceRow({ entry, people, actions, readOnly, underHeading }: { entry: OverlayEntry; people: SessionSnapshot["participants"]; actions: TicketActions; readOnly?: boolean; underHeading: boolean }) {
   const detail = describe(entry, people, !underHeading) || (underHeading ? "Not assigned" : "No details");
-  const editable = !readOnly && !entry.pending && actions.canEdit(entry);
+  const editable = !readOnly && actions.canEdit(entry);
+  const unsaved = isUnsavedAdd(entry);
   return (
     <li className={cn("flex items-center justify-between gap-3 py-1 pl-3", entry.pending && "opacity-60")}>
       <span className="min-w-0 text-[0.95rem] text-ink-soft">
@@ -40,7 +44,7 @@ function SourceRow({ entry, people, actions, readOnly, underHeading }: { entry: 
         {entry.pending ? <span className="ml-2 text-xs font-semibold text-saffron-ink">Saving…</span> : null}
       </span>
       {editable ? (
-        <Stepper value={entry.quantity} label={[entry.dishName, entry.variant, entry.instructions, attributionLabel(entry, people)].filter(Boolean).join(", ")} onChange={(q) => actions.setQuantity(entry, q)} onRemove={() => actions.remove(entry)} />
+        <Stepper value={entry.quantity} disabled={unsaved} label={[entry.dishName, entry.variant, entry.instructions, attributionLabel(entry, people)].filter(Boolean).join(", ")} onChange={(q) => actions.setQuantity(entry, q)} onRemove={() => actions.remove(entry)} />
       ) : (
         <span className="tally pr-3 text-lg text-tomato-ink">×{entry.quantity}</span>
       )}
@@ -54,7 +58,7 @@ function DishRow({ dish, people, actions, readOnly }: { dish: ConsolidatedDish; 
   const single = entries.length === 1 ? entries[0] : null;
   const pending = entries.some((e) => e.pending);
   const sub = single ? describe(single, people) : "";
-  const editableSingle = single && !readOnly && !single.pending && actions.canEdit(single);
+  const editableSingle = single && !readOnly && actions.canEdit(single);
   const panelId = `dish-${dish.dishId}`;
 
   return (
@@ -66,7 +70,7 @@ function DishRow({ dish, people, actions, readOnly }: { dish: ConsolidatedDish; 
           {pending && single ? <p className="text-xs font-semibold text-saffron-ink">Saving…</p> : null}
         </div>
         {editableSingle ? (
-          <Stepper size="lg" value={single.quantity} label={dish.name} onChange={(q) => actions.setQuantity(single, q)} onRemove={() => actions.remove(single)} />
+          <Stepper size="lg" value={single.quantity} disabled={isUnsavedAdd(single)} label={dish.name} onChange={(q) => actions.setQuantity(single, q)} onRemove={() => actions.remove(single)} />
         ) : single ? (
           <span className="tally text-3xl text-tomato-ink" aria-label={`${single.quantity} ${dish.name}`}>
             ×{single.quantity}

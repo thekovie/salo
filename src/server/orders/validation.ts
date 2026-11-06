@@ -8,10 +8,19 @@ export const LIMITS = {
   title: 60,
   quantity: 99,
   entriesPerSession: 300,
+  /** Lifetime cap including removed entries, so add/remove loops cannot grow a session forever. */
+  entriesEverPerSession: 1000,
+  dishesPerSession: 300,
   participantsPerSession: 30,
 } as const;
 
-const text = (max: number) => z.string().trim().max(max, `Keep it under ${max} characters.`);
+const text = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max, `Keep it under ${max} characters.`)
+    // PostgreSQL text cannot hold NUL; refuse it as input instead of failing with a server error.
+    .refine((value) => !value.includes("\u0000"), "That text contains an invalid character.");
 const optional = (max: number) => text(max).nullish();
 
 export const attributionSchema = z.discriminatedUnion("type", [

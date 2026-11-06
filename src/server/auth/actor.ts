@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, gt, isNull, or, sql } from "drizzle-orm";
 import type { Db } from "@/server/db/client";
 import { participantCredentials, participants } from "@/server/db/schema";
 import type { Actor } from "@/lib/permissions";
@@ -19,6 +19,7 @@ export async function resolveActor(db: Db, sessionId: string, token: string | un
         eq(participantCredentials.credentialHash, hashToken(token)),
         eq(participantCredentials.sessionId, sessionId),
         isNull(participantCredentials.revokedAt),
+        or(isNull(participantCredentials.expiresAt), gt(participantCredentials.expiresAt, sql`now()`)),
       ),
     );
   return row ?? null;

@@ -39,4 +39,4 @@ pnpm dev          # http://localhost:3000 (migrations run at startup)
 
 ## Documentation
 
-`docs/` describes implemented behaviour only: [data model](docs/data-model.md), [deployment](docs/deployment.md). More documents are added as each phase ships (see HANDOFF.md).
+`docs/` describes implemented behaviour only: [architecture](docs/architecture.md), [data model](docs/data-model.md), [API](docs/api.md), [UX specification](docs/ux-specification.md), [testing](docs/testing.md), [deployment](docs/deployment.md). Design system: [DESIGN.md](DESIGN.md). More documents are added as each phase ships (see HANDOFF.md).
