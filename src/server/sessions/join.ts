@@ -16,6 +16,16 @@ export interface InviteInfo {
   roundNumber: number;
 }
 
+/** "2 people · 11 items so far": shown on the invite page to someone holding the code (never in link previews). */
+export async function inviteActivity(db: Db, sessionId: string): Promise<{ people: number; items: number }> {
+  const [row] = await db.execute<{ people: number; items: number }>(sql`
+    SELECT
+      (SELECT count(*)::int FROM participants WHERE session_id = ${sessionId}) AS people,
+      (SELECT coalesce(sum(e.quantity), 0)::int FROM order_entries e JOIN order_batches b ON b.id = e.batch_id JOIN rounds r ON r.id = e.round_id
+         WHERE b.session_id = ${sessionId} AND e.deleted_at IS NULL AND r.status = 'DRAFT') AS items`);
+  return { people: Number(row?.people ?? 0), items: Number(row?.items ?? 0) };
+}
+
 /** What an invite link may reveal before joining: the order's name and round, never dishes or people. */
 export async function findInvite(db: Db, rawCode: string): Promise<InviteInfo | null> {
   const code = normalizeJoinCode(rawCode);

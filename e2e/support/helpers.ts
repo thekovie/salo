@@ -35,8 +35,10 @@ export async function joinAsGuest(browser: Browser, code: string, name: string) 
   const context = await browser.newContext({ ...test.info().project.use });
   const page = await context.newPage();
   await page.goto(`/j/${code}`);
+  await expect(page.getByText(/^Live · \d+ (person|people) · \d+ items? so far$/)).toBeVisible();
   await page.getByLabel("Your name").fill(name);
   await page.getByRole("button", { name: "Join the order" }).click();
+  await expect(page.getByText(/You’re in!/)).toBeVisible();
   await expect(page).toHaveURL(/\/s\/[0-9a-f-]{36}$/);
   return { context, page };
 }

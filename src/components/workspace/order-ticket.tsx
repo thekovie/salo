@@ -4,6 +4,7 @@ import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 import type { OverlayEntry } from "@/hooks/use-session";
 import { consolidate, hasSubLines, preparationLabel, type ConsolidatedDish } from "@/lib/consolidate";
+import { normalizeText } from "@/lib/dish-name";
 import { attributionLabel, type SessionSnapshot } from "@/lib/snapshot";
 import { cn } from "@/lib/utils";
 import { Stepper } from "./stepper";
@@ -52,7 +53,7 @@ function SourceRow({ entry, people, actions, readOnly, underHeading }: { entry: 
   );
 }
 
-function DishRow({ dish, people, actions, readOnly, fresh }: { dish: ConsolidatedDish; people: SessionSnapshot["participants"]; actions: TicketActions; readOnly?: boolean; fresh: boolean }) {
+function DishRow({ dish, people, actions, readOnly, washKey, fresh }: { dish: ConsolidatedDish; people: SessionSnapshot["participants"]; actions: TicketActions; readOnly?: boolean; washKey: string; fresh: boolean }) {
   const [open, setOpen] = useState(false);
   const entries = dish.preparations.flatMap((p) => p.entries) as OverlayEntry[];
   const single = entries.length === 1 ? entries[0] : null;
@@ -62,7 +63,9 @@ function DishRow({ dish, people, actions, readOnly, fresh }: { dish: Consolidate
   const panelId = `dish-${dish.dishId}`;
 
   return (
-    <li className={cn("px-5 py-2.5", fresh && "motion-safe:animate-[landed_900ms_ease-out]")} data-testid="dish-row">
+    <li className="relative px-5 py-2.5" data-testid="dish-row" data-dish={normalizeText(dish.name)}>
+      {/* Remounts (and replays) whenever someone adds this dish again, here or on another phone. */}
+      {fresh ? <span key={washKey} aria-hidden className="wash pointer-events-none absolute inset-0" /> : null}
       <div className="flex min-h-11 items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-lg leading-snug">{dish.name}</p>
@@ -128,7 +131,8 @@ function DishRow({ dish, people, actions, readOnly, fresh }: { dish: Consolidate
 export function OrderTicket({ entries, people, roundNumber, copy, actions, readOnly }: OrderTicketProps) {
   const consolidated = consolidate(entries);
   // Only dishes that land while you watch get the highlighter swipe; the ones already there on load do not flash.
-  const [initialDishes] = useState(() => new Set(consolidated.dishes.map((d) => d.dishId)));
+  const washKeyOf = (dish: ConsolidatedDish) => `${dish.dishId}:${dish.preparations.reduce((n, p) => n + p.entries.length, 0)}`;
+  const [initialKeys] = useState(() => new Set(consolidated.dishes.map(washKeyOf)));
   return (
     <section aria-labelledby="ticket-title" className={cn("ticket", copy === 2 && "ticket-copy-2", copy === 3 && "ticket-copy-3")}>
       <div className="flex items-baseline justify-between px-5 pb-2">
@@ -147,7 +151,7 @@ export function OrderTicket({ entries, people, roundNumber, copy, actions, readO
       ) : (
         <ul className="divide-y-[1.5px] divide-dashed divide-rule">
           {consolidated.dishes.map((dish) => (
-            <DishRow key={dish.dishId} dish={dish} people={people} actions={actions} readOnly={readOnly} fresh={!initialDishes.has(dish.dishId)} />
+            <DishRow key={dish.dishId} dish={dish} people={people} actions={actions} readOnly={readOnly} washKey={washKeyOf(dish)} fresh={!initialKeys.has(washKeyOf(dish))} />
           ))}
         </ul>
       )}

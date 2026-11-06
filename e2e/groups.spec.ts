@@ -52,7 +52,9 @@ test("hybrid: a guest claims a dish the host recorded for them; duplicate hint; 
 
   // The guest claims the Halo-halo the host recorded under their name; the host approves.
   await guest.page.getByRole("tab", { name: /People/ }).click();
-  const named = guest.page.locator("section", { hasText: "added by the host" });
+  // Dishes the host typed under the guest's name sit inside the guest's own card.
+  const named = guest.page.locator("section", { hasText: "The host added these for" });
+  await expect(guest.page.getByText("added by the host")).toHaveCount(0);
   const halo = named.getByRole("listitem").filter({ hasText: "Halo-halo" });
   await halo.getByRole("button", { name: "That’s mine" }).click();
   await expect(halo.getByText("Asked the host")).toBeVisible();

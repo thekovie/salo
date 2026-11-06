@@ -23,7 +23,7 @@ export function JoinNameForm({ sessionId, code }: { sessionId: string; code: str
     setBusy(true);
     try {
       const { id: joined } = await api<{ id: string }>(`/api/sessions/${sessionId}/join`, { method: "POST", body: { code, displayName: name } });
-      router.replace(`/s/${joined}`);
+      router.replace(`/s/${joined}?joined=1`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Something went wrong. Try again.");
       setBusy(false);

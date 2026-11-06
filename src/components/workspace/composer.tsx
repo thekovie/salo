@@ -9,11 +9,17 @@ import { Stepper } from "./stepper";
 
 type ForKind = "ME" | "UNASSIGNED" | "TABLE" | "INDIVIDUAL" | "GROUP";
 
-const FOR_OPTIONS: { kind: ForKind; label: string }[] = [
-  { kind: "ME", label: "Me" },
+/** At most four choices per person: guests order for themselves first, the host for whoever is speaking. */
+const HOST_OPTIONS: { kind: ForKind; label: string }[] = [
   { kind: "UNASSIGNED", label: "Anyone" },
   { kind: "TABLE", label: "Whole table" },
   { kind: "INDIVIDUAL", label: "A person" },
+  { kind: "GROUP", label: "A group" },
+];
+const GUEST_OPTIONS: { kind: ForKind; label: string }[] = [
+  { kind: "ME", label: "Me" },
+  { kind: "TABLE", label: "Whole table" },
+  { kind: "INDIVIDUAL", label: "Someone else" },
   { kind: "GROUP", label: "A group" },
 ];
 
@@ -100,7 +106,7 @@ export function Composer({ dishNames, knownLabels, disabled, defaultFor = "UNASS
                 setDish(name);
                 dishRef.current?.focus();
               }}
-              className="min-h-9 cursor-pointer rounded-full bg-saffron-wash px-3 text-sm font-semibold text-saffron-ink hover:brightness-95"
+              className="min-h-11 cursor-pointer rounded-full bg-saffron-wash px-3.5 text-sm font-semibold text-saffron-ink hover:brightness-95"
             >
               {name}
             </button>
@@ -116,7 +122,7 @@ export function Composer({ dishNames, knownLabels, disabled, defaultFor = "UNASS
               Ordered for
             </span>
             <div role="radiogroup" aria-labelledby={`${id}-for`} className="mt-1.5 flex flex-wrap gap-1.5">
-              {FOR_OPTIONS.map((option) => (
+              {(defaultFor === "ME" ? GUEST_OPTIONS : HOST_OPTIONS).map((option) => (
                 <button
                   key={option.kind}
                   type="button"
@@ -124,7 +130,7 @@ export function Composer({ dishNames, knownLabels, disabled, defaultFor = "UNASS
                   aria-checked={forKind === option.kind}
                   onClick={() => setForKind(option.kind)}
                   className={cn(
-                    "min-h-10 cursor-pointer rounded-full border-[1.5px] px-3.5 text-sm font-semibold transition-colors",
+                    "min-h-11 cursor-pointer rounded-full border-[1.5px] px-3.5 text-sm font-semibold transition-colors",
                     forKind === option.kind ? "border-ink bg-ink text-paper" : "border-input bg-ticket text-ink hover:bg-paper",
                   )}
                 >

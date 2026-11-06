@@ -148,3 +148,20 @@ Running record of decisions, issues, tests and deviations, one section per PR. N
 **Tests at the end of M5**: 89 unit/integration, 18 e2e (+1 capture spec, opt-in), proxy check, backup drill.
 
 **Deviations recorded**: confirm button label adds a verb to the brief's "Confirmed with waiter" so it is not mistaken for a status.
+
+**Merged** 2026-11-06 as PR #7 (and #8 docs).
+
+## UI/UX audit fixes (`feat/ux-audit-fixes`)
+
+Owner asked for a full UI/UX and motion audit (design review only). Verdict: the direction fits and is product-specific; feedback at high-stakes moments and motion were thin. Heuristics: status visibility 2, error recovery 2, real-world match 4, error prevention 4, others 3. This PR fixes the eight UX issues; motion follows in its own PR.
+
+1. Confirm dialog stays open with "Confirming…" and shows refusals inline; closes and stamps only on success; "Kain na!" toast follows the stamp.
+2. Saffron wash replays whenever a dish gets another entry (own or live), not only for new dishes; own adds scroll into view above the composer.
+3. Failed changes: Discard always, Retry when a second try can help.
+4. "Ordered for": four options per role; chips and suggestions 44 px.
+5. Waiter screen: the host's confirm is an outline button under the ticket, not a fixed red bar over it.
+6. Guest People: host-added dishes under the guest's own name fold into the guest's card.
+7. Invite page: top-aligned, "Live · n people · n items so far"; one-time "You're in!" tip after joining.
+8. Confirm, invite, members and correction dialogs are ticket strips; review heading sits under Back.
+
+Tests: 89 unit/integration, 18 e2e (join helper asserts the live line and the tip; claim test uses the merged card).

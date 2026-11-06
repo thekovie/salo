@@ -310,6 +310,14 @@ export function useSession(initial: SessionSnapshot) {
   );
 
   const dismiss = useCallback((key: string) => setQueue((list) => list.filter((p) => p.key !== key)), [setQueue]);
+  /** Send a refused change again with the same idempotency key (it can never be applied twice). */
+  const retry = useCallback(
+    (key: string) => {
+      setQueue((list) => list.map((p) => (p.key === key ? { ...p, status: "queued", error: undefined, code: undefined } : p)));
+      void pump();
+    },
+    [setQueue, pump],
+  );
 
   // Catch up whenever we may have missed something: back online, tab visible again, and while changes await a snapshot.
   useEffect(() => {
@@ -351,7 +359,7 @@ export function useSession(initial: SessionSnapshot) {
   /** The latest committed version of an entry (for Undo after an add). */
   const entryById = useCallback((id: string) => snapshotRef.current.entries.find((e) => e.id === id), []);
 
-  return { snapshot, entries, pending, failed, sync, mutate, dismiss, refresh, entryById };
+  return { snapshot, entries, pending, failed, sync, mutate, dismiss, retry, refresh, entryById };
 }
 
 function subscribeOnline(onChange: () => void) {

@@ -29,7 +29,7 @@ function MembersDialog({ group, people, onSave }: { group: GroupBucket; people: 
       >
         <Users className="size-4" aria-hidden /> {group.memberIds.length ? "Edit members" : "Add members"}
       </button>
-      <dialog ref={dialog} aria-labelledby={titleId} className="m-auto w-[min(24rem,calc(100vw-2rem))] rounded-[1.4rem] bg-ticket p-5 text-ink shadow-ticket backdrop:bg-ink/55">
+      <dialog ref={dialog} aria-labelledby={titleId} className="m-auto w-[min(24rem,calc(100vw-2rem))] ticket px-5 text-ink backdrop:bg-ink/55">
         <form
           method="dialog"
           onSubmit={() => onSave(selected)}
