@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { z, ZodError } from "zod";
 import { log } from "@/lib/logger";
-import { resolveActor } from "@/server/auth/actor";
+import { removedFrom, resolveActor } from "@/server/auth/actor";
 import { credentialCookieName } from "@/server/auth/credentials";
 import { getDb } from "@/server/db/client";
 import { AppError, notFound } from "@/server/errors";
@@ -53,10 +53,14 @@ export function idempotencyKey(request: Request): string {
   return key;
 }
 
-/** The caller's identity in this session, from their cookie. Strangers get "not found", not a hint the order exists. */
+/**
+ * The caller's identity in this session, from their cookie. Strangers get "not found", not a hint the order exists.
+ * A removed guest gets 403 REMOVED so their open screen can say so (the reason is only on their own page).
+ */
 export async function requireActor(sessionId: string): Promise<Actor> {
   const token = (await cookies()).get(credentialCookieName(sessionId))?.value;
   const actor = await resolveActor(getDb(), sessionId, token);
-  if (!actor) throw notFound();
-  return actor;
+  if (actor) return actor;
+  if (await removedFrom(getDb(), sessionId, token)) throw new AppError(403, "REMOVED", "The host removed you from this order.");
+  throw notFound();
 }

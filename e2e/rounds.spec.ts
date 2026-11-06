@@ -10,7 +10,7 @@ test("review, waiter view, host-only confirmation, round 2 with a correction, en
   const guest = await joinAsGuest(browser, await inviteCode(page), "Rafa");
   await addDish(page, "Chicken Katsu", 3);
   await addDish(guest.page, "Iced Tea", 2);
-  await expect(page.getByText("Iced Tea")).toBeVisible();
+  await expect(page.getByTestId("dish-row").filter({ hasText: "Iced Tea" })).toBeVisible();
 
   // Guests can look at the ticket but have no way to confirm (scenario 10).
   await guest.page.getByRole("button", { name: "Ticket" }).click();

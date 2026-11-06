@@ -1,7 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { and, eq } from "drizzle-orm";
-import { isUuid, resolveActor } from "@/server/auth/actor";
+import { isUuid, removedFrom, resolveActor } from "@/server/auth/actor";
 import { credentialCookieName } from "@/server/auth/credentials";
 import { getDb } from "@/server/db/client";
 import { sessions } from "@/server/db/schema";
@@ -29,4 +29,10 @@ export async function openInviteCode(sessionId: string): Promise<string | null> 
     .where(and(eq(sessions.id, sessionId), eq(sessions.status, "OPEN")))
     .limit(1);
   return row?.joinCode ?? null;
+}
+
+/** For a guest the host removed, the host's note (possibly null). Undefined for everyone else. */
+export async function removedNotice(sessionId: string) {
+  const token = (await cookies()).get(credentialCookieName(sessionId))?.value;
+  return removedFrom(getDb(), sessionId, token);
 }

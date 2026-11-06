@@ -6,8 +6,8 @@
 - Display names are labels, not identities; two guests may share one.
 
 ## Authorization (brief 4, 11.2)
-- `src/lib/permissions.ts`: host-only rename, confirm, rounds, close, claim approval, editing others' entries; guests add entries and change only their own.
-- Every session endpoint resolves the caller from the cookie; someone without a credential for that session gets `404` (the same as a session that does not exist). Entry ids are always scoped to the caller's session.
+- `src/lib/permissions.ts`: host-only rename, confirm, rounds, close, claim approval, removing guests, editing others' entries; guests add entries and change only their own.
+- Every session endpoint resolves the caller from the cookie; someone without a credential for that session gets `404` (the same as a session that does not exist). Entry ids are always scoped to the caller's session. A guest the host removed resolves to nobody (`resolveActor` returns null), so every route treats them as a stranger, except that session routes answer `403 REMOVED` so their screen can explain; their reason is only rendered on their own page. They may join again as a new guest.
 
 ## Invitations
 - The invite link is `/j/<code>`; the code is 6 characters from a 32-letter alphabet (about a billion values). Looking up a code (the invite page, its metadata and its preview image) allows 40 wrong codes per hour per client address; after that every lookup from that address is refused for the hour. Unknown and ended orders return the same 404. Joining is limited to 30 per hour per address, and `POST /api/sessions/:id/join` also requires the session id to match the code. A browser that already belongs to the order keeps its identity instead of joining again.

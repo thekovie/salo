@@ -7,11 +7,20 @@ import { hashToken } from "./credentials";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const isUuid = (value: string) => UUID.test(value);
 
-/** Who is asking, from their session cookie. Null when the token is missing, unknown, revoked or for another session. */
-export async function resolveActor(db: Db, sessionId: string, token: string | undefined): Promise<Actor | null> {
+type Identity = Actor & { removedAt: Date | null; removedReason: string | null };
+
+/** The participant behind a session cookie, removed or not. Null when the token is missing, unknown, revoked or foreign. */
+async function lookup(db: Db, sessionId: string, token: string | undefined): Promise<Identity | null> {
   if (!token || !isUuid(sessionId) || token.length > 128) return null;
   const [row] = await db
-    .select({ participantId: participants.id, role: participants.role, displayName: participants.displayName, sessionId: participants.sessionId })
+    .select({
+      participantId: participants.id,
+      role: participants.role,
+      displayName: participants.displayName,
+      sessionId: participants.sessionId,
+      removedAt: participants.removedAt,
+      removedReason: participants.removedReason,
+    })
     .from(participantCredentials)
     .innerJoin(participants, eq(participants.id, participantCredentials.participantId))
     .where(
@@ -23,4 +32,20 @@ export async function resolveActor(db: Db, sessionId: string, token: string | un
       ),
     );
   return row ?? null;
+}
+
+/**
+ * Who is asking, from their session cookie. A guest the host removed is nobody here: they can join again as a new
+ * guest, and every session route treats them as a stranger (see `removedFrom` for telling them why).
+ */
+export async function resolveActor(db: Db, sessionId: string, token: string | undefined): Promise<Actor | null> {
+  const row = await lookup(db, sessionId, token);
+  if (!row || row.removedAt) return null;
+  return { participantId: row.participantId, role: row.role, displayName: row.displayName, sessionId: row.sessionId };
+}
+
+/** For a guest the host removed: the host's reason (possibly null). Undefined for everyone else. */
+export async function removedFrom(db: Db, sessionId: string, token: string | undefined): Promise<{ reason: string | null } | undefined> {
+  const row = await lookup(db, sessionId, token);
+  return row?.removedAt ? { reason: row.removedReason } : undefined;
 }

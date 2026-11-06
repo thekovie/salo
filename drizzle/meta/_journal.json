@@ -36,6 +36,13 @@
       "when": 1793948455172,
       "tag": "0004_freeze_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793965623753,
+      "tag": "0005_participant_removal",
+      "breakpoints": true
     }
   ]
 }

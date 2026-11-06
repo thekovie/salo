@@ -16,7 +16,10 @@ export interface SessionSnapshot {
   rounds: { id: string; number: number; status: "DRAFT" | "CONFIRMED"; confirmedAt: string | null }[];
   /** The draft round, or the latest round when none is open. */
   activeRoundId: string;
+  /** People in the order now. */
   participants: { id: string; displayName: string; role: "HOST" | "GUEST" }[];
+  /** Guests the host removed: only so their names still show on dishes and tickets they appear in. */
+  removedPeople: { id: string; displayName: string }[];
   /** Active (not removed) entries of every round. */
   entries: SnapshotEntry[];
   /** Dish names typed in this session, for suggestions. */
@@ -48,4 +51,9 @@ export function attributionLabel(entry: Pick<SourceEntry, "attribution">, people
   if (type === "UNASSIGNED") return null;
   if (participantId) return people.find((p) => p.id === participantId)?.displayName ?? label ?? "Someone";
   return label;
+}
+
+/** Everyone a name might be needed for: current people, then removed guests (marked as such in the name). */
+export function everyone(snapshot: Pick<SessionSnapshot, "participants" | "removedPeople">): SessionSnapshot["participants"] {
+  return [...snapshot.participants, ...snapshot.removedPeople.map((p) => ({ id: p.id, displayName: `${p.displayName} (left)`, role: "GUEST" as const }))];
 }

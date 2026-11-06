@@ -14,12 +14,22 @@ export async function addDish(page: Page, name: string, quantity = 1) {
   await expect(dish).toHaveValue("");
 }
 
-/** Opens Details and picks who the next dishes are for. */
-export async function orderFor(page: Page, kind: "Me" | "Anyone" | "Whole table" | "A person" | "A group", name?: string) {
-  const details = page.getByRole("button", { name: /^(Details|Hide details)/ });
-  if ((await details.getAttribute("aria-expanded")) !== "true") await details.click();
-  await page.getByRole("radio", { name: kind }).click();
+const CHIP: Record<string, string> = { "A person": "+ Someone else", "A group": "+ New group" };
+
+/** Opens "who's it for" (the For button) if needed and picks a chip; "A person"/"A group" type a new name. */
+export async function orderFor(page: Page, kind: "Me" | "Anyone" | "Whole table" | "A person" | "A group" | (string & {}), name?: string) {
+  const toggle = page.getByRole("button", { name: /^For / });
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+  await page.getByRole("radio", { name: CHIP[kind] ?? kind, exact: true }).click();
   if (name) await page.getByLabel(kind === "A group" ? "Group name" : "Person's name").fill(name);
+}
+
+/** Opens "Size or notes" inside the For panel. */
+export async function openNotes(page: Page) {
+  const toggle = page.getByRole("button", { name: /^For / });
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+  const notes = page.getByRole("button", { name: "Size or notes", exact: true });
+  if ((await notes.getAttribute("aria-expanded")) !== "true") await notes.click();
 }
 
 export async function inviteCode(page: Page): Promise<string> {

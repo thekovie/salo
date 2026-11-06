@@ -15,6 +15,8 @@ export const LIMITS = {
   roundsPerSession: 30,
   correctionsPerSession: 100,
   participantsPerSession: 30,
+  /** The host's optional note to a guest they remove. */
+  removalReason: 140,
 } as const;
 
 const text = (max: number) =>
@@ -70,3 +72,5 @@ export const correctionSchema = z.object({
   explanation: optional(LIMITS.instructions),
 });
 export type CorrectionInput = z.infer<typeof correctionSchema>;
+
+export const removeParticipantSchema = z.object({ reason: z.string().trim().max(LIMITS.removalReason, `Keep the reason under ${LIMITS.removalReason} characters.`).nullish() });

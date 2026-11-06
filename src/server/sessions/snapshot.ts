@@ -21,7 +21,7 @@ export async function getSnapshot(db: Db, actor: Actor): Promise<SessionSnapshot
       if (!session) throw notFound();
       const [roundRows, people, entryRows, dishRows] = await Promise.all([
         tx.select().from(rounds).where(eq(rounds.sessionId, session.id)).orderBy(asc(rounds.roundNumber)),
-        tx.select({ id: participants.id, displayName: participants.displayName, role: participants.role }).from(participants).where(eq(participants.sessionId, session.id)).orderBy(asc(participants.createdAt)),
+        tx.select({ id: participants.id, displayName: participants.displayName, role: participants.role, removedAt: participants.removedAt }).from(participants).where(eq(participants.sessionId, session.id)).orderBy(asc(participants.createdAt)),
         tx
           .select({ entry: orderEntries, batch: orderBatches, dishName: dishes.canonicalName })
           .from(orderEntries)
@@ -65,7 +65,8 @@ export async function getSnapshot(db: Db, actor: Actor): Promise<SessionSnapshot
         me: { participantId: actor.participantId, role: actor.role, displayName: me?.displayName ?? actor.displayName },
         rounds: roundRows.map((r) => ({ id: r.id, number: r.roundNumber, status: r.status, confirmedAt: iso(r.confirmedAt) })),
         activeRoundId: draft.id,
-        participants: people,
+        participants: people.filter((p) => !p.removedAt).map(({ id, displayName, role }) => ({ id, displayName, role })),
+        removedPeople: people.filter((p) => p.removedAt).map(({ id, displayName }) => ({ id, displayName })),
         entries: entryRows.map(({ entry, batch, dishName }) => ({
           id: entry.id,
           roundId: entry.roundId,

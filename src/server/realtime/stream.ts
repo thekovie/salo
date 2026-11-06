@@ -31,6 +31,7 @@ export async function openEventStream(db: Db, actor: Actor, address: string, cur
   let again = false;
   let closed = false;
   let push: (chunk: string) => void = () => {};
+  let end: () => void = () => {};
 
   const flush = async () => {
     if (flushing) {
@@ -49,6 +50,11 @@ export async function openEventStream(db: Db, actor: Actor, address: string, cur
           for (const event of replay.events) {
             push(formatEvent(event));
             last = event.id;
+            // Removed from the order: they get this last event (their screen then says so) and nothing after it.
+            if (event.type === "participant.removed" && event.payload.participantId === actor.participantId) {
+              end();
+              return;
+            }
           }
         }
       } while (again && !closed);
@@ -66,7 +72,6 @@ export async function openEventStream(db: Db, actor: Actor, address: string, cur
 
   let heartbeat: ReturnType<typeof setInterval> | undefined;
   let lifetime: ReturnType<typeof setTimeout> | undefined;
-  let end: () => void = () => {};
   const cleanup = () => {
     if (closed) return;
     closed = true;

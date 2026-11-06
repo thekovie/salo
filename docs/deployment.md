@@ -21,6 +21,7 @@ Salo runs as two independent resources on the Coolify VPS (brief 13.2). Never po
 | `DATABASE_URL` | yes | Internal URL of `salo-db`, database `salo`. |
 | `APP_URL` | yes | The public https address, exactly as people open it. Invite links, QR codes, link previews, and the CSRF origin check all use it. |
 | `CLOSED_RETENTION_DAYS` | no (7) | Days a closed order stays readable before deletion. |
+| `NEW_ORDERS_PER_HOUR` | no (20) | New orders one client address may start per hour. Leave it in production; the e2e suite raises it. |
 | `INACTIVE_RETENTION_DAYS` | no (30) | Days without activity before an unclosed order is deleted. |
 
 4. Health check: the image has one (`GET /api/health`: 200 when the database answers, 503 otherwise). Coolify's own health check may point at the same path.

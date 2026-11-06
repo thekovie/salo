@@ -151,3 +151,77 @@ export async function resolveClaim(tx: Tx, session: SessionRow, actor: Actor, cl
   await tx.update(entryClaims).set({ status, resolvedAt: new Date() }).where(eq(entryClaims.id, claimId));
   return { result: { claimId, status }, event: { type: "attribution.changed", payload: { claimId, batchId: claim.batchId, status } } };
 }
+
+/** Open-round entries a guest submitted themselves: what leaves the ticket when the host removes them. */
+async function openEntriesOf(tx: Tx, sessionId: string, participantId: string, deletedAt: Date | null) {
+  return tx
+    .select({ id: orderEntries.id, revision: orderEntries.revision })
+    .from(orderEntries)
+    .innerJoin(orderBatches, eq(orderBatches.id, orderEntries.batchId))
+    .innerJoin(rounds, eq(rounds.id, orderEntries.roundId))
+    .where(
+      and(
+        eq(orderBatches.sessionId, sessionId),
+        eq(orderBatches.submittedBy, participantId),
+        eq(rounds.status, "DRAFT"),
+        deletedAt ? eq(orderEntries.deletedAt, deletedAt) : isNull(orderEntries.deletedAt),
+      ),
+    );
+}
+
+async function loadGuest(tx: Tx, sessionId: string, participantId: string) {
+  const [person] = await tx
+    .select({ id: participants.id, role: participants.role, removedAt: participants.removedAt })
+    .from(participants)
+    .where(and(eq(participants.id, participantId), eq(participants.sessionId, sessionId)))
+    .for("update");
+  if (!person) throw new AppError(404, "PERSON_NOT_FOUND", "That person isn’t in this order.");
+  if (person.role === "HOST") throw new AppError(409, "CANNOT_REMOVE_HOST", "The host can’t be removed.");
+  return person;
+}
+
+/**
+ * The host removes a guest (owner request): they lose access at once, their own dishes in the open round come off the
+ * ticket, and their pending claims, readiness and group memberships go. Confirmed rounds are frozen and stay as they
+ * are. The reason is stored for the removed guest only; the event carries just the id. They may join again.
+ */
+export async function removeParticipant(tx: Tx, session: SessionRow, actor: Actor, participantId: string, rawReason: string | null): Promise<Applied<{ removedEntries: number }>> {
+  if (!can(actor, "participant.remove")) throw forbidden("Only the host can remove people.");
+  const person = await loadGuest(tx, session.id, participantId);
+  if (person.removedAt) throw new AppError(409, "ALREADY_REMOVED", "They were already removed.");
+  const reason = rawReason ? tidyText(rawReason).slice(0, LIMITS.removalReason) || null : null;
+  const now = new Date();
+  const entries = await openEntriesOf(tx, session.id, participantId, null);
+  for (const entry of entries) {
+    await tx.update(orderEntries).set({ deletedAt: now, updatedAt: now, revision: entry.revision + 1 }).where(eq(orderEntries.id, entry.id));
+  }
+  await tx.update(participants).set({ removedAt: now, removedReason: reason }).where(eq(participants.id, participantId));
+  await tx.update(entryClaims).set({ status: "REJECTED", resolvedAt: now }).where(and(eq(entryClaims.requestedBy, participantId), eq(entryClaims.status, "PENDING")));
+  await tx.delete(participantRoundReadiness).where(eq(participantRoundReadiness.participantId, participantId));
+  await tx.delete(orderGroupMembers).where(eq(orderGroupMembers.participantId, participantId));
+  return { result: { removedEntries: entries.length }, event: { type: "participant.removed", payload: { participantId } } };
+}
+
+/** The host's Undo: the guest is back, and the dishes that left with them return if their round is still open. */
+export async function restoreParticipant(tx: Tx, session: SessionRow, actor: Actor, participantId: string): Promise<Applied<{ restoredEntries: number }>> {
+  if (!can(actor, "participant.remove")) throw forbidden("Only the host can do that.");
+  const person = await loadGuest(tx, session.id, participantId);
+  if (!person.removedAt) return { result: { restoredEntries: 0 }, event: { type: "participant.restored", payload: { participantId } } };
+  const entries = await openEntriesOf(tx, session.id, participantId, person.removedAt);
+  await assertRoomForPerson(tx, session.id);
+  const now = new Date();
+  for (const entry of entries) {
+    await tx.update(orderEntries).set({ deletedAt: null, updatedAt: now, revision: entry.revision + 1 }).where(eq(orderEntries.id, entry.id));
+  }
+  await tx.update(participants).set({ removedAt: null, removedReason: null }).where(eq(participants.id, participantId));
+  return { result: { restoredEntries: entries.length }, event: { type: "participant.restored", payload: { participantId } } };
+}
+
+/** Bringing someone back must not push the table past the active-people cap (they may have been replaced meanwhile). */
+async function assertRoomForPerson(tx: Tx, sessionId: string) {
+  const [{ value }] = await tx
+    .select({ value: count() })
+    .from(participants)
+    .where(and(eq(participants.sessionId, sessionId), isNull(participants.removedAt)));
+  if (value >= LIMITS.participantsPerSession) throw new AppError(422, "TABLE_FULL", `This order already has ${LIMITS.participantsPerSession} people.`);
+}

@@ -11,6 +11,8 @@ const schema = z.object({
   APP_URL: z.url(),
   /** Closed sessions stay read-only this long, then are deleted (brief 12.1). */
   CLOSED_RETENTION_DAYS: z.coerce.number().int().min(1).max(90).default(7),
+  /** New orders per client address per hour (brief 11.3). Raised only for the end-to-end suite, which starts many. */
+  NEW_ORDERS_PER_HOUR: z.coerce.number().int().min(1).max(10_000).default(20),
   /** Sessions never closed are deleted after this long without activity (brief 12.2). */
   INACTIVE_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(30),
 });

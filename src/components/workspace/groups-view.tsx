@@ -4,7 +4,7 @@ import { Users } from "lucide-react";
 import { useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { hasSubLines, preparationLabel } from "@/lib/consolidate";
-import type { SessionSnapshot, SnapshotEntry } from "@/lib/snapshot";
+import { everyone, type SessionSnapshot, type SnapshotEntry } from "@/lib/snapshot";
 import { byGroup, type GroupBucket } from "@/lib/views";
 
 interface GroupsViewProps {
@@ -68,7 +68,7 @@ function MembersDialog({ group, people, onSave }: { group: GroupBucket; people: 
 /** By group (brief 5.9): collective orders under their label, with optional members. */
 export function GroupsView({ snapshot, entries, onSetMembers }: GroupsViewProps) {
   const groups = byGroup(entries, snapshot.groups);
-  const name = (id: string) => snapshot.participants.find((p) => p.id === id)?.displayName ?? "Someone";
+  const name = (id: string) => everyone(snapshot).find((p) => p.id === id)?.displayName ?? "Someone";
   if (groups.length === 0) {
     return (
       <div className="ticket px-5 py-10 text-center">

@@ -33,6 +33,10 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
     throw new ApiError(0, "NETWORK", "No connection. Your change is kept and will be retried.");
   }
   const body = (await response.json().catch(() => null)) as { data?: T; error?: { code: string; message: string } } | null;
+  if (body?.error?.code === "REMOVED" && typeof window !== "undefined") {
+    // The host removed this guest: the page itself explains it (and offers to join again).
+    window.location.reload();
+  }
   if (!response.ok || body?.data === undefined) {
     throw new ApiError(response.status, body?.error?.code ?? "UNKNOWN", body?.error?.message ?? "Something went wrong. Try again.");
   }

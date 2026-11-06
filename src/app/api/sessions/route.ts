@@ -13,7 +13,7 @@ import { singleton } from "@/server/singleton";
 
 const HOUR_MS = 60 * 60 * 1000;
 /** Generous for a real table, tight for a script (brief 11.3). */
-const limiter = singleton("create-session-limiter", () => createRateLimiter({ limit: 20, windowMs: HOUR_MS }));
+const limiter = singleton("create-session-limiter", () => createRateLimiter({ limit: getEnv().NEW_ORDERS_PER_HOUR, windowMs: HOUR_MS }));
 
 const bodySchema = z.object({ title: z.string().trim().max(LIMITS.title).nullish() });
 

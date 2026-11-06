@@ -27,7 +27,9 @@ export type Op =
   | { kind: "openRound"; roundNumber: number }
   | { kind: "correction"; sourceEntryId: string; dishName: string; type: "QUANTITY" | "REPLACE"; quantity?: number; replacement?: string; explanation?: string }
   | { kind: "removeCorrection"; correctionId: string; dishName: string }
-  | { kind: "close" };
+  | { kind: "close" }
+  | { kind: "removeGuest"; participantId: string; name: string; reason: string | null }
+  | { kind: "restoreGuest"; participantId: string; name: string };
 
 type Status =
   | "queued" // waiting its turn
@@ -93,6 +95,10 @@ function request(sessionId: string, op: Op, latest: SessionSnapshot) {
       return { path: `${base}/corrections/${op.correctionId}`, method: "DELETE", body: undefined };
     case "close":
       return { path: `${base}/close`, method: "POST", body: undefined };
+    case "removeGuest":
+      return { path: `${base}/participants/${op.participantId}/remove`, method: "POST", body: { reason: op.reason } };
+    case "restoreGuest":
+      return { path: `${base}/participants/${op.participantId}/restore`, method: "POST", body: undefined };
   }
 }
 
@@ -127,6 +133,10 @@ export function describeOp(op: Op): string {
       return `Remove the correction for ${op.dishName}`;
     case "close":
       return "End the order";
+    case "removeGuest":
+      return `Remove ${op.name}`;
+    case "restoreGuest":
+      return `Bring back ${op.name}`;
   }
 }
 

@@ -35,6 +35,8 @@ JSON over HTTPS. Implemented in `src/app/api/**` with shared helpers in `src/ser
 | `POST /api/sessions/:id/rounds/:roundId/confirm` | host | `{ expectedRevision }` | "Confirmed with waiter". Refused if the session revision moved since the host looked (`409 STALE_REVISION`), if the round is not the open one (`409 ROUND_NOT_OPEN`), or if it has no dishes and no corrections (`422 EMPTY_ROUND`). Stores an immutable ticket snapshot, freezes the round's entries, closes pending claims on it. |
 | `POST /api/sessions/:id/corrections` | host | `{ sourceEntryId, type: "QUANTITY" \| "REPLACE", quantity?, replacement?, explanation? }` | A change to a confirmed dish, carried by the open round's ticket. `QUANTITY` cancels 1…entry quantity; `REPLACE` needs `replacement`. `409 NO_OPEN_ROUND`, `409 NOT_CONFIRMED`. |
 | `DELETE /api/sessions/:id/corrections/:correctionId` | host | — | Take a correction back before its round is confirmed. |
+| `POST /api/sessions/:id/participants/:pid/remove` | host | `{ reason? }` (≤140) | Remove a guest: their own open-round entries are soft-deleted, pending claims rejected, readiness and group memberships cleared. `409 CANNOT_REMOVE_HOST`, `409 ALREADY_REMOVED`. The reason is stored for that guest only, never in events. |
+| `POST /api/sessions/:id/participants/:pid/restore` | host | — | Undo a removal: the guest and the entries that left with them come back if their round is still open. |
 | `POST /api/sessions/:id/close` | host | — | End session: read-only, invite stops working, deleted after `CLOSED_RETENTION_DAYS` (7). |
 | `GET /api/sessions/:id/events` | participant | — | Server-Sent Events; see realtime.md. `503 TOO_MANY_STREAMS`. |
 | `GET /api/health` | anyone | — | `200 { ok, database }` or `503`. |

@@ -25,6 +25,8 @@ interface OrderTicketProps {
   actions: TicketActions;
   /** Read-only ticket (confirmed round, closed session). */
   readOnly?: boolean;
+  /** Dishes someone else just added, by dish id: a short "+2 · JD" tag on the row. */
+  recent?: ReadonlyMap<string, { key: string; label: string }>;
 }
 
 /** Who it's for, plus size and instructions unless a heading above already says them. */
@@ -55,7 +57,7 @@ function SourceRow({ entry, people, actions, readOnly, underHeading }: { entry: 
   );
 }
 
-function DishRow({ dish, people, actions, readOnly, washKey, fresh }: { dish: ConsolidatedDish; people: SessionSnapshot["participants"]; actions: TicketActions; readOnly?: boolean; washKey: string; fresh: boolean }) {
+function DishRow({ dish, people, actions, readOnly, washKey, fresh, tag }: { dish: ConsolidatedDish; people: SessionSnapshot["participants"]; actions: TicketActions; readOnly?: boolean; washKey: string; fresh: boolean; tag?: { key: string; label: string } }) {
   const [open, setOpen] = useState(false);
   const entries = dish.preparations.flatMap((p) => p.entries) as OverlayEntry[];
   const single = entries.length === 1 ? entries[0] : null;
@@ -70,7 +72,14 @@ function DishRow({ dish, people, actions, readOnly, washKey, fresh }: { dish: Co
       {fresh ? <span key={washKey} aria-hidden className="wash pointer-events-none absolute inset-0" /> : null}
       <div className="flex min-h-11 items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-lg leading-snug">{dish.name}</p>
+          <p className="text-lg leading-snug">
+            {dish.name}
+            {tag ? (
+              <span key={tag.key} className="arrival-tag ml-2 inline-block rounded-full bg-saffron px-2 py-0.5 align-middle font-sans text-xs font-semibold text-ink">
+                {tag.label}
+              </span>
+            ) : null}
+          </p>
           {sub ? <p className="text-sm text-ink-soft">{sub}</p> : null}
           {pending && single ? <p className="text-xs font-semibold text-saffron-ink">Saving…</p> : null}
         </div>
@@ -130,7 +139,7 @@ function DishRow({ dish, people, actions, readOnly, washKey, fresh }: { dish: Co
 }
 
 /** The round's order pad: consolidated dishes, big counts, source entries one tap away. */
-export function OrderTicket({ entries, people, roundNumber, copy, actions, readOnly }: OrderTicketProps) {
+export function OrderTicket({ entries, people, roundNumber, copy, actions, readOnly, recent }: OrderTicketProps) {
   const consolidated = consolidate(entries);
   // Only dishes that land while you watch get the highlighter swipe; the ones already there on load do not flash.
   const washKeyOf = (dish: ConsolidatedDish) => `${dish.dishId}:${dish.preparations.reduce((n, p) => n + p.entries.length, 0)}`;
@@ -153,7 +162,7 @@ export function OrderTicket({ entries, people, roundNumber, copy, actions, readO
       ) : (
         <ul className="divide-y-[1.5px] divide-dashed divide-rule">
           {consolidated.dishes.map((dish) => (
-            <DishRow key={dish.dishId} dish={dish} people={people} actions={actions} readOnly={readOnly} washKey={washKeyOf(dish)} fresh={!initialKeys.has(washKeyOf(dish))} />
+            <DishRow key={dish.dishId} dish={dish} people={people} actions={actions} readOnly={readOnly} washKey={washKeyOf(dish)} fresh={!initialKeys.has(washKeyOf(dish))} tag={recent?.get(dish.dishId)} />
           ))}
         </ul>
       )}
