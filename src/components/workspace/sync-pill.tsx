@@ -21,7 +21,7 @@ export function SyncPill({ state, className }: { state: SyncState; className?: s
       aria-live="polite"
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold",
-        alarming ? "bg-saffron text-ink" : "bg-ink/20 text-on-tomato",
+        alarming ? "bg-saffron text-ink" : "bg-black/25 text-on-band",
         className,
       )}
     >

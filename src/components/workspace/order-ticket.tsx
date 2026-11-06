@@ -52,7 +52,7 @@ function SourceRow({ entry, people, actions, readOnly, underHeading }: { entry: 
   );
 }
 
-function DishRow({ dish, people, actions, readOnly }: { dish: ConsolidatedDish; people: SessionSnapshot["participants"]; actions: TicketActions; readOnly?: boolean }) {
+function DishRow({ dish, people, actions, readOnly, fresh }: { dish: ConsolidatedDish; people: SessionSnapshot["participants"]; actions: TicketActions; readOnly?: boolean; fresh: boolean }) {
   const [open, setOpen] = useState(false);
   const entries = dish.preparations.flatMap((p) => p.entries) as OverlayEntry[];
   const single = entries.length === 1 ? entries[0] : null;
@@ -62,7 +62,7 @@ function DishRow({ dish, people, actions, readOnly }: { dish: ConsolidatedDish; 
   const panelId = `dish-${dish.dishId}`;
 
   return (
-    <li className="px-5 py-2.5 motion-safe:animate-[landed_900ms_ease-out]" data-testid="dish-row">
+    <li className={cn("px-5 py-2.5", fresh && "motion-safe:animate-[landed_900ms_ease-out]")} data-testid="dish-row">
       <div className="flex min-h-11 items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-lg leading-snug">{dish.name}</p>
@@ -127,6 +127,8 @@ function DishRow({ dish, people, actions, readOnly }: { dish: ConsolidatedDish; 
 /** The round's order pad: consolidated dishes, big counts, source entries one tap away. */
 export function OrderTicket({ entries, people, roundNumber, copy, actions, readOnly }: OrderTicketProps) {
   const consolidated = consolidate(entries);
+  // Only dishes that land while you watch get the highlighter swipe; the ones already there on load do not flash.
+  const [initialDishes] = useState(() => new Set(consolidated.dishes.map((d) => d.dishId)));
   return (
     <section aria-labelledby="ticket-title" className={cn("ticket", copy === 2 && "ticket-copy-2", copy === 3 && "ticket-copy-3")}>
       <div className="flex items-baseline justify-between px-5 pb-2">
@@ -145,7 +147,7 @@ export function OrderTicket({ entries, people, roundNumber, copy, actions, readO
       ) : (
         <ul className="divide-y-[1.5px] divide-dashed divide-rule">
           {consolidated.dishes.map((dish) => (
-            <DishRow key={dish.dishId} dish={dish} people={people} actions={actions} readOnly={readOnly} />
+            <DishRow key={dish.dishId} dish={dish} people={people} actions={actions} readOnly={readOnly} fresh={!initialDishes.has(dish.dishId)} />
           ))}
         </ul>
       )}

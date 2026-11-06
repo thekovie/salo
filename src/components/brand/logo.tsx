@@ -5,8 +5,8 @@ import { cn } from "@/lib/utils";
  * "typing…" indicator. Everyone's voice, one table.
  */
 export function LogoMark({ className, title, inverse = false }: { className?: string; title?: string; inverse?: boolean }) {
-  const table = inverse ? "var(--on-tomato)" : "var(--tomato)";
-  const plate = inverse ? "var(--tomato)" : "var(--on-tomato)";
+  const table = inverse ? "var(--on-band)" : "var(--tomato)";
+  const plate = inverse ? "var(--band)" : "var(--on-tomato)";
   return (
     <svg viewBox="0 0 48 48" className={cn("shrink-0", className)} role={title ? "img" : undefined} aria-hidden={title ? undefined : true} aria-label={title}>
       <circle cx="25" cy="23" r="20" fill={table} />

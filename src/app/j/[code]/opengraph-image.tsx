@@ -16,5 +16,5 @@ export default async function Image({ params }: { params: Promise<{ code: string
     return image;
   }
   const invite = lookup.invite;
-  return renderPreview({ stub: `Round ${invite.roundNumber}`, title: inviteTitle(invite.title), subtitle: INVITE_DESCRIPTION, pill: "Add your order" });
+  return renderPreview({ title: inviteTitle(invite.title), subtitle: INVITE_DESCRIPTION, pill: "Add your order" });
 }

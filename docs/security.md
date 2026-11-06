@@ -38,4 +38,4 @@ Rate limits live in process memory (one instance) and key on the last `X-Forward
 ## Data minimization and retention
 Preview images for unknown or ended invites are a cached static card (fonts read once per process).
 
-Only display names are collected. Retention and cleanup: Phase 5 (closed sessions deleted 7 days after closing, inactive ones after 30 days).
+Only display names are collected. Retention: an hourly job deletes every order whose deletion date has passed (closed + 7 days, or last activity + 30 days), with everything in it (`src/server/maintenance/cleanup.ts`). Backups follow their own retention ([backups.md](backups.md)).

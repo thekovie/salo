@@ -87,6 +87,15 @@ describe("entries", () => {
     expect(events.map((e) => e.revision).sort((a, b) => a - b)).toEqual(Array.from({ length: 13 }, (_, i) => i + 1));
   });
 
+  it("keeps exact totals with 20 people adding at the same moment (brief 14)", async () => {
+    const { host, sessionId } = await newSession(db);
+    const guests = await Promise.all(Array.from({ length: 19 }, (_, i) => addGuest(db, sessionId, `Guest ${i + 1}`)));
+    await Promise.all([host, ...guests].map((actor) => add(db, actor, { dishName: "Chicken Katsu", quantity: 2, attribution: { type: "INDIVIDUAL" } })));
+    const { entries, session } = await getSnapshot(db, host);
+    expect(consolidate(entries).totalItems).toBe(40);
+    expect(session.revision).toBe(21);
+  });
+
   it("updates with optimistic locking and refuses a stale revision", async () => {
     const { host } = await newSession(db);
     const { result } = await add(db, host, { dishName: "Gyoza", quantity: 1 });

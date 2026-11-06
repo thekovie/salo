@@ -127,3 +127,24 @@ Running record of decisions, issues, tests and deviations, one section per PR. N
 - Found by the new guard test: deleting a session with a confirmed round failed because the cascade clears `confirmed_by` on the snapshot and the immutability trigger refused it; retention cleanup would never have removed confirmed orders. Cascaded changes now pass; direct ones are still refused.
 - Code review: no high; mediums fixed: a refused confirmation (e.g. order changed meanwhile) now says why in a toast and does not block the Confirm button; Review and Waiter panels are native modal dialogs (focus moves in and back, background inert, Escape closes, one main landmark); panels close if their round changes on another device. Lows fixed: stamp ends at the same angle animated or not and plays once; corrections-only rounds say "n corrections"; guests can open the full ticket of a confirmed round; correction dialog shows what is left and its real per-correction limit.
 - Tests after fixes: 86 unit/integration, 15 e2e.
+
+**Merged** 2026-11-06 as PR #6.
+
+## M5 · Production hardening (`feat/m5-hardening`)
+
+**Built**
+- Retention: hourly in-process job deletes sessions past `expires_at` (closed + 7 d, or last activity + 30 d) with everything in them; scenario 14 e2e (links, invite and resume all gone).
+- Proxy streaming: `compose.yaml` profile `proxy` (Traefik v3, as on Coolify) + `scripts/sse-proxy-check.mjs`; new CI job. Local result: 75 ms event latency through Traefik, 3 heartbeats over 75 s idle, Last-Event-ID replay OK.
+- Backups: `docs/backups.md` (Coolify schedule, S3 off-VPS, retention, alerts, restore steps) and `scripts/backup-restore-drill.sh` (dump → scratch restore → identical row counts → constraints present). Local drill PASS.
+- Load and concurrency: 20 people adding at once give exact totals; 100 entries / 20 people measured locally (add 21 ms avg, reload 120 ms, dish visible 63 ms, saved 97 ms) — local numbers, not production benchmarks.
+- Accessibility: keyboard-only e2e (add with Enter and focus return, steppers, tabs with arrows/Home/End, dialogs with Enter/Escape and focus return); axe scans across every screen in light and dark.
+- Docs: full Coolify deployment and operations guide, backups, measurements in testing.md.
+- Design finish: impeccable detector 0 findings; finish review (see below); dishes already on the ticket no longer flash on load; header band token (quiet deep red in dark); ink/cream focus ring; people/groups cards and review checks as ticket strips; `e2e/capture.spec.ts` (CAPTURE=1) re-shoots every screen for design review.
+
+**Fixed along the way**: Playwright helper matched "Details" case-sensitively; an axe scan could catch a toast mid-animation (reduced motion set from the start).
+
+**Finish review (impeccable finish reviewer)**: first two passes asked for recaptures (stale or malformed screenshots; `e2e/capture.spec.ts` now captures every screen at 390×844 @3×). The recapture surfaced a real defect: after End order the header still said "Round 3 · Open" and the bottom bar stayed; fixed ("Order ended", no bar, "Never confirmed with the waiter" on the unsent round). Verdict "fix first" with six fixes, all applied: confirm button now "Mark confirmed with waiter"; Review order is outline so Add is the only tomato button; corrections print once with Remove on the line; no "Round" label above the join heading (page and preview image); ended notice as plain text; flat underlined tabs instead of a segmented control. Kept as the reviewer asked: tomato mono counts on dashed strips, white/canary/pink rounds, stamp in the header row, quiet deep-red dark header, Taglish only in empty/success states.
+
+**Tests at the end of M5**: 89 unit/integration, 18 e2e (+1 capture spec, opt-in), proxy check, backup drill.
+
+**Deviations recorded**: confirm button label adds a verb to the brief's "Confirmed with waiter" so it is not mistaken for a status.

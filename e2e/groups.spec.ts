@@ -30,8 +30,11 @@ test("collective group ordering with optional members (scenario 3)", async ({ pa
 });
 
 test("hybrid: a guest claims a dish the host recorded for them; duplicate hint; readiness (scenario 4)", async ({ page, browser }) => {
+  // The accessibility scans below measure settled colours, never a toast or highlight mid-animation.
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await startOrder(page);
   const guest = await joinAsGuest(browser, await inviteCode(page), "Rafa");
+  await guest.page.emulateMedia({ reducedMotion: "reduce" });
 
   await orderFor(page, "A person", "Rafa");
   await addDish(page, "Chicken Katsu");
@@ -58,7 +61,6 @@ test("hybrid: a guest claims a dish the host recorded for them; duplicate hint; 
   await expect(page.getByText(/says Halo-halo/)).toHaveCount(0);
 
   // People and Groups views pass the automated accessibility scan, for host and guest.
-  await page.emulateMedia({ reducedMotion: "reduce" });
   for (const target of [page, guest.page]) {
     const results = await new AxeBuilder({ page: target }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
     expect(results.violations).toEqual([]);

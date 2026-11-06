@@ -71,7 +71,7 @@ export function GroupsView({ snapshot, entries, onSetMembers }: GroupsViewProps)
   const name = (id: string) => snapshot.participants.find((p) => p.id === id)?.displayName ?? "Someone";
   if (groups.length === 0) {
     return (
-      <div className="rounded-2xl bg-ticket px-5 py-10 text-center shadow-ticket ring-[1.5px] ring-rule">
+      <div className="ticket px-5 py-10 text-center">
         <p className="font-display text-xl">No group orders yet.</p>
         <p className="mt-1 text-ink-soft">When one person orders for a few, open Details and choose &ldquo;A group&rdquo;.</p>
       </div>
@@ -80,7 +80,7 @@ export function GroupsView({ snapshot, entries, onSetMembers }: GroupsViewProps)
   return (
     <div className="space-y-3">
       {groups.map((group) => (
-        <section key={group.key} className="rounded-2xl bg-ticket p-4 shadow-ticket ring-[1.5px] ring-rule">
+        <section key={group.key} className="ticket px-5">
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-lg">{group.label}</h3>
             <span className="tally text-sm text-ink-soft">
