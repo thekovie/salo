@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
+import { openNotes, orderFor } from "./support/helpers";
 
 async function startOrder(page: Page) {
   await page.goto("/");
@@ -48,14 +49,16 @@ test("host-only ordering: start, add dishes, consolidate, waiter ticket (scenari
 
 test("variants and instructions stay distinct; recipient is kept between entries (scenario 6)", async ({ page }) => {
   await startOrder(page);
-  await page.getByRole("button", { name: /Details/ }).click();
-  await page.getByRole("radio", { name: "A person" }).click();
-  await page.getByLabel("Person's name").fill("Miguel");
+  // The host orders for themselves unless they pick someone else.
+  await expect(page.getByRole("button", { name: /^For Me/ })).toBeVisible();
+  await orderFor(page, "A person", "Miguel");
+  await openNotes(page);
   await page.getByRole("textbox", { name: "Size or variant" }).fill("Large");
   await addDish(page, "Iced Tea");
-  // Size resets, recipient stays.
+  // Size resets, recipient stays (now a one-tap chip).
   await expect(page.getByRole("textbox", { name: "Size or variant" })).toHaveValue("");
-  await expect(page.getByLabel("Person's name")).toHaveValue("Miguel");
+  await expect(page.getByRole("radio", { name: "Miguel", exact: true })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("button", { name: /^For Miguel/ })).toBeVisible();
   await page.getByRole("textbox", { name: "Instructions" }).fill("Less ice");
   await addDish(page, "Iced Tea");
   await page.getByRole("radio", { name: "Anyone" }).click();

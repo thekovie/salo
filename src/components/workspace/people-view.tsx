@@ -2,10 +2,11 @@
 
 import { CircleCheck, Clock, Hand } from "lucide-react";
 import { hasSubLines, preparationLabel } from "@/lib/consolidate";
-import type { SessionSnapshot, SnapshotEntry } from "@/lib/snapshot";
+import { everyone, type SessionSnapshot, type SnapshotEntry } from "@/lib/snapshot";
 import { cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/dish-name";
 import { byPerson, findLikelyDuplicates, readinessSummary, type PersonBucket } from "@/lib/views";
+import { RemoveGuestSheet } from "./remove-guest-sheet";
 
 interface PeopleViewProps {
   snapshot: SessionSnapshot;
@@ -13,6 +14,9 @@ interface PeopleViewProps {
   canClaim: boolean;
   onClaim: (entry: SnapshotEntry) => void;
   onRemoveDuplicate: (entry: SnapshotEntry) => void;
+  /** Host, order open: remove a guest. Resolves true when accepted. */
+  onRemoveGuest?: (participantId: string, name: string, reason: string | null) => Promise<boolean>;
+  roundNumber: number;
 }
 
 function Lines({ bucket, claimable, canClaimEntry, myClaims, onClaim }: { bucket: PersonBucket; claimable: boolean; canClaimEntry: (e: SnapshotEntry) => boolean; myClaims: Set<string>; onClaim: (e: SnapshotEntry) => void }) {
@@ -67,9 +71,12 @@ function Lines({ bucket, claimable, canClaimEntry, myClaims, onClaim }: { bucket
 }
 
 /** By person (brief 5.3, 5.8): who ordered what, who hasn't ordered, who is ready; guests claim dishes recorded for them. */
-export function PeopleView({ snapshot, entries, canClaim, onClaim, onRemoveDuplicate }: PeopleViewProps) {
+export function PeopleView({ snapshot, entries, canClaim, onClaim, onRemoveDuplicate, onRemoveGuest, roundNumber }: PeopleViewProps) {
   // The host usually orders for others; an empty host card is noise. Guests with nothing yet stay visible.
-  const all = byPerson(entries, snapshot.participants).filter((b) => b.role !== "HOST" || b.entries.length > 0);
+  // Removed guests only show while something is still marked for them.
+  const draftOpen = snapshot.rounds.find((r) => r.id === snapshot.activeRoundId)?.status === "DRAFT";
+  const removedIds = new Set(snapshot.removedPeople.map((p) => p.id));
+  const all = byPerson(entries, everyone(snapshot)).filter((b) => (b.role !== "HOST" && !(b.participantId && removedIds.has(b.participantId))) || b.entries.length > 0);
   // A guest sees dishes the host typed under their own name inside their own card, not as a second "them".
   const myName = normalizeText(snapshot.me.displayName);
   const forMe = snapshot.me.role === "HOST" ? undefined : all.find((b) => b.kind === "name" && normalizeText(b.title) === myName);
@@ -79,6 +86,15 @@ export function PeopleView({ snapshot, entries, canClaim, onClaim, onRemoveDupli
   const hints = isHost ? findLikelyDuplicates(entries, snapshot.participants) : [];
   const myClaims = new Set(snapshot.claims.filter((c) => c.requestedBy === snapshot.me.participantId).map((c) => c.batchId));
   const hostIds = new Set(snapshot.participants.filter((p) => p.role === "HOST").map((p) => p.id));
+
+  if (buckets.length === 0 && !forMe) {
+    return (
+      <div className="ticket px-5 py-8 text-center">
+        <p className="font-display text-xl">Ikaw pa lang.</p>
+        <p className="mt-1 text-ink-soft">Nobody else is in this order yet. Tap Invite to bring the table in.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -114,7 +130,7 @@ export function PeopleView({ snapshot, entries, canClaim, onClaim, onRemoveDupli
                 {bucket.kind === "name" ? <span className="ml-1.5 font-sans text-sm text-ink-soft">· added by the host</span> : null}
               </h3>
               <div className="flex items-center gap-2">
-                {bucket.role === "GUEST" ? (
+                {bucket.role === "GUEST" && !(bucket.participantId && removedIds.has(bucket.participantId)) ? (
                   <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold", guestReady ? "bg-ok-wash text-ok" : "bg-ink/6 text-ink-soft")}>
                     {guestReady ? <CircleCheck className="size-3.5" aria-hidden /> : <Clock className="size-3.5" aria-hidden />}
                     {guestReady ? "Ready" : "Still choosing"}
@@ -123,6 +139,14 @@ export function PeopleView({ snapshot, entries, canClaim, onClaim, onRemoveDupli
                 <span className="tally text-sm text-ink-soft">
                   {bucket.ticket.totalItems} {bucket.ticket.totalItems === 1 ? "item" : "items"}
                 </span>
+                {onRemoveGuest && bucket.role === "GUEST" && bucket.participantId && !removedIds.has(bucket.participantId) ? (
+                  <RemoveGuestSheet
+                    name={bucket.title}
+                    roundNumber={roundNumber}
+                    itemCount={draftOpen ? entries.filter((e) => e.submittedBy === bucket.participantId).reduce((n, e) => n + e.quantity, 0) : 0}
+                    onRemove={(reason) => onRemoveGuest(bucket.participantId as string, bucket.title, reason)}
+                  />
+                ) : null}
               </div>
             </div>
             <Lines bucket={bucket} claimable={claimable} canClaimEntry={(e) => hostIds.has(e.submittedBy) && !e.id.startsWith("pending:")} myClaims={myClaims} onClaim={onClaim} />

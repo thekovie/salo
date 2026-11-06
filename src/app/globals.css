@@ -158,6 +158,8 @@
   --dur-sheet: 300ms;
   --dur-stamp: 520ms;
   --dur-wash: 900ms;
+  /* A live "someone added" pill: in, readable for a moment, out. Keep in step with ARRIVAL_MS in arrival-pills.tsx. */
+  --dur-arrival: 2800ms;
   --ease-in-exit: cubic-bezier(0.4, 0, 1, 1);
 }
 
@@ -251,6 +253,11 @@
   /* The wash is a colour change that says "this just changed", not movement: keep it. */
   .wash {
     animation-duration: var(--dur-wash) !important;
+  }
+  /* "JD added Gyoza" is information: it still appears and leaves, by fading only. */
+  .arrival-pill,
+  .arrival-tag {
+    animation: arrival-fade var(--dur-arrival) linear both !important;
   }
   ::view-transition-group(*),
   ::view-transition-old(*),
@@ -423,3 +430,59 @@ dialog.sheet {
   mask: var(--perf-top);
   -webkit-mask: var(--perf-top);
 }
+
+/* Live arrivals: slide down and in (~200 ms), hold, fade up and out (~140 ms). One animation, so nothing has to
+   track an exit state. */
+@keyframes arrival-pill {
+  0% {
+    opacity: 0;
+    translate: 0 -0.5rem;
+    scale: 0.96;
+  }
+  7% {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+  95% {
+    opacity: 1;
+    translate: 0 0;
+  }
+  100% {
+    opacity: 0;
+    translate: 0 -0.25rem;
+  }
+}
+@keyframes arrival-tag {
+  0% {
+    opacity: 0;
+    scale: 0.9;
+  }
+  6% {
+    opacity: 1;
+    scale: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes arrival-fade {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  5%,
+  95% {
+    opacity: 1;
+  }
+}
+.arrival-pill {
+  animation: arrival-pill var(--dur-arrival) var(--ease-out-expo) both;
+}
+.arrival-tag {
+  animation: arrival-tag var(--dur-arrival) var(--ease-out-expo) both;
+}
+

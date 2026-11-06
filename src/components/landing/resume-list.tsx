@@ -1,8 +1,7 @@
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
+import { LocalTime } from "@/components/ui/local-time";
 import type { Resumable } from "@/server/sessions/resume";
-
-const timeFormat = new Intl.DateTimeFormat("en-PH", { weekday: "short", hour: "numeric", minute: "2-digit" });
 
 /** "Resume an active session" (brief 5.1): orders this phone is part of. */
 export function ResumeList({ items }: { items: Resumable[] }) {
@@ -19,7 +18,7 @@ export function ResumeList({ items }: { items: Resumable[] }) {
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold">{item.title ?? "Table order"}</p>
                 <p className="text-sm text-ink-soft">
-                  {item.status === "CLOSED" ? "Ended" : `Round ${item.roundNumber}`} · {item.role === "HOST" ? "You're the host" : "Guest"} · {timeFormat.format(new Date(item.updatedAt))}
+                  {item.status === "CLOSED" ? "Ended" : `Round ${item.roundNumber}`} · {item.role === "HOST" ? "You're the host" : "Guest"} · <LocalTime iso={item.updatedAt} style="relative" />
                 </p>
               </div>
               <ChevronRight className="size-5 text-ink-soft" aria-hidden />

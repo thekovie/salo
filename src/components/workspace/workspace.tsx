@@ -1,16 +1,18 @@
 "use client";
 
 import { CircleCheck, Hand, Lock, Plus, ReceiptText } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { WaiterTicket } from "@/components/ticket/waiter-ticket";
 import { Button } from "@/components/ui/button";
 import { describeOp, useSession, type AddInput, type OverlayEntry } from "@/hooks/use-session";
 import { consolidate } from "@/lib/consolidate";
-import type { SessionSnapshot } from "@/lib/snapshot";
+import { arrivalsBetween, type Arrival } from "@/lib/arrivals";
+import { everyone, type SessionSnapshot } from "@/lib/snapshot";
 import { normalizeText } from "@/lib/dish-name";
 import { liveTicket } from "@/lib/ticket";
 import { withViewTransition } from "@/lib/view-transition";
 import { Ticker } from "@/components/motion/ticker";
+import { LocalTime } from "@/components/ui/local-time";
 import { cn } from "@/lib/utils";
 import { canEditEntry } from "@/lib/permissions";
 import { byGroup, readinessSummary } from "@/lib/views";
@@ -23,6 +25,7 @@ import { WaiterPanel } from "./waiter-panel";
 import { ViewTabs, type View } from "./view-tabs";
 import { InviteSheet } from "./invite-sheet";
 import { OrderTicket, type TicketActions } from "./order-ticket";
+import { ArrivalPills, ARRIVAL_MS } from "./arrival-pills";
 import { OrderOptionsSheet } from "./order-options-sheet";
 import { SessionHeader } from "./session-header";
 import { Toasts, useToasts } from "./toasts";
@@ -39,6 +42,8 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
   const roundEntries = useMemo(() => entries.filter((e) => e.roundId === round.id), [entries, round.id]);
   const total = consolidate(roundEntries).totalItems;
   const isHost = snapshot.me.role === "HOST";
+  // Names for every dish, including ones marked for a guest the host has since removed.
+  const people = useMemo(() => everyone(snapshot), [snapshot]);
   const sessionOpen = snapshot.session.status === "OPEN";
   const isOpen = sessionOpen && round.status === "DRAFT";
   const unsaved = pending.filter((p) => p.status !== "failed").length;
@@ -46,6 +51,45 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
   const anyConfirmed = snapshot.rounds.some((r) => r.status === "CONFIRMED");
   const ended = sessionOpen ? null : anyConfirmed ? "ended" : "cancelled";
   const [optionsOpen, setOptionsOpen] = useState(false);
+
+  // Someone else's new dishes, noticed when a newer snapshot arrives (compared during render, React's "previous
+  // value" pattern), shown as pills for a moment and tagged on their rows.
+  const [seenEntries, setSeenEntries] = useState(snapshot.entries);
+  const [arrivals, setArrivals] = useState<Arrival[]>([]);
+  if (snapshot.entries !== seenEntries) {
+    const nameOf = (id: string) => people.find((p) => p.id === id)?.displayName ?? "Someone";
+    const fresh = arrivalsBetween(seenEntries, snapshot.entries, snapshot.me.participantId, nameOf);
+    setSeenEntries(snapshot.entries);
+    if (fresh.length > 0) setArrivals((list) => [...list, ...fresh].slice(-4));
+  }
+  // Each pill leaves on its own clock, however many arrive after it.
+  const arrivalTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  useEffect(() => {
+    const timers = arrivalTimers.current;
+    for (const a of arrivals) {
+      if (timers.has(a.key)) continue;
+      timers.set(
+        a.key,
+        setTimeout(() => {
+          timers.delete(a.key);
+          setArrivals((list) => list.filter((x) => x.key !== a.key));
+        }, ARRIVAL_MS),
+      );
+    }
+  }, [arrivals]);
+  useEffect(() => {
+    const timers = arrivalTimers.current;
+    return () => timers.forEach(clearTimeout);
+  }, []);
+  const recent = useMemo(() => new Map(arrivals.map((a) => [a.dishId, { key: a.key, label: `+${a.quantity} · ${a.who}` }])), [arrivals]);
+  function jumpTo(arrival: Arrival) {
+    setArrivals((list) => list.filter((a) => a.key !== arrival.key));
+    const name = snapshot.entries.find((e) => e.dishId === arrival.dishId)?.dishName;
+    if (!name) return;
+    setView("order");
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    requestAnimationFrame(() => document.querySelector(`[data-dish="${CSS.escape(normalizeText(name))}"]`)?.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" }));
+  }
 
   const [view, setView] = useState<View>(sessionOpen ? "order" : "rounds");
   const [justConfirmed, setJustConfirmed] = useState<string | null>(null);
@@ -81,10 +125,17 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
       })
     : [];
 
-  const knownLabels = useMemo(
-    () => [...new Set([...snapshot.participants.map((p) => p.displayName), ...snapshot.entries.map((e) => e.attribution.label).filter((l): l is string => Boolean(l))])],
-    [snapshot],
-  );
+  // One-tap choices for "who's it for": people with a phone, names typed for people without one, groups used so far.
+  const recipients = useMemo(() => {
+    const people = snapshot.participants.filter((p) => p.id !== snapshot.me.participantId);
+    const taken = new Set(snapshot.participants.map((p) => normalizeText(p.displayName)));
+    const uniq = (labels: string[]) => [...new Map(labels.map((l) => [normalizeText(l), l])).values()];
+    const names = uniq(snapshot.entries.flatMap((e) => (e.attribution.type === "INDIVIDUAL" && !e.attribution.participantId && e.attribution.label ? [e.attribution.label] : []))).filter(
+      (n) => !taken.has(normalizeText(n)),
+    );
+    const groups = uniq([...snapshot.groups.map((g) => g.label), ...snapshot.entries.flatMap((e) => (e.attribution.type === "GROUP" && e.attribution.label ? [e.attribution.label] : []))]);
+    return { people, names, groups };
+  }, [snapshot]);
 
   const add = useCallback(
     async (input: AddInput) => {
@@ -157,6 +208,14 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
 
   const correct = (request: CorrectionRequest) => void mutate({ kind: "correction", ...request });
 
+  async function removeGuest(participantId: string, name: string, reason: string | null): Promise<boolean> {
+    const accepted = Boolean(await mutate({ kind: "removeGuest", participantId, name, reason }));
+    if (accepted) {
+      show({ message: `${name} removed.`, action: { label: "Undo", run: () => void mutate({ kind: "restoreGuest", participantId, name }) } });
+    }
+    return accepted;
+  }
+
   async function closeOrder(): Promise<boolean> {
     const accepted = Boolean(await mutate({ kind: "close" }));
     // An ended order opens on its tickets; a cancelled one has none, so it stays on the (now read-only) order.
@@ -179,6 +238,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
           ) : null
         }
       />
+      {sessionOpen ? <ArrivalPills arrivals={arrivals} onSelect={jumpTo} /> : null}
       {isHost && sessionOpen ? (
         <OrderOptionsSheet
           open={optionsOpen}
@@ -217,7 +277,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
             <Lock className="mt-0.5 size-5 shrink-0" aria-hidden />
             <p>
               {ended === "cancelled" ? "This order was cancelled. Nothing was sent to the waiter." : "This order has ended. Nothing can be changed."} Everything is
-              deleted on {new Intl.DateTimeFormat("en-PH", { weekday: "long", month: "long", day: "numeric" }).format(new Date(snapshot.session.expiresAt))}.
+              deleted on <LocalTime iso={snapshot.session.expiresAt} style="date" />.
             </p>
           </div>
         ) : null}
@@ -257,7 +317,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
               ) : null}
             </div>
           ) : view === "order" ? (
-            <OrderTicket entries={roundEntries} people={snapshot.participants} roundNumber={round.number} copy={copyFor(round.number)} actions={actions} readOnly={!isOpen} />
+            <OrderTicket entries={roundEntries} people={people} recent={recent} roundNumber={round.number} copy={copyFor(round.number)} actions={actions} readOnly={!isOpen} />
           ) : view === "rounds" ? (
             <RoundsView
               snapshot={snapshot}
@@ -274,6 +334,8 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
               canClaim={!isHost && isOpen}
               onClaim={(entry) => void mutate({ kind: "claim", batchId: entry.batchId, dishName: entry.dishName })}
               onRemoveDuplicate={(entry) => actions.remove(entry)}
+              roundNumber={round.number}
+              onRemoveGuest={isHost && sessionOpen ? removeGuest : undefined}
             />
           ) : (
             <GroupsView snapshot={snapshot} entries={roundEntries} onSetMembers={(label, memberIds) => void mutate({ kind: "groupMembers", label, memberIds })} />
@@ -284,7 +346,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
       {sessionOpen ? (
       <div className="fixed inset-x-0 bottom-0 z-30 bg-gradient-to-t from-paper from-70% to-transparent pt-6 pb-[calc(env(safe-area-inset-bottom)+0.5rem)]">
         <div className="mx-auto max-w-2xl space-y-2 px-3">
-          {isOpen ? <Composer dishNames={snapshot.dishNames} knownLabels={knownLabels} defaultFor={isHost ? "UNASSIGNED" : "ME"} onAdd={(input) => void add(input)} /> : null}
+          {isOpen ? <Composer dishNames={snapshot.dishNames} {...recipients} onAdd={(input) => void add(input)} /> : null}
           <div className="flex items-center justify-between gap-3 px-2">
             <div className="min-w-0">
               <p className="whitespace-nowrap text-ink-soft" data-testid="round-total">

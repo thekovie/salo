@@ -1,4 +1,4 @@
-import { and, count, eq, sql } from "drizzle-orm";
+import { and, count, eq, isNull, sql } from "drizzle-orm";
 import { getEnv } from "@/env";
 import { tidyText } from "@/lib/dish-name";
 import { isJoinCode, normalizeJoinCode } from "@/lib/join-code";
@@ -20,7 +20,7 @@ export interface InviteInfo {
 export async function inviteActivity(db: Db, sessionId: string): Promise<{ people: number; items: number }> {
   const [row] = await db.execute<{ people: number; items: number }>(sql`
     SELECT
-      (SELECT count(*)::int FROM participants WHERE session_id = ${sessionId}) AS people,
+      (SELECT count(*)::int FROM participants WHERE session_id = ${sessionId} AND removed_at IS NULL) AS people,
       (SELECT coalesce(sum(e.quantity), 0)::int FROM order_entries e JOIN order_batches b ON b.id = e.batch_id JOIN rounds r ON r.id = e.round_id
          WHERE b.session_id = ${sessionId} AND e.deleted_at IS NULL AND r.status = 'DRAFT') AS items`);
   return { people: Number(row?.people ?? 0), items: Number(row?.items ?? 0) };
@@ -61,7 +61,7 @@ export async function joinSession(db: Db, rawCode: string, rawName: string, expe
     const [session] = await tx.select().from(sessions).where(eq(sessions.joinCode, code)).for("update");
     if (!session || (expectedSessionId && session.id !== expectedSessionId)) throw new AppError(404, "INVITE_NOT_FOUND", "That code doesn’t match an order. Check it with the host.");
     if (session.status === "CLOSED") throw closed();
-    const [{ value: people }] = await tx.select({ value: count() }).from(participants).where(eq(participants.sessionId, session.id));
+    const [{ value: people }] = await tx.select({ value: count() }).from(participants).where(and(eq(participants.sessionId, session.id), isNull(participants.removedAt)));
     if (people >= LIMITS.participantsPerSession) throw new AppError(422, "TABLE_FULL", `This order already has ${LIMITS.participantsPerSession} people.`);
 
     const [guest] = await tx.insert(participants).values({ sessionId: session.id, displayName, role: "GUEST" }).returning({ id: participants.id });

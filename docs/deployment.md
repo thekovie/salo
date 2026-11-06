@@ -21,6 +21,7 @@ Salo runs as two independent resources on the Coolify VPS (brief 13.2). Never po
 | `DATABASE_URL` | yes | Internal URL of `salo-db`, database `salo`. |
 | `APP_URL` | yes | The public https address, exactly as people open it. Invite links, QR codes, link previews, and the CSRF origin check all use it. |
 | `CLOSED_RETENTION_DAYS` | no (7) | Days a closed order stays readable before deletion. |
+| `NEW_ORDERS_PER_HOUR` | no (20) | New orders one client address may start per hour. Leave it in production; the e2e suite raises it. |
 | `INACTIVE_RETENTION_DAYS` | no (30) | Days without activity before an unclosed order is deleted. |
 
 4. Health check: the image has one (`GET /api/health`: 200 when the database answers, 503 otherwise). Coolify's own health check may point at the same path.
@@ -36,7 +37,7 @@ Coolify routes traffic through Traefik. Salo's event stream works through it wit
 - `scripts/sse-proxy-check.mjs` runs the app behind Traefik v3 (`docker compose --profile proxy`, see below) in CI: events arrive in well under a second (75 ms locally), 20-second heartbeats keep an idle stream open past 75 s, and reconnecting with `Last-Event-ID` replays missed events.
 - Each stream ends after 15 minutes on purpose; browsers reconnect at once and lose nothing. Redeploys drop streams the same way.
 - After the first deploy, run the check against production: `node scripts/sse-proxy-check.mjs https://salo.example.com 75` (it creates a throwaway order; it is deleted after 30 days like any quiet order).
-- Rate limits key on the **last** `X-Forwarded-For` hop, which Traefik appends. Do not expose the container port directly, and revisit `src/server/auth/client-ip.ts` before putting a CDN in front.
+- Rate limits key on the **last** `X-Forwarded-For` hop, which Traefik appends. Do not expose the container port directly, and revisit `src/server/auth/client-ip.ts` before putting a CDN in front (behind Cloudflare every visitor would share the edge address: key on `CF-Connecting-IP` instead).
 
 ## Operations
 

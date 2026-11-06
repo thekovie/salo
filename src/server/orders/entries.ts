@@ -1,4 +1,4 @@
-import { and, count, eq, sql } from "drizzle-orm";
+import { and, count, eq, isNull, sql } from "drizzle-orm";
 import { normalizeText, optionalText, tidyText } from "@/lib/dish-name";
 import type { Tx } from "@/server/db/client";
 import { dishes, orderBatches, orderEntries, participants, rounds } from "@/server/db/schema";
@@ -42,7 +42,7 @@ async function batchValues(tx: Tx, session: SessionRow, actor: Actor, attributio
       const label = optionalText(attribution.label);
       const participantId = attribution.participantId ?? (label ? null : actor.participantId);
       if (participantId) {
-        const [person] = await tx.select({ id: participants.id }).from(participants).where(and(eq(participants.id, participantId), eq(participants.sessionId, session.id)));
+        const [person] = await tx.select({ id: participants.id }).from(participants).where(and(eq(participants.id, participantId), eq(participants.sessionId, session.id), isNull(participants.removedAt)));
         if (!person) throw new AppError(422, "UNKNOWN_PERSON", "That person isn’t in this order.");
       }
       return { attributionType: "INDIVIDUAL" as const, attributedParticipantId: participantId, collectiveLabel: participantId ? null : label };

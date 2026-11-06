@@ -1,6 +1,6 @@
 import { writeFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
-import { addDish, inviteCode, joinAsGuest, orderFor, startOrder } from "./support/helpers";
+import { addDish, inviteCode, joinAsGuest, openNotes, orderFor, startOrder } from "./support/helpers";
 
 // Design-review captures of every screen from the current build. Skipped unless CAPTURE=1:
 //   CAPTURE=1 pnpm e2e e2e/capture.spec.ts
@@ -50,13 +50,13 @@ test("capture every screen", async ({ page, browser, request }) => {
   await addDish(page, "Crispy Pata");
   await orderFor(page, "A person", "Rafa");
   await addDish(page, "Halo-halo");
-  await page.getByRole("button", { name: /Hide details/ }).click();
-  await guest.page.getByRole("button", { name: /Details/ }).click();
+  await page.getByRole("button", { name: "Close details" }).click();
+  await openNotes(guest.page);
   await guest.page.getByLabel("Instructions").fill("No sauce");
   await addDish(guest.page, "Chicken Katsu");
-  await guest.page.getByRole("button", { name: /Hide details/ }).click();
+  await guest.page.getByRole("button", { name: "Close details" }).click();
   await addDish(guest.page, "Iced Tea", 3);
-  await expect(page.getByText("Iced Tea")).toBeVisible();
+  await expect(page.getByTestId("dish-row").filter({ hasText: "Iced Tea" })).toBeVisible();
   await page.reload();
   await expect(page.locator('[data-sync="saved"]')).toBeVisible();
   await shot(page, "cap-02-workspace-light");

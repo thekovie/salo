@@ -6,8 +6,8 @@
 - Display names are labels, not identities; two guests may share one.
 
 ## Authorization (brief 4, 11.2)
-- `src/lib/permissions.ts`: host-only rename, confirm, rounds, close, claim approval, editing others' entries; guests add entries and change only their own.
-- Every session endpoint resolves the caller from the cookie; someone without a credential for that session gets `404` (the same as a session that does not exist). Entry ids are always scoped to the caller's session.
+- `src/lib/permissions.ts`: host-only rename, confirm, rounds, close, claim approval, removing guests, editing others' entries; guests add entries and change only their own.
+- Every session endpoint resolves the caller from the cookie; someone without a credential for that session gets `404` (the same as a session that does not exist). Entry ids are always scoped to the caller's session. A guest the host removed resolves to nobody (`resolveActor` returns null), so every route treats them as a stranger, except that session routes answer `403 REMOVED` so their screen can explain; their reason is only rendered on their own page. They may join again as a new guest.
 
 ## Invitations
 - The invite link is `/j/<code>`; the code is 6 characters from a 32-letter alphabet (about a billion values). Looking up a code (the invite page, its metadata and its preview image) allows 40 wrong codes per hour per client address; after that every lookup from that address is refused for the hour. Unknown and ended orders return the same 404. Joining is limited to 30 per hour per address, and `POST /api/sessions/:id/join` also requires the session id to match the code. A browser that already belongs to the order keeps its identity instead of joining again.
@@ -22,18 +22,19 @@
 ## Abuse limits (brief 11.3)
 | Limit | Value |
 |---|---|
-| New orders | 20 / hour / client address |
-| Joins | 30 / hour / client address |
-| Changes | 120 / minute / participant |
+| New orders | 20 / hour / client address (`NEW_ORDERS_PER_HOUR`), and 15× that across all addresses |
+| Joins | 30 / hour / client address, and 600 / hour across all addresses |
+| Changes | 120 / minute / participant; re-checked under the session lock, so a guest removed mid-flight cannot land a change |
+| Snapshots (`/sync`) | 120 / minute / participant |
 | Event streams | 500 per instance, 12 per client address, 4 per participant; each ends after 15 minutes (the browser reconnects and replays) |
-| Invite lookups | 40 wrong codes / hour / client address |
+| Invite lookups | 40 wrong codes / hour / client address, and 2,000 / hour across all addresses (then invite pages wait out the hour) |
 | Request body | 8 KB |
 | People per order | 30 |
 | Entries | 300 active, 1,000 ever, 300 distinct dishes per order |
 | Rounds / corrections | 30 rounds and 100 corrections per order; cancellations never exceed what was ordered |
 | Groups | 30 per order; members changed only by the host or whoever set the group up |
 | Text | dish 60, size 40, instructions 140, names 40, order name 60; no NUL |
-Rate limits live in process memory (one instance) and key on the last `X-Forwarded-For` hop (one trusted proxy; see deployment.md).
+Rate limits live in process memory (one instance) and key on the last `X-Forwarded-For` hop (one trusted proxy; see deployment.md). Each per-address table holds 2,000 addresses (IPv6 grouped by /64); the all-addresses ceilings exist because rotating through more addresses than that would otherwise evict every counter before it filled. Preview cards and app icons are drawn once per process and served from memory. A Traefik rate limit in front is a sensible extra backstop.
 
 ## Data minimization and retention
 Preview images for unknown or ended invites are a cached static card (fonts read once per process).

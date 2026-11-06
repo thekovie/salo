@@ -186,3 +186,34 @@ Owner feedback: no way to call off an order; renaming inline in the header was c
 - **Link previews, root causes**: (1) `robots.txt` disallowed `/j/` and `/s/`, and preview crawlers that honour robots.txt (Facebook/Messenger, X, Slack…) skipped both the page and its OG image; now only `/api/` is disallowed and `noindex` (meta + X-Robots-Tag) keeps them out of search. (2) Room links `/s/<id>` returned 404 to anyone without the cookie, crawlers included; now a non-member opening an open order's room link is redirected to its invite `/j/<code>` (the room id is a random UUID, stronger than the join code it leads to). Ended/unknown ids still 404. Note: previews also need a public `APP_URL` (og:image is absolute); localhost/LAN links never preview.
 
 Tests: 89 unit/integration, 20 e2e (new: cancel flow; robots + room-link redirect in the preview test; stranger test updated).
+
+## Ordering experience, guest removal, live pills (`feat/order-experience`)
+
+Owner feedback: times were not local; the host's ordering was awkward (defaulted to "Anyone", recipient hidden, names retyped); the dish field was too small; wanted another UI/UX audit of the ordering flow (ui-ux-pro-max guidance), a way for the host to remove guests with a reason, and small live "added" notifications.
+
+**Audit findings (ordering flow)**: A1 dish input ~80 px with a placeholder-only label (high); A2 recipient hidden behind Details (high); A3 host default "Anyone" (high); A4 retyping people/groups already in the order (high); A5 times in the server's zone (high); A6 bottom dock heavy with the keyboard open (medium); A7 frequent "who" mixed with rare size/notes (medium).
+
+**Changes**
+- `LocalTime` client component (device time zone, renders after hydration): resume list ("Today 7:42 PM" / "Yesterday" / weekday), "Confirmed h:mm", "deleted on …".
+- Composer in two rows: full-width labelled Dish field; **For <name> ▾** · stepper · Add. *Who's it for?* chips from the order (Me default for everyone, other people, typed names, groups, Whole table, Anyone, + Someone else, + New group); size/notes one step in. Picking a person sends `participantId` (no server change).
+- Host removes a guest (People tab): migration `0005_participant_removal` (`removed_at`, `removed_reason`, CHECK guest-only and ≤140). Their own open-round entries are soft-deleted, claims rejected, readiness and memberships cleared; event carries the id only. Removed actors resolve to nobody; session routes answer `403 REMOVED`; their page shows the reason and Join again; their live stream ends. Undo restores them and those entries. Rejoining creates a new guest. People cap counts active people only.
+- Live pills: someone else's new dishes (detected by diffing snapshots on the client) show as a saffron pill under the header and a "+n · name" tag on the row; quiet on load/resync; reduced motion fades only.
+- `NEW_ORDERS_PER_HOUR` env (default 20) so the e2e suite can start more orders than the production limit allows.
+
+Tests: 95 unit/integration (new: removal, arrivals, relative time), 24 e2e (new: host default Me + one-tap guest, live pill, remove with reason + rejoin + Undo, device time zone), two consecutive green runs.
+
+**Security review (PR #14)**, fixed in the same PR:
+- HIGH: per-address limiters could be evicted by rotating 2,000+ addresses (an IPv6 /48 is enough). Added all-addresses ceilings (`createTieredLimiter`) for new orders (15×), joins (600/h) and wrong invite codes (2,000/h).
+- MEDIUM:
+  - A change sent just before a removal could land after it: `runMutation` re-checks removal under the session lock.
+  - Dishes or group members could point at a removed guest: lookups now skip removed people.
+  - Preview cards and app icons are memoized per process.
+  - `/sync` is limited to 120/min per participant.
+  - Deployment note for the CDN case.
+- LOW:
+  - The heartbeat ends a removed guest's stream even if a resync skipped the event.
+  - Idempotency types include the target guest.
+  - The reload-on-REMOVED runs once per page view.
+
+Left as accepted: guests may attribute dishes to other people in the order (by design: ordering for a friend); host-written reasons are plain text; a large table behind one carrier-grade NAT shares the 30 joins/hour.
+

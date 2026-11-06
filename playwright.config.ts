@@ -14,6 +14,6 @@ export default defineConfig({
     url: `http://localhost:${PORT}/api/health`,
     reuseExistingServer: !process.env.CI,
     timeout: 240_000,
-    env: { APP_URL: `http://localhost:${PORT}`, DATABASE_URL: process.env.DATABASE_URL ?? "postgres://salo@localhost:5433/salo" },
+    env: { APP_URL: `http://localhost:${PORT}`, NEW_ORDERS_PER_HOUR: "1000", DATABASE_URL: process.env.DATABASE_URL ?? "postgres://salo@localhost:5433/salo" },
   },
 });

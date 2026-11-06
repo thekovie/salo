@@ -66,10 +66,15 @@ export const participants = pgTable(
     role: text("role", { enum: ROLES }).notNull(),
     createdAt: createdAt(),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Set when the host removed this guest. The row stays so names on tickets still resolve. */
+    removedAt: timestamp("removed_at", { withTimezone: true }),
+    /** Optional, shown only to the removed guest. */
+    removedReason: text("removed_reason"),
   },
   (t) => [
     index("participants_session_idx").on(t.sessionId),
     check("participants_role_ck", inList("role", ROLES)),
+    check("participants_removed_ck", sql`(removed_at IS NULL OR role = 'GUEST') AND (removed_reason IS NULL OR (removed_at IS NOT NULL AND char_length(removed_reason) <= 140))`),
     // Exactly one host per session.
     uniqueIndex("participants_one_host_uq").on(t.sessionId).where(sql`role = 'HOST'`),
   ],

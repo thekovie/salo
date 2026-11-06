@@ -4,7 +4,7 @@ import { getEnv } from "@/env";
 import { resolveActor } from "@/server/auth/actor";
 import { clientIp } from "@/server/auth/client-ip";
 import { credentialCookieName, credentialCookieOptions } from "@/server/auth/credentials";
-import { createRateLimiter } from "@/server/auth/rate-limit";
+import { createTieredLimiter } from "@/server/auth/rate-limit";
 import { getDb } from "@/server/db/client";
 import { AppError } from "@/server/errors";
 import { handle, ok, readJson } from "@/server/http";
@@ -14,7 +14,7 @@ import { singleton } from "@/server/singleton";
 
 const HOUR_MS = 60 * 60 * 1000;
 /** Also slows down guessing join codes (brief 11.3). */
-const limiter = singleton("join-limiter", () => createRateLimiter({ limit: 30, windowMs: HOUR_MS }));
+const limiter = singleton("join-limiter", () => createTieredLimiter({ limit: 30, windowMs: HOUR_MS }, { limit: 600, windowMs: HOUR_MS }));
 
 const bodySchema = z.object({
   code: z.string().trim().min(1).max(12),

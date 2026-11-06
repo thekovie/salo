@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { addDish, inviteCode, startOrder } from "./support/helpers";
+import { addDish, inviteCode, orderFor, startOrder } from "./support/helpers";
 import type { Browser } from "@playwright/test";
 
 async function joinAsGuest(browser: Browser, code: string, name: string) {
@@ -28,7 +28,7 @@ test("QR/code collaboration: guests join and every change shows up live (scenari
 
   // The host sees it without reloading: consolidated with their own entry.
   await expect(page.getByTestId("dish-row").first()).toContainText("×3");
-  await expect(page.getByText("Iced Tea")).toBeVisible();
+  await expect(page.getByTestId("dish-row").filter({ hasText: "Iced Tea" })).toBeVisible();
   await page.getByRole("button", { name: /Show who ordered Chicken Katsu/ }).click();
   await expect(page.getByText("Rafa").first()).toBeVisible();
 
@@ -49,7 +49,7 @@ test("network recovery: changes made while offline elsewhere arrive after reconn
   await addDish(guest.page, "Gyoza", 3);
   await expect(guest.page.locator('[data-sync="saved"]')).toBeVisible();
   await context.setOffline(false);
-  await expect(page.getByText("Gyoza")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId("dish-row").filter({ hasText: "Gyoza" })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId("round-total")).toContainText("3");
 
   // The guest's own queued change survives their connection dropping too.
@@ -57,7 +57,7 @@ test("network recovery: changes made while offline elsewhere arrive after reconn
   await addDish(guest.page, "Rice");
   await expect(guest.page.getByText("Offline · not saved yet")).toBeVisible();
   await guest.context.setOffline(false);
-  await expect(page.getByText("Rice")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId("dish-row").filter({ hasText: "Rice" })).toBeVisible({ timeout: 20_000 });
   await guest.context.close();
 });
 
@@ -106,4 +106,67 @@ test("the host can cancel an order nothing was confirmed for; guests see it canc
 test("unknown codes and strangers get nothing", async ({ request }) => {
   expect((await request.get("/j/ZZZZZZ")).status()).toBe(404);
   expect((await request.get("/api/sessions/00000000-0000-4000-8000-000000000000/events")).status()).toBe(404);
+});
+
+test("the host orders for themselves by default and picks a guest with one tap", async ({ page, browser }) => {
+  await startOrder(page);
+  const guest = await joinAsGuest(browser, await inviteCode(page), "JD");
+  await addDish(page, "Sisig");
+  await orderFor(page, "JD");
+  await addDish(page, "Halo-halo");
+  await page.getByRole("tab", { name: /People/ }).click();
+  const hostCard = page.getByRole("tabpanel").locator("section", { has: page.getByRole("heading", { name: /host/ }) });
+  await expect(hostCard).toContainText("Sisig");
+  const jdCard = page.getByRole("tabpanel").locator("section", { has: page.getByRole("heading", { name: /^JD/ }) });
+  await expect(jdCard).toContainText("Halo-halo");
+  await guest.context.close();
+});
+
+test("someone else's new dish shows as a live pill and tags its row", async ({ page, browser }) => {
+  await startOrder(page);
+  const guest = await joinAsGuest(browser, await inviteCode(page), "JD");
+  await addDish(guest.page, "Gyoza", 2);
+  await expect(page.getByRole("status").filter({ hasText: "JD added Gyoza ×2" })).toBeVisible();
+  await expect(page.getByTestId("dish-row").filter({ hasText: "Gyoza" })).toContainText("+2 · JD");
+  // Never for your own dish.
+  await expect(guest.page.getByText("JD added Gyoza ×2")).toHaveCount(0);
+  await guest.context.close();
+});
+
+test("the host removes a guest with a reason; the guest sees it and can join again; Undo restores", async ({ page, browser }) => {
+  await startOrder(page);
+  const code = await inviteCode(page);
+  const guest = await joinAsGuest(browser, code, "JD");
+  await addDish(guest.page, "Gyoza", 2);
+  await expect(page.getByTestId("round-total")).toContainText("2");
+
+  await page.getByRole("tab", { name: /People/ }).click();
+  await page.getByRole("button", { name: "Remove JD" }).click();
+  const sheet = page.getByRole("dialog", { name: "Remove JD from the order?" });
+  await expect(sheet).toContainText("The 2 items they added in round 1 come off the ticket.");
+  await sheet.getByLabel(/Reason/).fill("Wrong table, sorry!");
+  await sheet.getByRole("button", { name: "Remove JD" }).click();
+  await expect(page.getByTestId("round-total")).toContainText("0");
+
+  // The guest's screen explains, with the host's note, and offers the way back.
+  await expect(guest.page.getByRole("heading", { name: "You’re no longer in this order" })).toBeVisible({ timeout: 10_000 });
+  await expect(guest.page.getByText("Wrong table, sorry!")).toBeVisible();
+  await expect(guest.page.getByRole("link", { name: "Join again" })).toHaveAttribute("href", `/j/${code}`);
+
+  // Undo on the host's toast brings JD and the dishes back.
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.getByTestId("round-total")).toContainText("2");
+  await guest.context.close();
+});
+
+test("times on the landing page are in the device's time zone", async ({ browser }) => {
+  const context = await browser.newContext({ ...test.info().project.use, timezoneId: "America/New_York" });
+  const page = await context.newPage();
+  await startOrder(page);
+  await page.goto("/");
+  const time = page.locator("section[aria-labelledby=resume] time").first();
+  // Formatted by the browser in its own zone (New York here), whatever zone the server runs in.
+  const clock = await time.evaluate((el) => new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(el.getAttribute("datetime") ?? "")));
+  await expect(time).toHaveText(new RegExp(`^(Today|Yesterday) ${clock.replace(/\s/g, "\\s")}$`));
+  await context.close();
 });

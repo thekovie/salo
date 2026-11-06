@@ -25,6 +25,7 @@ const snapshot = {
   rounds: [{ id: "r1", number: 1, status: "DRAFT", confirmedAt: null }],
   activeRoundId: "r1",
   participants: [],
+  removedPeople: [],
   entries: [gyoza],
   dishNames: ["Gyoza"],
   claims: [],

@@ -9,6 +9,7 @@ import { consolidate, preparationLabel } from "@/lib/consolidate";
 import type { SessionSnapshot, SnapshotEntry } from "@/lib/snapshot";
 import { liveTicket } from "@/lib/ticket";
 import { cn } from "@/lib/utils";
+import { LocalTime } from "@/components/ui/local-time";
 import { Stepper } from "./stepper";
 
 export interface CorrectionRequest {
@@ -195,7 +196,7 @@ export function RoundsView({ snapshot, entries, justConfirmedRoundId, onOpenRoun
             <WaiterTicket ticket={ticket} size="compact" confirmed justConfirmed={round.id === justConfirmedRoundId} />
             <div className="flex flex-wrap items-center justify-between gap-2 px-1">
               <span className="text-sm text-ink-soft">
-                Confirmed {round.confirmedAt ? new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit" }).format(new Date(round.confirmedAt)) : ""}
+                Confirmed {round.confirmedAt ? <LocalTime iso={round.confirmedAt} /> : null}
               </span>
               {isHost && isOpen && draft && roundEntries.length ? <CorrectionDialog roundNumber={round.number} entries={roundEntries} corrections={snapshot.corrections} onCorrect={onCorrect} /> : null}
             </div>
