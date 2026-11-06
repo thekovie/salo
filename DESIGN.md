@@ -45,6 +45,7 @@ The system preference sets dark mode in CSS alone; `.dark` / `.light` on `<html>
 - **View tabs**: flat text tabs on the paper ground, active one underlined in tomato (3 px), counts in tomato mono. No segmented-control track.
 - **Bottom bar**: Add is the single tomato button; Review order (host) and Ticket (guest) are outline. The confirm action reads "Mark confirmed with waiter" (a verb, not a status).
 - **Full-screen panels** (Review, Waiter ticket): native modal dialogs (`FullScreenSheet`).
+- **Bottom drawers** (Invite, Correct a dish): `src/components/ui/drawer.tsx` (shadcn's Drawer on `vaul`): slides up, swipe or drag the handle down to close, Escape and tapping outside close it, focus moves in and returns. Styled as a ticket torn off the pad (`.ticket-top`: perforated top edge only) with a grab handle. Confirm questions stay centred dialogs.
 - **Composer**: single row (Details, Dish, stepper, Add), details panel above it, suggestion chips (saffron-wash) above that.
 
 ## Motion

@@ -1,8 +1,9 @@
 "use client";
 
 import { Plus, Wrench } from "lucide-react";
-import { useId, useRef, useState } from "react";
+import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
 import { WaiterTicket } from "@/components/ticket/waiter-ticket";
 import { consolidate, preparationLabel } from "@/lib/consolidate";
 import type { SessionSnapshot, SnapshotEntry } from "@/lib/snapshot";
@@ -46,7 +47,7 @@ function preparationsOf(entries: SnapshotEntry[], corrections: SessionSnapshot["
 }
 
 function CorrectionDialog({ roundNumber, entries, corrections, onCorrect }: { roundNumber: number; entries: SnapshotEntry[]; corrections: SessionSnapshot["corrections"]; onCorrect: (r: CorrectionRequest) => void }) {
-  const ref = useRef<HTMLDialogElement>(null);
+  const [open, setOpen] = useState(false);
   const id = useId();
   const options = preparationsOf(entries, corrections);
   const [choice, setChoice] = useState(0);
@@ -67,26 +68,23 @@ function CorrectionDialog({ roundNumber, entries, corrections, onCorrect }: { ro
           setQuantity(1);
           setReplacement("");
           setNote("");
-          ref.current?.showModal();
+          setOpen(true);
         }}
       >
         <Wrench className="size-4" aria-hidden /> Correct a dish
       </Button>
-      <dialog ref={ref} aria-labelledby={`${id}-t`} className="m-auto w-[min(26rem,calc(100vw-2rem))] ticket px-5 text-ink backdrop:bg-ink/55">
+      <Drawer open={open} onOpenChange={setOpen}>
+        <DrawerContent>
         <form
-          method="dialog"
           onSubmit={(e) => {
-            if ((type === "REPLACE" && !replacement.trim()) || (type === "QUANTITY" && option.max === 0)) {
-              e.preventDefault();
-              return;
-            }
+            e.preventDefault();
+            if ((type === "REPLACE" && !replacement.trim()) || (type === "QUANTITY" && option.max === 0)) return;
+            setOpen(false);
             onCorrect({ sourceEntryId: option.entryId, dishName: option.dishName, type, quantity: type === "QUANTITY" ? Math.min(quantity, option.max) : undefined, replacement: type === "REPLACE" ? replacement : undefined, explanation: note || undefined });
           }}
         >
-          <h2 id={`${id}-t`} className="text-xl">
-            Correct round {roundNumber}
-          </h2>
-          <p className="mt-1 text-sm text-ink-soft">Confirmed dishes never change. The correction goes to the waiter with the open round.</p>
+          <DrawerTitle className="font-display text-xl font-medium">Correct round {roundNumber}</DrawerTitle>
+          <DrawerDescription className="mt-1 text-sm text-ink-soft">Confirmed dishes never change. The correction goes to the waiter with the open round.</DrawerDescription>
           <label htmlFor={`${id}-dish`} className="mt-4 block text-sm font-semibold">
             Dish
           </label>
@@ -147,13 +145,14 @@ function CorrectionDialog({ roundNumber, entries, corrections, onCorrect }: { ro
           </label>
           <input id={`${id}-note`} value={note} onChange={(e) => setNote(e.target.value)} maxLength={140} className="mt-1 min-h-11 w-full rounded-xl border-[1.5px] border-input bg-ticket px-3 text-base" />
           <div className="mt-5 flex justify-end gap-2">
-            <Button variant="ghost" type="button" onClick={() => ref.current?.close()}>
+            <Button variant="ghost" type="button" onClick={() => setOpen(false)}>
               Cancel
             </Button>
             <Button type="submit">Add correction</Button>
           </div>
         </form>
-      </dialog>
+        </DrawerContent>
+      </Drawer>
     </>
   );
 }
