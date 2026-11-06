@@ -12,6 +12,8 @@ export const LIMITS = {
   entriesEverPerSession: 1000,
   dishesPerSession: 300,
   groupsPerSession: 30,
+  roundsPerSession: 30,
+  correctionsPerSession: 100,
   participantsPerSession: 30,
 } as const;
 

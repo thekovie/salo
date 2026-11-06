@@ -3,6 +3,7 @@ import { hasSubLines, preparationLabel, type Consolidated } from "./consolidate"
 /** A change to a confirmed round, carried on a later round's ticket (brief 5.15, 8.12). */
 export interface CorrectionView {
   id: string;
+  sourceEntryId: string | null;
   sourceRoundNumber: number;
   targetRoundId: string;
   dishName: string;

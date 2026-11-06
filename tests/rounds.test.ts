@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import type { Actor } from "@/lib/permissions";
 import { confirmedRoundSnapshots, sessions } from "@/server/db/schema";
@@ -93,6 +93,8 @@ describe("rounds and corrections", () => {
       ["Chicken Katsu", "QUANTITY", -1, null, 1],
       ["Iced Tea", "REPLACE", null, "Large", 1],
     ]);
+    // Cancellations add up per dish: 1 of 3 already cancelled, so at most 2 more.
+    expect(await errorOf(run(host, (tx, s) => recordCorrection(tx, s, host, { sourceEntryId: katsu.id, type: "QUANTITY", quantity: 3 })))).toMatchObject({ status: 422 });
     await run(host, (tx, s) => removeCorrection(tx, s, host, replace.result.correctionId));
     await confirm(host);
     const done = await getSnapshot(db, host);
@@ -100,6 +102,19 @@ describe("rounds and corrections", () => {
     expect(round2).toMatchObject({ roundNumber: 2, totalItems: 3, dishes: [{ name: "Extra Rice", quantity: 3 }], corrections: ["Cancel 1 × Chicken Katsu from round 1"] });
     // Round 1's ticket is untouched.
     expect(done.tickets[done.rounds[0].id]).toMatchObject({ totalItems: 5, corrections: [] });
+  });
+});
+
+describe("database guards", () => {
+  it("refuses to reopen a confirmed round or delete its snapshot, but session deletion still cascades", async () => {
+    const { host, sessionId } = await newSession(db);
+    await add(db, host, { dishName: "Gyoza", quantity: 1 });
+    await confirm(host);
+    await expect(db.execute(sql`UPDATE rounds SET status = 'DRAFT', confirmed_at = NULL WHERE session_id = ${sessionId}`)).rejects.toThrow();
+    await expect(db.delete(confirmedRoundSnapshots)).rejects.toThrow();
+    await expect(db.execute(sql`DELETE FROM order_entries`)).rejects.toThrow();
+    await db.delete(sessions).where(eq(sessions.id, sessionId));
+    expect(await db.select().from(confirmedRoundSnapshots)).toHaveLength(0);
   });
 });
 

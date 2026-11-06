@@ -26,7 +26,8 @@ PostgreSQL, defined in `src/server/db/schema.ts`; migrations in `drizzle/` (appl
 - CHECK constraints on every status/role/type enum, `quantity BETWEEN 1 AND 99`, `revision >= 0`, and status/timestamp agreement (CLOSED ⇔ `closed_at`, CONFIRMED ⇔ `confirmed_at`).
 - Partial unique indexes: one DRAFT round per session, one HOST per session, one pending claim per batch and requester.
 - Triggers (`drizzle/0001_integrity_triggers.sql`): a confirmed snapshot can never be updated; a session revision can never go backwards; entries of a confirmed round cannot be inserted or updated.
-- Covered by `tests/db-integrity.test.ts`.
+- More triggers (`drizzle/0004_freeze_guards.sql`): a confirmed round cannot be reopened; snapshots, entries of confirmed rounds and corrections already given to the waiter cannot be deleted or changed, except when a whole session is deleted (cascade).
+- Covered by `tests/db-integrity.test.ts` and `tests/rounds.test.ts`.
 
 ## Deviations from brief section 8
 

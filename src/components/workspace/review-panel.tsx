@@ -7,6 +7,7 @@ import type { TicketSnapshot } from "@/lib/ticket";
 import type { SessionSnapshot, SnapshotEntry } from "@/lib/snapshot";
 import { findLikelyDuplicates, readinessSummary } from "@/lib/views";
 import { ConfirmDialog } from "./confirm-dialog";
+import { FullScreenSheet } from "./full-screen-sheet";
 
 interface ReviewPanelProps {
   snapshot: SessionSnapshot;
@@ -32,6 +33,12 @@ function Check({ ok, children }: { ok: boolean | "wait"; children: React.ReactNo
 }
 
 /** Review before telling the waiter (brief 5.12): what is ordered, and anything that might be wrong. */
+export function roundSummary(ticket: Pick<TicketSnapshot, "totalItems" | "corrections">): string {
+  const items = `${ticket.totalItems} ${ticket.totalItems === 1 ? "item" : "items"}`;
+  const fixes = ticket.corrections.length ? `${ticket.corrections.length} ${ticket.corrections.length === 1 ? "correction" : "corrections"}` : "";
+  return ticket.totalItems === 0 && fixes ? fixes : [items, fixes].filter(Boolean).join(", ");
+}
+
 export function ReviewPanel({ snapshot, entries, ticket, unsaved, notSaved, onBack, onShowWaiter, onConfirm, onRemoveDuplicate }: ReviewPanelProps) {
   const isHost = snapshot.me.role === "HOST";
   const ready = readinessSummary(snapshot);
@@ -41,16 +48,16 @@ export function ReviewPanel({ snapshot, entries, ticket, unsaved, notSaved, onBa
   const blocked = unsaved > 0 || notSaved > 0 || empty;
 
   return (
-    <div className="fixed inset-0 z-40 overflow-y-auto bg-paper pb-[calc(env(safe-area-inset-bottom)+8rem)]" role="region" aria-label={`Review round ${ticket.roundNumber}`}>
+    <FullScreenSheet label={`Review round ${ticket.roundNumber}`} onClose={onBack} className="pb-[calc(env(safe-area-inset-bottom)+8rem)]">
       <div className="sticky top-0 z-10 bg-paper/95 pt-[env(safe-area-inset-top)] backdrop-blur-sm">
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-3 py-2">
           <Button variant="ghost" onClick={onBack}>
             <ArrowLeft className="size-5" aria-hidden /> Back to order
           </Button>
-          <h1 className="text-xl">Review round {ticket.roundNumber}</h1>
+          <h2 className="text-xl">Review round {ticket.roundNumber}</h2>
         </div>
       </div>
-      <main className="mx-auto max-w-2xl space-y-4 px-3 pt-2">
+      <div className="mx-auto max-w-2xl space-y-4 px-3 pt-2">
         <ul className="space-y-3 rounded-2xl bg-ticket p-4 shadow-ticket ring-[1.5px] ring-rule" aria-label="Checks">
           <Check ok={unsaved === 0 && notSaved === 0 ? true : unsaved > 0 ? "wait" : false}>
             {notSaved > 0 ? `${notSaved} ${notSaved === 1 ? "change was" : "changes were"} not saved. Go back to see which.` : unsaved > 0 ? `${unsaved} ${unsaved === 1 ? "change is" : "changes are"} still saving…` : "Everything is saved."}
@@ -87,7 +94,7 @@ export function ReviewPanel({ snapshot, entries, ticket, unsaved, notSaved, onBa
         </ul>
 
         <WaiterTicket ticket={ticket} size="compact" />
-      </main>
+      </div>
 
       <div className="fixed inset-x-0 bottom-0 bg-gradient-to-t from-paper from-70% to-transparent pt-6 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
         <div className="mx-auto flex max-w-2xl flex-col gap-2 px-3 sm:flex-row sm:justify-end">
@@ -99,7 +106,7 @@ export function ReviewPanel({ snapshot, entries, ticket, unsaved, notSaved, onBa
               title={`Confirm round ${ticket.roundNumber} with the waiter?`}
               body={
                 <>
-                  <p>This saves round {ticket.roundNumber} exactly as shown ({ticket.totalItems} items).</p>
+                  <p>This saves round {ticket.roundNumber} exactly as shown ({roundSummary(ticket)}).</p>
                   <p>Its dishes can&rsquo;t be changed afterwards. Anything else goes in a new round, as add-ons or corrections.</p>
                 </>
               }
@@ -115,6 +122,6 @@ export function ReviewPanel({ snapshot, entries, ticket, unsaved, notSaved, onBa
         </div>
         {isHost && blocked && !empty ? <p className="mx-auto mt-1 max-w-2xl px-4 text-center text-sm text-ink-soft">Confirm once every change is saved.</p> : null}
       </div>
-    </div>
+    </FullScreenSheet>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { CircleCheck, Hand, Lock, Plus, ReceiptText, X } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { WaiterTicket } from "@/components/ticket/waiter-ticket";
 import { Button } from "@/components/ui/button";
 import { describeOp, useSession, type AddInput, type OverlayEntry } from "@/hooks/use-session";
@@ -37,8 +37,18 @@ export function Workspace({ initial, appUrl }: { initial: SessionSnapshot; appUr
   const unsaved = pending.filter((p) => p.status !== "failed").length;
 
   const [view, setView] = useState<View>(sessionOpen ? "order" : "rounds");
-  const [mode, setMode] = useState<"edit" | "review" | "waiter">("edit");
   const [justConfirmed, setJustConfirmed] = useState<string | null>(null);
+  // A panel belongs to the round it was opened for: if the round changes underneath (confirmed or started on another
+  // device), it closes instead of silently showing something else. The host's own confirmation keeps the stamped ticket.
+  const roundKey = `${round.id}:${round.status}`;
+  const [modeState, setModeState] = useState<{ mode: "edit" | "review" | "waiter"; key: string }>({ mode: "edit", key: roundKey });
+  const mode = modeState.key === roundKey || justConfirmed === round.id ? modeState.mode : "edit";
+  const setMode = (next: "edit" | "review" | "waiter") => setModeState({ mode: next, key: roundKey });
+  useEffect(() => {
+    if (!justConfirmed) return;
+    const timer = setTimeout(() => setJustConfirmed(null), 1500); // the stamp plays once
+    return () => clearTimeout(timer);
+  }, [justConfirmed]);
   const ticket = liveTicket({ roundNumber: round.number, title: snapshot.session.title, ticket: consolidate(roundEntries), corrections: snapshot.corrections, roundId: round.id });
   const confirmedTicket = round.status === "CONFIRMED" ? snapshot.tickets[round.id] : undefined;
   const correctionsThisRound = ticket.corrections.length;
@@ -89,13 +99,18 @@ export function Workspace({ initial, appUrl }: { initial: SessionSnapshot; appUr
   };
 
   async function confirmRound() {
-    const result = await mutate({ kind: "confirm", roundId: round.id, roundNumber: round.number, expectedRevision: snapshot.session.revision });
+    let failure = "";
+    const result = await mutate(
+      { kind: "confirm", roundId: round.id, roundNumber: round.number, expectedRevision: snapshot.session.revision },
+      { onError: (message) => (failure = message) },
+    );
     if (result) {
       setJustConfirmed(round.id);
-      setMode("waiter");
+      setModeState({ mode: "waiter", key: `${round.id}:CONFIRMED` });
       show({ message: `Round ${round.number} confirmed. Kain na!` });
     } else {
       setMode("review");
+      show({ message: `Not confirmed. ${failure || "Try again."}` });
     }
   }
 
@@ -249,8 +264,8 @@ export function Workspace({ initial, appUrl }: { initial: SessionSnapshot; appUr
                 <ReceiptText className="size-5" aria-hidden />
                 Review order
               </Button>
-            ) : isOpen ? (
-              <Button variant="outline" onClick={() => setMode("waiter")} disabled={total === 0 && correctionsThisRound === 0}>
+            ) : isOpen || confirmedTicket ? (
+              <Button variant="outline" onClick={() => setMode("waiter")} disabled={!confirmedTicket && total === 0 && correctionsThisRound === 0}>
                 <ReceiptText className="size-5" aria-hidden />
                 Ticket
               </Button>

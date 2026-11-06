@@ -31,20 +31,24 @@ interface RoundsViewProps {
 }
 
 /** One option per preparation of a confirmed round; corrections attach to its largest source entry. */
-function preparationsOf(entries: SnapshotEntry[]) {
+function preparationsOf(entries: SnapshotEntry[], corrections: SessionSnapshot["corrections"]) {
+  const cancelled = (entryId: string) =>
+    corrections.filter((c) => c.sourceEntryId === entryId && c.type === "QUANTITY").reduce((sum, c) => sum + Math.abs(c.quantityDelta ?? 0), 0);
   return consolidate(entries).dishes.flatMap((dish) =>
-    dish.preparations.map((p) => {
-      const source = [...p.entries].sort((a, b) => b.quantity - a.quantity)[0];
+    dish.preparations.flatMap((p) => {
+      const sources = p.entries.map((e) => ({ id: e.id, left: e.quantity - cancelled(e.id) })).sort((a, b) => b.left - a.left);
+      const source = sources[0];
       const label = dish.preparations.length > 1 || p.variant || p.instructions ? `${dish.name} · ${preparationLabel(p)}` : dish.name;
-      return { key: p.key, label, dishName: dish.name, entryId: source.id, max: source.quantity, total: p.quantity };
+      const left = sources.reduce((sum, x) => sum + Math.max(0, x.left), 0);
+      return source ? [{ key: p.key, label, dishName: dish.name, entryId: source.id, max: Math.max(0, source.left), left }] : [];
     }),
   );
 }
 
-function CorrectionDialog({ roundNumber, entries, onCorrect }: { roundNumber: number; entries: SnapshotEntry[]; onCorrect: (r: CorrectionRequest) => void }) {
+function CorrectionDialog({ roundNumber, entries, corrections, onCorrect }: { roundNumber: number; entries: SnapshotEntry[]; corrections: SessionSnapshot["corrections"]; onCorrect: (r: CorrectionRequest) => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   const id = useId();
-  const options = preparationsOf(entries);
+  const options = preparationsOf(entries, corrections);
   const [choice, setChoice] = useState(0);
   const [type, setType] = useState<"QUANTITY" | "REPLACE">("QUANTITY");
   const [quantity, setQuantity] = useState(1);
@@ -72,11 +76,11 @@ function CorrectionDialog({ roundNumber, entries, onCorrect }: { roundNumber: nu
         <form
           method="dialog"
           onSubmit={(e) => {
-            if (type === "REPLACE" && !replacement.trim()) {
+            if ((type === "REPLACE" && !replacement.trim()) || (type === "QUANTITY" && option.max === 0)) {
               e.preventDefault();
               return;
             }
-            onCorrect({ sourceEntryId: option.entryId, dishName: option.dishName, type, quantity: type === "QUANTITY" ? quantity : undefined, replacement: type === "REPLACE" ? replacement : undefined, explanation: note || undefined });
+            onCorrect({ sourceEntryId: option.entryId, dishName: option.dishName, type, quantity: type === "QUANTITY" ? Math.min(quantity, option.max) : undefined, replacement: type === "REPLACE" ? replacement : undefined, explanation: note || undefined });
           }}
         >
           <h2 id={`${id}-t`} className="text-xl">
@@ -97,7 +101,7 @@ function CorrectionDialog({ roundNumber, entries, onCorrect }: { roundNumber: nu
           >
             {options.map((o, i) => (
               <option key={o.key} value={i}>
-                {o.label} ×{o.total}
+                {o.label} ×{o.left}
               </option>
             ))}
           </select>
@@ -119,10 +123,17 @@ function CorrectionDialog({ roundNumber, entries, onCorrect }: { roundNumber: nu
             </div>
           </fieldset>
           {type === "QUANTITY" ? (
-            <div className="mt-3 flex items-center justify-between">
-              <span className="text-sm">How many to cancel</span>
-              <Stepper value={quantity} label={`${option.label} to cancel`} max={option.max} onChange={setQuantity} />
-            </div>
+            option.max > 0 ? (
+              <div className="mt-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">How many to cancel</span>
+                  <Stepper value={Math.min(quantity, option.max)} label={`${option.label} to cancel`} max={option.max} onChange={setQuantity} />
+                </div>
+                {option.max < option.left ? <p className="text-xs text-ink-soft">Up to {option.max} at a time (it was ordered in parts). Add another correction for more.</p> : null}
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-ink-soft">All of this dish is already cancelled.</p>
+            )
           ) : (
             <div className="mt-3">
               <label htmlFor={`${id}-to`} className="text-sm font-semibold">
@@ -196,7 +207,7 @@ export function RoundsView({ snapshot, entries, justConfirmedRoundId, onOpenRoun
               <span className="text-sm text-ink-soft">
                 Confirmed {round.confirmedAt ? new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit" }).format(new Date(round.confirmedAt)) : ""}
               </span>
-              {isHost && isOpen && draft && roundEntries.length ? <CorrectionDialog roundNumber={round.number} entries={roundEntries} onCorrect={onCorrect} /> : null}
+              {isHost && isOpen && draft && roundEntries.length ? <CorrectionDialog roundNumber={round.number} entries={roundEntries} corrections={snapshot.corrections} onCorrect={onCorrect} /> : null}
             </div>
             {isHost && isOpen && !draft && roundEntries.length ? <p className="px-1 text-sm text-ink-soft">To correct this round, start a new round first.</p> : null}
           </div>

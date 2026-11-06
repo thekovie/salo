@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, isNull, sql, sum } from "drizzle-orm";
 import { getEnv } from "@/env";
 import { consolidate, preparationLabel, isPlain } from "@/lib/consolidate";
 import { can, type Actor } from "@/lib/permissions";
@@ -8,7 +8,7 @@ import type { Tx } from "@/server/db/client";
 import { confirmedRoundSnapshots, dishes, entryClaims, orderBatches, orderCorrections, orderEntries, rounds, sessions } from "@/server/db/schema";
 import { AppError, forbidden } from "@/server/errors";
 import type { Applied, SessionRow } from "@/server/mutations";
-import type { CorrectionInput } from "./validation";
+import { LIMITS, type CorrectionInput } from "./validation";
 
 type Db = Pick<Tx, "select">;
 
@@ -17,6 +17,7 @@ export async function loadCorrections(tx: Db, sessionId: string): Promise<Correc
   const rows = await tx
     .select({
       id: orderCorrections.id,
+      sourceEntryId: orderCorrections.sourceEntryId,
       targetRoundId: orderCorrections.targetRoundId,
       type: orderCorrections.correctionType,
       quantityDelta: orderCorrections.quantityDelta,
@@ -35,6 +36,7 @@ export async function loadCorrections(tx: Db, sessionId: string): Promise<Correc
     .orderBy(asc(orderCorrections.createdAt));
   return rows.map((r) => ({
     id: r.id,
+    sourceEntryId: r.sourceEntryId,
     targetRoundId: r.targetRoundId,
     type: r.type === "REPLACE" ? "REPLACE" : "QUANTITY",
     quantityDelta: r.quantityDelta,
@@ -91,8 +93,9 @@ export async function confirmRound(tx: Tx, session: SessionRow, actor: Actor, ro
   );
   const snapshot = buildTicketSnapshot({ roundNumber: round.roundNumber, title: session.title, ticket, corrections, confirmedAt: confirmedAt.toISOString() });
   await tx.insert(confirmedRoundSnapshots).values({ roundId: round.id, snapshotRevision: expectedRevision, snapshotData: snapshot, confirmedBy: actor.participantId, confirmedAt });
-  await tx.update(rounds).set({ status: "CONFIRMED", confirmedAt, confirmedBy: actor.participantId }).where(eq(rounds.id, round.id));
+  // Corrections are marked as said before the round freezes (the database refuses changes to confirmed rounds' corrections).
   await tx.update(orderCorrections).set({ communicatedAt: confirmedAt }).where(eq(orderCorrections.targetRoundId, round.id));
+  await tx.update(rounds).set({ status: "CONFIRMED", confirmedAt, confirmedBy: actor.participantId }).where(eq(rounds.id, round.id));
   // Requests to take over dishes in this round can no longer be granted.
   await tx
     .update(entryClaims)
@@ -105,6 +108,8 @@ export async function confirmRound(tx: Tx, session: SessionRow, actor: Actor, ro
 export async function openRound(tx: Tx, session: SessionRow, actor: Actor): Promise<Applied<{ roundId: string }>> {
   if (!can(actor, "round.open")) throw forbidden("Only the host can start a new round.");
   if (await draftRound(tx, session.id)) throw new AppError(409, "ROUND_OPEN", "There’s already an open round.");
+  const [{ value: roundCount }] = await tx.select({ value: count() }).from(rounds).where(eq(rounds.sessionId, session.id));
+  if (roundCount >= LIMITS.roundsPerSession) throw new AppError(422, "TOO_MANY_ROUNDS", `An order can have up to ${LIMITS.roundsPerSession} rounds.`);
   const [last] = await tx.select({ number: rounds.roundNumber }).from(rounds).where(eq(rounds.sessionId, session.id)).orderBy(desc(rounds.roundNumber)).limit(1);
   const [round] = await tx
     .insert(rounds)
@@ -129,9 +134,18 @@ export async function recordCorrection(tx: Tx, session: SessionRow, actor: Actor
     .where(and(eq(orderEntries.id, input.sourceEntryId), eq(orderBatches.sessionId, session.id), isNull(orderEntries.deletedAt)));
   if (!source) throw new AppError(404, "ENTRY_NOT_FOUND", "That dish isn’t in this order.");
   if (source.roundStatus !== "CONFIRMED") throw new AppError(409, "NOT_CONFIRMED", "This dish isn’t confirmed yet; change it directly.");
+  const [{ value: correctionCount }] = await tx.select({ value: count() }).from(orderCorrections).where(eq(orderCorrections.sessionId, session.id));
+  if (correctionCount >= LIMITS.correctionsPerSession) throw new AppError(422, "TOO_MANY_CORRECTIONS", `An order can have up to ${LIMITS.correctionsPerSession} corrections.`);
   const replacement = optionalText(input.replacement);
-  if (input.type === "QUANTITY" && (!input.quantity || input.quantity > source.quantity)) {
-    throw new AppError(422, "INVALID", `You can cancel between 1 and ${source.quantity}.`);
+  if (input.type === "QUANTITY") {
+    // Cancellations add up: never cancel more of a dish than was ordered.
+    const [{ cancelled }] = await tx
+      .select({ cancelled: sum(sql`-${orderCorrections.quantityDelta}`).mapWith(Number) })
+      .from(orderCorrections)
+      .where(and(eq(orderCorrections.sourceEntryId, source.id), eq(orderCorrections.correctionType, "QUANTITY")));
+    const left = source.quantity - (cancelled ?? 0);
+    if (left <= 0) throw new AppError(409, "ALREADY_CANCELLED", "All of this dish is already cancelled.");
+    if (!input.quantity || input.quantity > left) throw new AppError(422, "INVALID", `You can cancel between 1 and ${left}.`);
   }
   if (input.type === "REPLACE" && !replacement) throw new AppError(422, "INVALID", "Say what to change it to.");
   const [correction] = await tx

@@ -14,8 +14,8 @@ const entry = (id: string, dishName: string, quantity: number, instructions: str
   submittedBy: "h",
 });
 
-const cancel: CorrectionView = { id: "c1", sourceRoundNumber: 1, targetRoundId: "r2", dishName: "Chicken Katsu", preparation: "No sauce", type: "QUANTITY", quantityDelta: -1, replacement: null, explanation: null };
-const change: CorrectionView = { id: "c2", sourceRoundNumber: 1, targetRoundId: "r2", dishName: "Iced Tea", preparation: null, type: "REPLACE", quantityDelta: null, replacement: "Large", explanation: "they asked" };
+const cancel: CorrectionView = { id: "c1", sourceEntryId: "e1", sourceRoundNumber: 1, targetRoundId: "r2", dishName: "Chicken Katsu", preparation: "No sauce", type: "QUANTITY", quantityDelta: -1, replacement: null, explanation: null };
+const change: CorrectionView = { id: "c2", sourceEntryId: "e2", sourceRoundNumber: 1, targetRoundId: "r2", dishName: "Iced Tea", preparation: null, type: "REPLACE", quantityDelta: null, replacement: "Large", explanation: "they asked" };
 
 describe("corrections", () => {
   it("reads like something to say to the waiter", () => {

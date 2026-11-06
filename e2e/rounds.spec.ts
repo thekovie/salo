@@ -14,18 +14,18 @@ test("review, waiter view, host-only confirmation, round 2 with a correction, en
 
   // Guests can look at the ticket but have no way to confirm (scenario 10).
   await guest.page.getByRole("button", { name: "Ticket" }).click();
-  await expect(guest.page.getByRole("region", { name: "Waiter ticket" })).toContainText("5 items");
+  await expect(guest.page.getByRole("dialog", { name: "Waiter ticket" })).toContainText("5 items");
   await expect(guest.page.getByRole("button", { name: "Confirmed with waiter" })).toHaveCount(0);
   await guest.page.getByRole("button", { name: "Back" }).click();
 
   // Review (scenario 9): checks plus the ticket; showing the waiter does not confirm.
   await page.getByRole("button", { name: "Review order" }).click();
-  const review = page.getByRole("region", { name: "Review round 1" });
+  const review = page.getByRole("dialog", { name: "Review round 1" });
   await expect(review.getByText("Everything is saved.")).toBeVisible();
   await expect(review.getByText(/0 of 1 guest ready/)).toBeVisible();
   expect((await axe(page)).violations).toEqual([]);
   await review.getByRole("button", { name: "Show the waiter" }).click();
-  const waiter = page.getByRole("region", { name: "Waiter ticket" });
+  const waiter = page.getByRole("dialog", { name: "Waiter ticket" });
   await expect(waiter).toContainText("Chicken Katsu");
   await expect(waiter).toContainText("×3");
   expect((await axe(page)).violations).toEqual([]);
@@ -51,13 +51,13 @@ test("review, waiter view, host-only confirmation, round 2 with a correction, en
 
   await page.getByRole("tab", { name: /Order/ }).click();
   await page.getByRole("button", { name: "Review order" }).click();
-  const review2 = page.getByRole("region", { name: "Review round 2" });
+  const review2 = page.getByRole("dialog", { name: "Review round 2" });
   await expect(review2).toContainText("Extra Rice");
   await expect(review2).toContainText("Cancel 1 × Chicken Katsu from round 1");
   await expect(review2).not.toContainText("Iced Tea");
   await review2.getByRole("button", { name: "Confirmed with waiter" }).click();
   await page.getByRole("dialog", { name: /Confirm round 2/ }).getByRole("button", { name: "Yes, the waiter has it" }).click();
-  await expect(page.getByRole("region", { name: "Waiter ticket" }).getByRole("region", { name: "Round 2, confirmed with the waiter" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Waiter ticket" }).getByRole("region", { name: "Round 2, confirmed with the waiter" })).toBeVisible();
   await page.getByRole("button", { name: "Back", exact: true }).click();
 
   // Both rounds kept, each stamped; round 1 untouched.

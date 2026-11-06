@@ -38,7 +38,7 @@ test("host-only ordering: start, add dishes, consolidate, waiter ticket (scenari
 
   await page.getByRole("button", { name: "Review order" }).click();
   await page.getByRole("button", { name: "Show the waiter" }).click();
-  const waiter = page.getByRole("region", { name: "Waiter ticket" });
+  const waiter = page.getByRole("dialog", { name: "Waiter ticket" });
   await expect(waiter.getByRole("heading", { name: "Round 1" })).toBeVisible();
   await expect(waiter).toContainText("4 items");
   await waiter.getByRole("button", { name: "Back" }).click();

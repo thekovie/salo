@@ -121,3 +121,9 @@ Running record of decisions, issues, tests and deviations, one section per PR. N
 - Corrections attach to the largest source entry of a preparation; cancelling is limited to that entry's quantity.
 - Confirmation asks once (brief 6.8: destructive and irreversible), routine edits still never prompt.
 - Found visually: the stamp covered counts; it now sits in the ticket's header row.
+
+**Independent reviews (before PR)**
+- Security: no critical/high. Fixed: cancellations add up per dish and can never exceed what was ordered; 30 rounds and 100 corrections per order; new database guards (migration 0004): confirmed rounds cannot be reopened, snapshots / confirmed entries / corrections already given to the waiter cannot be deleted or changed. Left as known: an idempotency key reused by the same host for a different target returns the earlier result (self-only).
+- Found by the new guard test: deleting a session with a confirmed round failed because the cascade clears `confirmed_by` on the snapshot and the immutability trigger refused it; retention cleanup would never have removed confirmed orders. Cascaded changes now pass; direct ones are still refused.
+- Code review: no high; mediums fixed: a refused confirmation (e.g. order changed meanwhile) now says why in a toast and does not block the Confirm button; Review and Waiter panels are native modal dialogs (focus moves in and back, background inert, Escape closes, one main landmark); panels close if their round changes on another device. Lows fixed: stamp ends at the same angle animated or not and plays once; corrections-only rounds say "n corrections"; guests can open the full ticket of a confirmed round; correction dialog shows what is left and its real per-correction limit.
+- Tests after fixes: 86 unit/integration, 15 e2e.
