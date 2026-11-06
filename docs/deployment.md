@@ -53,6 +53,20 @@ Coolify routes traffic through Traefik. Salo's event stream works through it wit
 
 Logs are one JSON object per line with secrets redacted (`src/lib/logger.ts`).
 
+## Link previews (Messenger, Viber, WhatsApp…)
+- Every shared link shows a card: the landing page, invites (`/j/<code>`, with the order's name), and room links (`/s/<id>`, which redirect to the invite). Cards never show dishes or people.
+- `robots.txt` blocks only `/api/`, and search engines are kept out with `noindex`. Previews need crawlers to be allowed in, which is why robots.txt is not used for that (fixed in PR #13).
+- **Facebook / Messenger caches robots.txt and each link's card**, for up to about a day. After a robots.txt change, or for a link first seen while it was blocked, the Sharing Debugger (developers.facebook.com/tools/debug) reports *403, "could be due to a robots.txt block"* even though the server returns 200 to everyone. Wait for Facebook to re-read robots.txt, then press **Scrape Again**.
+- How to tell a cache problem from a real block:
+  - Run `curl -A "facebookexternalhit/1.1" -o /dev/null -w "%{http_code}" https://<domain>/j/<code>` and check opengraph.xyz.
+  - If both are fine, it's Facebook's cache.
+  - If the server really blocks, the proxy logs show Facebook's requests failing, or show none at all (then it's the hosting network).
+- Diagnosed on 2026-11-06, with every check passing:
+  - Facebook, Facebot, meta-externalagent, Viber, WhatsApp and Telegram user agents get 200 with tags in `<head>`; the image returns 200 PNG.
+  - Facebook-style requests (HTTP/1.1, byte range) also work.
+  - No IPv6 record; consistent DNS (Cloudflare, DNS-only); valid TLS chain.
+  - opengraph.xyz renders every platform. Only the debugger's cached robots.txt said 403.
+
 ## Local production-like runs
 
 ```bash
