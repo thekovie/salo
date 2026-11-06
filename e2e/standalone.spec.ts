@@ -36,10 +36,13 @@ test("host-only ordering: start, add dishes, consolidate, waiter ticket (scenari
   await expect(page.getByRole("button", { name: "Chicken Katsu", exact: true })).toBeVisible();
   await page.getByRole("textbox", { name: "Dish" }).fill("");
 
-  await page.getByRole("link", { name: "Show waiter" }).click();
-  await expect(page.getByRole("heading", { name: "Round 1" })).toBeVisible();
-  await expect(page.getByRole("main").getByText(/^\s*4 items\s*$/).last()).toBeVisible();
-  await page.getByRole("link", { name: "Back to order" }).click();
+  await page.getByRole("button", { name: "Review order" }).click();
+  await page.getByRole("button", { name: "Show the waiter" }).click();
+  const waiter = page.getByRole("dialog", { name: "Waiter ticket" });
+  await expect(waiter.getByRole("heading", { name: "Round 1" })).toBeVisible();
+  await expect(waiter).toContainText("4 items");
+  await waiter.getByRole("button", { name: "Back" }).click();
+  await page.getByRole("button", { name: "Back to order" }).click();
   await expect(rows).toHaveCount(2);
 });
 
@@ -137,7 +140,8 @@ test("landing and workspace have no automatically detectable accessibility viola
   await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
   const dark = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
   expect(dark.violations).toEqual([]);
-  await page.getByRole("link", { name: "Show waiter" }).click();
+  await page.getByRole("button", { name: "Review order" }).click();
+  await page.getByRole("button", { name: "Show the waiter" }).click();
   const waiter = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
   expect(waiter.violations).toEqual([]);
 });

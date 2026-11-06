@@ -240,3 +240,22 @@
     background-color: color-mix(in oklch, var(--saffron) 45%, transparent);
   }
 }
+
+/* The signature moment: a rubber stamp lands on a confirmed round. */
+@keyframes stamp-in {
+  0% {
+    opacity: 0;
+    rotate: -14deg;
+    scale: 1.8;
+  }
+  60% {
+    opacity: 1;
+    rotate: -7deg;
+    scale: 0.94;
+  }
+  100% {
+    opacity: 0.85;
+    rotate: -8deg;
+    scale: 1;
+  }
+}

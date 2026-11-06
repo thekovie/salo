@@ -42,7 +42,7 @@ export function SampleTicket() {
           <span className="tally text-xl">{total} items</span>
         </div>
       </div>
-      <Stamp className="absolute top-[46%] left-[38%]" />
+      <Stamp className="absolute top-[46%] left-[38%] text-lg" />
       <figcaption className="mt-3 text-center text-sm text-ink-soft">Sample order</figcaption>
     </figure>
   );

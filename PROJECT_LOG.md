@@ -104,3 +104,26 @@ Running record of decisions, issues, tests and deviations, one section per PR. N
 - Security: no critical/high. Fixed: 30 groups per order; group members changed only by the host or the group's creator; approving a claim on a removed dish or a dish now marked for someone else is refused (`ENTRY_REMOVED`, `CLAIM_STALE`).
 - Code review: no high; mediums fixed: People/Groups keep pending edits visible (only unsaved adds are claim-disabled); "That's mine" appears only on dishes the host added; readiness resets for the actor, the dish owner and whoever the dish is for (and on claim approval); new indexes for pending claims and readiness by round (migration 0003). Lows fixed: double-order hint requires the guest's own dish to be for themselves; Groups tab count matches the view; tabs support Home/End and point aria-controls only at the shown panel.
 - Tests after fixes: 79 unit/integration, 13 e2e.
+
+**Merged** 2026-11-06 as PR #5.
+
+## M4 · Review, confirmation and rounds (`feat/m4-rounds`)
+
+**Built**
+- `confirmRound` (host only, `expectedRevision` must equal the session revision, immutable `confirmed_round_snapshots` JSON with dishes, preparations, corrections and total; entries frozen by the existing trigger; pending claims on the round closed), `openRound`, `recordCorrection` / `removeCorrection` (corrections reference a confirmed source entry and ride on the open round), `closeSession` (read-only, expires 7 days after closing).
+- Pure ticket helpers (`src/lib/ticket.ts`): correction wording for the waiter, snapshot builder, live ticket for the open round, plain-text ticket.
+- UI: in-place Review panel (checks + ticket) and Waiter panel (big ticket, copy, wake lock, confirm) so queued changes are never lost by navigating; one confirm dialog; the stamp animation; Rounds tab with carbon-copy colours, corrections dialog, End order dialog; ended-order banner; host "Review order" / guest "Ticket" in the bottom bar.
+
+**Tests**: 85 unit/integration + 15 e2e (scenarios 9, 10, 11, 13 in one two-browser journey with axe on review, waiter and the ended view; stale-revision confirmation refused).
+
+**Decisions / deviations**
+- Review and waiter views moved from a separate page into the workspace (in place). `/s/:id/waiter` stays as a direct, read-only link.
+- Corrections attach to the largest source entry of a preparation; cancelling is limited to that entry's quantity.
+- Confirmation asks once (brief 6.8: destructive and irreversible), routine edits still never prompt.
+- Found visually: the stamp covered counts; it now sits in the ticket's header row.
+
+**Independent reviews (before PR)**
+- Security: no critical/high. Fixed: cancellations add up per dish and can never exceed what was ordered; 30 rounds and 100 corrections per order; new database guards (migration 0004): confirmed rounds cannot be reopened, snapshots / confirmed entries / corrections already given to the waiter cannot be deleted or changed. Left as known: an idempotency key reused by the same host for a different target returns the earlier result (self-only).
+- Found by the new guard test: deleting a session with a confirmed round failed because the cascade clears `confirmed_by` on the snapshot and the immutability trigger refused it; retention cleanup would never have removed confirmed orders. Cascaded changes now pass; direct ones are still refused.
+- Code review: no high; mediums fixed: a refused confirmation (e.g. order changed meanwhile) now says why in a toast and does not block the Confirm button; Review and Waiter panels are native modal dialogs (focus moves in and back, background inert, Escape closes, one main landmark); panels close if their round changes on another device. Lows fixed: stamp ends at the same angle animated or not and plays once; corrections-only rounds say "n corrections"; guests can open the full ticket of a confirmed round; correction dialog shows what is left and its real per-correction limit.
+- Tests after fixes: 86 unit/integration, 15 e2e.

@@ -9,8 +9,8 @@ Read this first when resuming. Specification: `docs/brief.md`. Decisions per PR:
 | M0 Foundation | 0 | Merged (PR #2) |
 | M1 Standalone ordering | 1 | Merged (PR #3) |
 | M2 Collaboration (QR, SSE) | 2 | Merged (PR #4) |
-| M3 Groups & hybrid | 3 | In review (`feat/m3-groups-hybrid`) |
-| M4 Review, confirm, rounds | 4 | Not started |
+| M3 Groups & hybrid | 3 | Merged (PR #5) |
+| M4 Review, confirm, rounds | 4 | In review (`feat/m4-rounds`) |
 | M5 Hardening | 5 | Not started |
 
 ## Working rules
@@ -32,4 +32,4 @@ Read this first when resuming. Specification: `docs/brief.md`. Decisions per PR:
 
 ## Next steps
 
-M4: review screen (duplicates, sync issues, readiness), waiter view from review, host-only "Confirmed with waiter" with revision check and immutable snapshot, new rounds (carbon-copy colours, CONFIRMED stamp), corrections, End session + read-only view, Rounds tab.
+M5: retention cleanup job (closed +7 d, inactive +30 d) and scenario 14, backups and restore doc, SSE through the real Coolify proxy, full accessibility pass (keyboard, screen reader), performance check with 20 people / 100 entries, remaining docs, final design review.

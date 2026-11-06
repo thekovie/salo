@@ -1,4 +1,5 @@
 import type { AttributionType, SourceEntry } from "./consolidate";
+import type { CorrectionView, TicketSnapshot } from "./ticket";
 
 /** Everything a client needs to draw a session, at one revision. Sent by GET /sync and the initial page render. */
 export interface SessionSnapshot {
@@ -26,6 +27,10 @@ export interface SessionSnapshot {
   readiness: { participantId: string; ready: boolean }[];
   /** Collective groups with optional members (brief 5.9). Groups also exist implicitly through order labels. */
   groups: { id: string; label: string; createdBy: string | null; memberIds: string[] }[];
+  /** Corrections to confirmed rounds, each carried by a later round (brief 5.15). */
+  corrections: CorrectionView[];
+  /** The immutable ticket of each confirmed round, by round id (brief 5.14). */
+  tickets: Record<string, TicketSnapshot>;
 }
 
 export interface SnapshotEntry extends SourceEntry {

@@ -22,7 +22,12 @@ export type Op =
   | { kind: "ready"; ready: boolean }
   | { kind: "claim"; batchId: string; dishName: string }
   | { kind: "resolveClaim"; claimId: string; approve: boolean; dishName: string }
-  | { kind: "groupMembers"; label: string; memberIds: string[] };
+  | { kind: "groupMembers"; label: string; memberIds: string[] }
+  | { kind: "confirm"; roundId: string; roundNumber: number; expectedRevision: number }
+  | { kind: "openRound"; roundNumber: number }
+  | { kind: "correction"; sourceEntryId: string; dishName: string; type: "QUANTITY" | "REPLACE"; quantity?: number; replacement?: string; explanation?: string }
+  | { kind: "removeCorrection"; correctionId: string; dishName: string }
+  | { kind: "close" };
 
 type Status =
   | "queued" // waiting its turn
@@ -78,6 +83,16 @@ function request(sessionId: string, op: Op, latest: SessionSnapshot) {
       return { path: `${base}/claims/${op.claimId}/${op.approve ? "approve" : "reject"}`, method: "POST", body: undefined };
     case "groupMembers":
       return { path: `${base}/groups`, method: "PUT", body: { label: op.label, memberIds: op.memberIds } };
+    case "confirm":
+      return { path: `${base}/rounds/${op.roundId}/confirm`, method: "POST", body: { expectedRevision: op.expectedRevision } };
+    case "openRound":
+      return { path: `${base}/rounds`, method: "POST", body: undefined };
+    case "correction":
+      return { path: `${base}/corrections`, method: "POST", body: { sourceEntryId: op.sourceEntryId, type: op.type, quantity: op.quantity, replacement: op.replacement, explanation: op.explanation } };
+    case "removeCorrection":
+      return { path: `${base}/corrections/${op.correctionId}`, method: "DELETE", body: undefined };
+    case "close":
+      return { path: `${base}/close`, method: "POST", body: undefined };
   }
 }
 
@@ -102,6 +117,16 @@ export function describeOp(op: Op): string {
       return `${op.approve ? "Approve" : "Decline"} the claim for ${op.dishName}`;
     case "groupMembers":
       return `Update ${op.label}`;
+    case "confirm":
+      return `Confirm round ${op.roundNumber}`;
+    case "openRound":
+      return `Start round ${op.roundNumber}`;
+    case "correction":
+      return `Correct ${op.dishName}`;
+    case "removeCorrection":
+      return `Remove the correction for ${op.dishName}`;
+    case "close":
+      return "End the order";
   }
 }
 
@@ -118,7 +143,7 @@ export function useSession(initial: SessionSnapshot) {
   const snapshotRef = useRef(initial);
   const [pending, setPendingState] = useState<Pending[]>([]);
   const queueRef = useRef<Pending[]>([]);
-  const resolvers = useRef(new Map<string, (result: MutationResponse["result"] | null) => void>());
+  const resolvers = useRef(new Map<string, { resolve: (result: MutationResponse["result"] | null) => void; onError?: (message: string) => void }>());
   const pumping = useRef(false);
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const online = useSyncExternalStore(subscribeOnline, () => navigator.onLine, () => true);
@@ -130,8 +155,10 @@ export function useSession(initial: SessionSnapshot) {
 
   const patch = useCallback((key: string, fields: Partial<Pending>) => setQueue((list) => list.map((p) => (p.key === key ? { ...p, ...fields } : p))), [setQueue]);
 
-  const finish = useCallback((key: string, result: MutationResponse["result"] | null) => {
-    resolvers.current.get(key)?.(result);
+  const finish = useCallback((key: string, result: MutationResponse["result"] | null, error?: string) => {
+    const entry = resolvers.current.get(key);
+    if (error) entry?.onError?.(error);
+    entry?.resolve(result);
     resolvers.current.delete(key);
   }, []);
 
@@ -249,8 +276,13 @@ export function useSession(initial: SessionSnapshot) {
           }
           // Refused (conflict, removed, confirmed, invalid…): show the latest state and say what was not saved.
           if (err.status === 409 || err.status === 404) await refresh().catch(() => undefined);
-          patch(item.key, { status: "failed", error: err.message, code: err.code });
-          finish(item.key, null);
+          if (resolvers.current.get(item.key)?.onError) {
+            // The caller reports this failure itself (e.g. confirmation): nothing to list as "not saved".
+            setQueue((list) => list.filter((p) => p.key !== item.key));
+          } else {
+            patch(item.key, { status: "failed", error: err.message, code: err.code });
+          }
+          finish(item.key, null, err.message);
         }
       }
     } finally {
@@ -259,7 +291,7 @@ export function useSession(initial: SessionSnapshot) {
   }, [sessionId, patch, finish, refresh, setQueue]);
 
   const mutate = useCallback(
-    (op: Op): Promise<MutationResponse["result"] | null> => {
+    (op: Op, options: { onError?: (message: string) => void } = {}): Promise<MutationResponse["result"] | null> => {
       // Several taps on one stepper while the first is still queued: keep only the final number.
       if (op.kind === "update") {
         const queued = queueRef.current.find((p) => p.status === "queued" && p.op.kind === "update" && p.op.entry.id === op.entry.id);
@@ -269,7 +301,7 @@ export function useSession(initial: SessionSnapshot) {
         }
       }
       const item: Pending = { key: newKey(), op, status: "queued", createdAt: new Date().toISOString(), attempts: 0 };
-      const promise = new Promise<MutationResponse["result"] | null>((resolve) => resolvers.current.set(item.key, resolve));
+      const promise = new Promise<MutationResponse["result"] | null>((resolve) => resolvers.current.set(item.key, { resolve, onError: options.onError }));
       setQueue((list) => [...list, item]);
       void pump();
       return promise;
