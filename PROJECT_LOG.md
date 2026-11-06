@@ -175,3 +175,14 @@ From the same audit's motion review (only three moments animated before). Added 
 ## Bottom drawers (`feat/drawers`)
 
 Owner asked whether shadcn would improve the UI; answer: not wholesale (the app already has accessible primitives and its own look), but a swipe-to-dismiss bottom drawer helps one-handed use. Added `vaul` (what shadcn's Drawer wraps) as `src/components/ui/drawer.tsx`, styled as a ticket torn off the pad, and moved the invite sheet and the correction sheet onto it. Found: vaul leaves focus on the trigger unless `autoFocus` is set; our Drawer turns it on (keyboard test now checks focus moves inside). Also fixed a test that measured contrast in the same frame as a theme switch. 89 unit + 19 e2e, two consecutive green runs.
+
+## Order options, cancel, link previews (`feat/order-options`)
+
+Owner feedback: no way to call off an order; renaming inline in the header was cramped on phones; the "Ordered for" panel needed an X; link previews did not show for room links or invite codes.
+
+- **Header**: name gets the width; the sync status sits under it (calm "Saved" shrinks to a check, still read out; problems keep their words); host gets an "Order options" button (tapping the name opens it too).
+- **Order options drawer** (host): full-width name field; **Cancel order** (no round confirmed yet) or **End order**, behind an in-drawer confirm step. "End order" moved here from the Rounds tab. A cancelled order is read-only, says "This order was cancelled. Nothing was sent to the waiter", and is deleted after 1 day (`CANCELLED_RETENTION_DAYS`) instead of 7. No migration: cancelled = closed with no confirmed round.
+- **Composer**: the details panel has a Close (X) button.
+- **Link previews, root causes**: (1) `robots.txt` disallowed `/j/` and `/s/`, and preview crawlers that honour robots.txt (Facebook/Messenger, X, Slack…) skipped both the page and its OG image; now only `/api/` is disallowed and `noindex` (meta + X-Robots-Tag) keeps them out of search. (2) Room links `/s/<id>` returned 404 to anyone without the cookie, crawlers included; now a non-member opening an open order's room link is redirected to its invite `/j/<code>` (the room id is a random UUID, stronger than the join code it leads to). Ended/unknown ids still 404. Note: previews also need a public `APP_URL` (og:image is absolute); localhost/LAN links never preview.
+
+Tests: 89 unit/integration, 20 e2e (new: cancel flow; robots + room-link redirect in the preview test; stranger test updated).

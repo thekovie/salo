@@ -148,7 +148,7 @@ export function OrderTicket({ entries, people, roundNumber, copy, actions, readO
       {consolidated.dishes.length === 0 ? (
         <div className="px-5 py-10 text-center">
           <p className="font-display text-xl">Wala pang order.</p>
-          <p className="mt-1 text-ink-soft">Type the first dish below. Same dishes get counted together.</p>
+          <p className="mt-1 text-ink-soft">{readOnly ? "No dishes in this round." : "Type the first dish below. Same dishes get counted together."}</p>
         </div>
       ) : (
         <ul className="divide-y-[1.5px] divide-dashed divide-rule">

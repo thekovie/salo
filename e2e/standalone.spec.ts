@@ -116,11 +116,16 @@ test("a retried submission is applied once (scenario 8)", async ({ page }) => {
   await expect(items(page)).toContainText("3");
 });
 
-test("strangers cannot open someone else's order", async ({ page, browser }) => {
+test("strangers cannot open someone else's order: a forwarded room link only offers to join", async ({ page, browser }) => {
   await startOrder(page);
+  await addDish(page, "Secret Dish");
   const other = await browser.newContext();
   const stranger = await other.newPage();
-  const response = await stranger.goto(page.url());
+  await stranger.goto(page.url());
+  await expect(stranger).toHaveURL(/\/j\/[A-Z0-9]{6}$/);
+  await expect(stranger.getByText("Secret Dish")).toHaveCount(0);
+  // Unknown and ended orders look the same: nothing there.
+  const response = await stranger.goto("/s/00000000-0000-4000-8000-000000000000");
   expect(response?.status()).toBe(404);
   await expect(stranger.getByText("Wala dito.")).toBeVisible();
   await other.close();

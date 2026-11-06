@@ -9,7 +9,7 @@ What is built, screen by screen. Design world and tokens: `PRODUCT.md`, the dire
 - Sample ticket (labelled "Sample order") and a three-step how-it-works.
 
 ## Workspace (`/s/:id`)
-- **Header band** (tomato): home, order name (host taps to rename; optional), "Round n · Taking orders", sync pill: Saving… / Saved / Offline · not saved yet / Changed elsewhere / Not saved. Announced politely to screen readers.
+- **Header band** (tomato): home, order name, "Round n · Open" with the sync pill under it (Saved shows as a check), Invite, and for the host an **Order options** drawer (name, Cancel/End order). Sync pill: Saving… / Saved / Offline · not saved yet / Changed elsewhere / Not saved. Announced politely to screen readers.
 - **Ticket**: consolidated dishes with big counts. A dish with one source entry shows a stepper directly; at 1 the minus becomes Remove. A dish with several entries shows its total and, if needed, its preparations ("Regular ×2", "No sauce ×1"); tapping the total opens the source entries, each with its own stepper and who it is for.
 - **Empty state**: "Wala pang order. Type the first dish below."
 - **Composer** (pinned at the bottom): Details button, Dish field, quantity stepper (starts at 1), Add. Suggestions appear above the field for dishes already in this order (starts-with first, then contains; up to four). Details reveals *Ordered for* (Anyone, Whole table, A person, A group, with name suggestions), *Size or variant* and *Instructions*. A dot on the Details button shows when details are set while hidden. *Ordered for* offers four choices per role: the host gets Anyone, Whole table, A person, A group; guests get Me, Whole table, Someone else, A group. Chips and suggestions are 44 px tall.

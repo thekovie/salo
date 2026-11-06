@@ -23,6 +23,7 @@ import { WaiterPanel } from "./waiter-panel";
 import { ViewTabs, type View } from "./view-tabs";
 import { InviteSheet } from "./invite-sheet";
 import { OrderTicket, type TicketActions } from "./order-ticket";
+import { OrderOptionsSheet } from "./order-options-sheet";
 import { SessionHeader } from "./session-header";
 import { Toasts, useToasts } from "./toasts";
 
@@ -41,6 +42,10 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
   const sessionOpen = snapshot.session.status === "OPEN";
   const isOpen = sessionOpen && round.status === "DRAFT";
   const unsaved = pending.filter((p) => p.status !== "failed").length;
+  // Ended before anything reached the waiter = the table called it off.
+  const anyConfirmed = snapshot.rounds.some((r) => r.status === "CONFIRMED");
+  const ended = sessionOpen ? null : anyConfirmed ? "ended" : "cancelled";
+  const [optionsOpen, setOptionsOpen] = useState(false);
 
   const [view, setView] = useState<View>(sessionOpen ? "order" : "rounds");
   const [justConfirmed, setJustConfirmed] = useState<string | null>(null);
@@ -152,8 +157,11 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
 
   const correct = (request: CorrectionRequest) => void mutate({ kind: "correction", ...request });
 
-  async function closeOrder() {
-    if (await mutate({ kind: "close" })) setView("rounds");
+  async function closeOrder(): Promise<boolean> {
+    const accepted = Boolean(await mutate({ kind: "close" }));
+    // An ended order opens on its tickets; a cancelled one has none, so it stays on the (now read-only) order.
+    if (accepted && anyConfirmed) setView("rounds");
+    return accepted;
   }
 
   return (
@@ -162,16 +170,26 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
         title={snapshot.session.title}
         roundNumber={round.number}
         roundStatus={round.status}
-        ended={!sessionOpen}
+        ended={ended}
         sync={sync}
-        canRename={isHost && snapshot.session.status === "OPEN"}
-        onRename={(title) => void mutate({ kind: "rename", title })}
+        onOptions={isHost && sessionOpen ? () => setOptionsOpen(true) : undefined}
         actions={
-          snapshot.session.status === "OPEN" ? (
+          sessionOpen ? (
             <InviteSheet appUrl={appUrl} joinCode={snapshot.session.joinCode} title={snapshot.session.title} peopleCount={snapshot.participants.length} />
           ) : null
         }
       />
+      {isHost && sessionOpen ? (
+        <OrderOptionsSheet
+          open={optionsOpen}
+          onOpenChange={setOptionsOpen}
+          title={snapshot.session.title}
+          anyConfirmed={anyConfirmed}
+          unsentRound={round.status === "DRAFT" && roundEntries.length > 0 ? round.number : null}
+          onRename={(title) => void mutate({ kind: "rename", title })}
+          onEnd={closeOrder}
+        />
+      ) : null}
 
       <main className="mx-auto max-w-2xl px-3 pt-5">
         {failed.length > 0 ? (
@@ -198,8 +216,8 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
           <div role="status" className="mb-4 flex items-start gap-2.5 px-1 text-ink-soft">
             <Lock className="mt-0.5 size-5 shrink-0" aria-hidden />
             <p>
-              This order has ended. Nothing can be changed. Everything is deleted on{" "}
-              {new Intl.DateTimeFormat("en-PH", { weekday: "long", month: "long", day: "numeric" }).format(new Date(snapshot.session.expiresAt))}.
+              {ended === "cancelled" ? "This order was cancelled. Nothing was sent to the waiter." : "This order has ended. Nothing can be changed."} Everything is
+              deleted on {new Intl.DateTimeFormat("en-PH", { weekday: "long", month: "long", day: "numeric" }).format(new Date(snapshot.session.expiresAt))}.
             </p>
           </div>
         ) : null}
@@ -248,7 +266,6 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
               onOpenRound={() => void openRound()}
               onCorrect={correct}
               onRemoveCorrection={(correctionId, dishName) => void mutate({ kind: "removeCorrection", correctionId, dishName })}
-              onClose={() => void closeOrder()}
             />
           ) : view === "people" ? (
             <PeopleView

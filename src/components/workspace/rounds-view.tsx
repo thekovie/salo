@@ -9,7 +9,6 @@ import { consolidate, preparationLabel } from "@/lib/consolidate";
 import type { SessionSnapshot, SnapshotEntry } from "@/lib/snapshot";
 import { liveTicket } from "@/lib/ticket";
 import { cn } from "@/lib/utils";
-import { ConfirmDialog } from "./confirm-dialog";
 import { Stepper } from "./stepper";
 
 export interface CorrectionRequest {
@@ -28,7 +27,6 @@ interface RoundsViewProps {
   onOpenRound: () => void;
   onCorrect: (request: CorrectionRequest) => void;
   onRemoveCorrection: (id: string, dishName: string) => void;
-  onClose: () => void;
 }
 
 /** One option per preparation of a confirmed round; corrections attach to its largest source entry. */
@@ -157,8 +155,8 @@ function CorrectionDialog({ roundNumber, entries, corrections, onCorrect }: { ro
   );
 }
 
-/** Round history (brief 5.3, 5.15): each confirmed round on its own carbon copy, stamped; corrections; end session. */
-export function RoundsView({ snapshot, entries, justConfirmedRoundId, onOpenRound, onCorrect, onRemoveCorrection, onClose }: RoundsViewProps) {
+/** Round history (brief 5.3, 5.15): each confirmed round on its own carbon copy, stamped; corrections. Ending the order lives in the header's order options. */
+export function RoundsView({ snapshot, entries, justConfirmedRoundId, onOpenRound, onCorrect, onRemoveCorrection }: RoundsViewProps) {
   const isHost = snapshot.me.role === "HOST";
   const isOpen = snapshot.session.status === "OPEN";
   const draft = snapshot.rounds.find((r) => r.status === "DRAFT");
@@ -206,28 +204,6 @@ export function RoundsView({ snapshot, entries, justConfirmedRoundId, onOpenRoun
         );
       })}
 
-      {isHost && isOpen ? (
-        <div className="border-t-[1.5px] border-dashed border-rule pt-5">
-          <ConfirmDialog
-            danger
-            title="End this order?"
-            body={
-              <>
-                <p>Nobody can add or change anything after this, and the invite stops working.</p>
-                <p>Everyone can still look at the tickets for 7 days. Then the order is deleted.</p>
-                {draft && entries.some((e) => e.roundId === draft.id) ? <p className="font-semibold text-ink">Round {draft.number} was never confirmed with the waiter.</p> : null}
-              </>
-            }
-            confirmLabel="End order"
-            onConfirm={onClose}
-            trigger={(open) => (
-              <Button variant="danger" className="w-full" onClick={open}>
-                End order
-              </Button>
-            )}
-          />
-        </div>
-      ) : null}
     </div>
   );
 }

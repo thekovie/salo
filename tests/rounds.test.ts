@@ -5,7 +5,7 @@ import { confirmedRoundSnapshots, sessions } from "@/server/db/schema";
 import { runMutation } from "@/server/mutations";
 import { setEntryRemoved, updateEntry } from "@/server/orders/entries";
 import { requestClaim } from "@/server/orders/people";
-import { closeSession, confirmRound, openRound, recordCorrection, removeCorrection } from "@/server/orders/rounds";
+import { CANCELLED_RETENTION_DAYS, closeSession, confirmRound, openRound, recordCorrection, removeCorrection } from "@/server/orders/rounds";
 import { getSnapshot } from "@/server/sessions/snapshot";
 import { resetDb, testDb } from "./helpers/db";
 import { add, addGuest, key, newSession } from "./helpers/session";
@@ -119,7 +119,7 @@ describe("database guards", () => {
 });
 
 describe("closing", () => {
-  it("makes the session read-only and schedules deletion 7 days after closing (brief 5.16)", async () => {
+  it("makes the session read-only; a cancelled order (nothing confirmed) is deleted after a day (brief 5.16)", async () => {
     const { host, sessionId } = await newSession(db);
     const guest = await addGuest(db, sessionId, "Rafa");
     await add(db, host, { dishName: "Gyoza", quantity: 1 });
@@ -127,7 +127,7 @@ describe("closing", () => {
     const { result } = await run(host, (tx, s) => closeSession(tx, s, host));
     const [row] = await db.select().from(sessions).where(eq(sessions.id, sessionId));
     expect(row.status).toBe("CLOSED");
-    expect(row.expiresAt.getTime() - row.closedAt!.getTime()).toBe(7 * 86_400_000);
+    expect(row.expiresAt.getTime() - row.closedAt!.getTime()).toBe(CANCELLED_RETENTION_DAYS * 86_400_000);
     expect(result.expiresAt).toBe(row.expiresAt.toISOString());
     expect(await errorOf(add(db, guest, { dishName: "Rice", quantity: 1 }))).toMatchObject({ code: "SESSION_CLOSED" });
     expect(await errorOf(run(host, (tx, s) => closeSession(tx, s, host)))).toMatchObject({ code: "SESSION_CLOSED" });
