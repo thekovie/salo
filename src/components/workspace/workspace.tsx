@@ -134,6 +134,7 @@ export function Workspace({ initial, appUrl }: { initial: SessionSnapshot; appUr
         title={snapshot.session.title}
         roundNumber={round.number}
         roundStatus={round.status}
+        ended={!sessionOpen}
         sync={sync}
         canRename={isHost && snapshot.session.status === "OPEN"}
         onRename={(title) => void mutate({ kind: "rename", title })}
@@ -161,7 +162,7 @@ export function Workspace({ initial, appUrl }: { initial: SessionSnapshot; appUr
           </div>
         ) : null}
         {!sessionOpen ? (
-          <div role="status" className="mb-4 flex items-start gap-2.5 rounded-2xl bg-ink/6 p-4">
+          <div role="status" className="mb-4 flex items-start gap-2.5 px-1 text-ink-soft">
             <Lock className="mt-0.5 size-5 shrink-0" aria-hidden />
             <p>
               This order has ended. Nothing can be changed. Everything is deleted on{" "}
@@ -230,6 +231,7 @@ export function Workspace({ initial, appUrl }: { initial: SessionSnapshot; appUr
         </div>
       </main>
 
+      {sessionOpen ? (
       <div className="fixed inset-x-0 bottom-0 z-30 bg-gradient-to-t from-paper from-70% to-transparent pt-6 pb-[calc(env(safe-area-inset-bottom)+0.5rem)]">
         <div className="mx-auto max-w-2xl space-y-2 px-3">
           {isOpen ? <Composer dishNames={snapshot.dishNames} knownLabels={knownLabels} defaultFor={isHost ? "UNASSIGNED" : "ME"} onAdd={(input) => void add(input)} /> : null}
@@ -239,7 +241,7 @@ export function Workspace({ initial, appUrl }: { initial: SessionSnapshot; appUr
                 <span className="tally text-xl text-ink">{total}</span> {total === 1 ? "item" : "items"}
                 <span className="hidden sm:inline"> this round</span>
               </p>
-              {isHost && ready.total > 0 ? (
+              {isHost && isOpen && ready.total > 0 ? (
                 <p className="text-sm text-ink-soft">
                   {ready.ready} of {ready.total} {ready.total === 1 ? "guest" : "guests"} ready
                 </p>
@@ -260,7 +262,7 @@ export function Workspace({ initial, appUrl }: { initial: SessionSnapshot; appUr
               </button>
             ) : null}
             {isOpen && isHost ? (
-              <Button onClick={() => setMode("review")} disabled={total === 0 && correctionsThisRound === 0}>
+              <Button variant="outline" onClick={() => setMode("review")} disabled={total === 0 && correctionsThisRound === 0}>
                 <ReceiptText className="size-5" aria-hidden />
                 Review order
               </Button>
@@ -273,6 +275,7 @@ export function Workspace({ initial, appUrl }: { initial: SessionSnapshot; appUr
           </div>
         </div>
       </div>
+      ) : null}
 
       {mode === "review" && isOpen ? (
         <ReviewPanel

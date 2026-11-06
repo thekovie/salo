@@ -52,10 +52,7 @@ export default async function JoinPage({ params }: Props) {
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-8 px-4 py-10">
       <div className="ticket px-6">
-        <div className="flex items-center gap-3">
-          <LogoMark className="size-10" />
-          <span className="font-mono text-sm tracking-[0.14em] text-tomato-ink uppercase">Round {invite.roundNumber}</span>
-        </div>
+        <LogoMark className="size-10" />
         <h1 className="mt-5 text-3xl">{inviteTitle(invite.title)}</h1>
         <p className="mt-2 text-ink-soft">Add your dishes to the table&rsquo;s order. Everyone sees the same ticket, and the host gives it to the waiter.</p>
         <JoinNameForm sessionId={invite.sessionId} code={code} />

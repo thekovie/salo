@@ -15,7 +15,7 @@ test("review, waiter view, host-only confirmation, round 2 with a correction, en
   // Guests can look at the ticket but have no way to confirm (scenario 10).
   await guest.page.getByRole("button", { name: "Ticket" }).click();
   await expect(guest.page.getByRole("dialog", { name: "Waiter ticket" })).toContainText("5 items");
-  await expect(guest.page.getByRole("button", { name: "Confirmed with waiter" })).toHaveCount(0);
+  await expect(guest.page.getByRole("button", { name: "Mark confirmed with waiter" })).toHaveCount(0);
   await guest.page.getByRole("button", { name: "Back" }).click();
 
   // Review (scenario 9): checks plus the ticket; showing the waiter does not confirm.
@@ -30,7 +30,7 @@ test("review, waiter view, host-only confirmation, round 2 with a correction, en
   await expect(waiter).toContainText("×3");
   expect((await axe(page)).violations).toEqual([]);
 
-  await waiter.getByRole("button", { name: "Confirmed with waiter" }).click();
+  await waiter.getByRole("button", { name: "Mark confirmed with waiter" }).click();
   await page.getByRole("dialog", { name: /Confirm round 1/ }).getByRole("button", { name: "Yes, the waiter has it" }).click();
   await expect(waiter.getByRole("region", { name: "Round 1, confirmed with the waiter" })).toBeVisible();
   await page.getByRole("button", { name: "Back" }).click();
@@ -55,7 +55,7 @@ test("review, waiter view, host-only confirmation, round 2 with a correction, en
   await expect(review2).toContainText("Extra Rice");
   await expect(review2).toContainText("Cancel 1 × Chicken Katsu from round 1");
   await expect(review2).not.toContainText("Iced Tea");
-  await review2.getByRole("button", { name: "Confirmed with waiter" }).click();
+  await review2.getByRole("button", { name: "Mark confirmed with waiter" }).click();
   await page.getByRole("dialog", { name: /Confirm round 2/ }).getByRole("button", { name: "Yes, the waiter has it" }).click();
   await expect(page.getByRole("dialog", { name: "Waiter ticket" }).getByRole("region", { name: "Round 2, confirmed with the waiter" })).toBeVisible();
   await page.getByRole("button", { name: "Back", exact: true }).click();

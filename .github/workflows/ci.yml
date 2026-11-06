@@ -87,3 +87,18 @@ jobs:
           done
           docker compose --profile app logs app
           exit 1
+  # Live updates through Traefik (the proxy Coolify runs): latency, heartbeats over a 45 s idle, Last-Event-ID replay.
+  proxy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+      - name: Start app, PostgreSQL and Traefik
+        run: |
+          SALO_APP_URL=http://localhost:8080 docker compose --profile proxy up -d --build
+          for i in $(seq 1 40); do curl -fsS http://localhost:8080/api/health && break; sleep 3; done
+      - run: node scripts/sse-proxy-check.mjs http://localhost:8080 45
+      - if: failure()
+        run: docker compose --profile proxy logs

@@ -21,15 +21,30 @@ services:
 
   app:
     build: .
-    profiles: ["app"]
+    profiles: ["app", "proxy"]
     depends_on:
       db:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://salo@db:5432/salo
-      APP_URL: http://localhost:3000
+      # The address people use. Behind the local Traefik (profile "proxy") run with SALO_APP_URL=http://localhost:8080.
+      APP_URL: ${SALO_APP_URL:-http://localhost:3000}
     ports:
       - "127.0.0.1:3000:3000"
+
+  # Traefik, the proxy Coolify uses, in front of the app: checks that live updates stream through it unbuffered.
+  proxy:
+    image: traefik:v3.3
+    profiles: ["proxy"]
+    depends_on: [app]
+    command:
+      - --entrypoints.web.address=:80
+      - --providers.file.filename=/etc/traefik/dynamic.yml
+      - --log.level=WARN
+    volumes:
+      - ./ops/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+    ports:
+      - "127.0.0.1:8080:80"
 
 volumes:
   db-data:

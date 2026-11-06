@@ -100,7 +100,7 @@ export function PeopleView({ snapshot, entries, canClaim, onClaim, onRemoveDupli
         const guestReady = bucket.participantId ? ready.readyIds.has(bucket.participantId) : false;
         const claimable = canClaim && (bucket.kind === "name" || bucket.kind === "unassigned") && bucket.entries.some((e) => hostIds.has(e.submittedBy));
         return (
-          <section key={bucket.key} className="rounded-2xl bg-ticket p-4 shadow-ticket ring-[1.5px] ring-rule">
+          <section key={bucket.key} className="ticket px-5">
             <div className="mb-2 flex items-center justify-between gap-3">
               <h3 className="text-lg">
                 {bucket.title}

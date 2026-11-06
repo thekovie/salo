@@ -1,0 +1,12 @@
+# Local stand-in for Coolify's Traefik: one router to the app, nothing else (used by scripts/sse-proxy-check.mjs).
+http:
+  routers:
+    salo:
+      rule: "PathPrefix(`/`)"
+      entryPoints: [web]
+      service: salo
+  services:
+    salo:
+      loadBalancer:
+        servers:
+          - url: "http://app:3000"

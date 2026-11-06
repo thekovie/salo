@@ -49,7 +49,7 @@ export function WaiterPanel({ ticket, confirmed, justConfirmed, canConfirm, onBa
               onConfirm={onConfirm}
               trigger={(open) => (
                 <Button size="lg" className="w-full" onClick={open}>
-                  <CircleCheck className="size-5" aria-hidden /> Confirmed with waiter
+                  <CircleCheck className="size-5" aria-hidden /> Mark confirmed with waiter
                 </Button>
               )}
             />

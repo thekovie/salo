@@ -32,7 +32,11 @@
   --ok-wash: oklch(0.94 0.05 150);
   --bad: oklch(0.48 0.17 25);
   --bad-wash: oklch(0.945 0.035 25);
-  --ring: oklch(0.5 0.15 262);
+  /* Focus: ballpoint ink, the pad's own pen colour. */
+  --ring: oklch(0.38 0.09 266);
+  /* Header band: the order pad's red cover. */
+  --band: var(--tomato);
+  --on-band: var(--on-tomato);
   --stamp-blend: multiply;
   /* Toasts: an inverted chip in either theme; the action colour is chosen for that inverted surface. */
   --toast-bg: var(--ink);
@@ -65,7 +69,10 @@
   --ok-wash: oklch(0.3 0.06 150);
   --bad: oklch(0.8 0.12 25);
   --bad-wash: oklch(0.31 0.07 25);
-  --ring: oklch(0.78 0.11 262);
+  --ring: oklch(0.86 0.06 82);
+  /* Under a dim bar light the cover is a deep, quiet red, not a glowing coral. */
+  --band: oklch(0.36 0.105 29);
+  --on-band: oklch(0.95 0.02 70);
   --stamp-blend: screen;
   --toast-bg: var(--ink);
   --toast-fg: var(--paper);
@@ -96,7 +103,10 @@
     --ok-wash: oklch(0.3 0.06 150);
     --bad: oklch(0.8 0.12 25);
     --bad-wash: oklch(0.31 0.07 25);
-    --ring: oklch(0.78 0.11 262);
+    --ring: oklch(0.86 0.06 82);
+  /* Under a dim bar light the cover is a deep, quiet red, not a glowing coral. */
+  --band: oklch(0.36 0.105 29);
+  --on-band: oklch(0.95 0.02 70);
     --stamp-blend: screen;
   --toast-bg: var(--ink);
   --toast-fg: var(--paper);
@@ -127,6 +137,8 @@
   --color-bad: var(--bad);
   --color-bad-wash: var(--bad-wash);
   --color-ring: var(--ring);
+  --color-band: var(--band);
+  --color-on-band: var(--on-band);
   --radius-lg: var(--radius);
   --shadow-ticket: var(--shadow);
   --color-toast: var(--toast-bg);

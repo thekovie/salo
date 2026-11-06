@@ -11,6 +11,7 @@ interface SessionHeaderProps {
   title: string | null;
   roundNumber: number;
   roundStatus: "DRAFT" | "CONFIRMED";
+  ended?: boolean;
   sync: SyncState;
   canRename: boolean;
   onRename: (title: string | null) => void;
@@ -18,7 +19,7 @@ interface SessionHeaderProps {
 }
 
 /** The tomato band: what table this is, which round, and whether everything is saved. */
-export function SessionHeader({ title, roundNumber, roundStatus, sync, canRename, onRename, actions }: SessionHeaderProps) {
+export function SessionHeader({ title, roundNumber, roundStatus, ended = false, sync, canRename, onRename, actions }: SessionHeaderProps) {
   const id = useId();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(title ?? "");
@@ -30,9 +31,9 @@ export function SessionHeader({ title, roundNumber, roundStatus, sync, canRename
   }
 
   return (
-    <header className="sticky top-0 z-30 bg-tomato text-on-tomato pt-[env(safe-area-inset-top)] shadow-[0_6px_16px_-10px_oklch(0.3_0.1_30/0.6)]">
+    <header className="sticky top-0 z-30 bg-band text-on-band pt-[env(safe-area-inset-top)] shadow-[0_6px_16px_-10px_oklch(0.3_0.1_30/0.6)]">
       <div className="mx-auto flex max-w-2xl items-center gap-2 px-3 py-2">
-        <Link href="/" aria-label="Salo home" className="inline-flex size-11 shrink-0 items-center justify-center rounded-full hover:bg-on-tomato/10">
+        <Link href="/" aria-label="Salo home" className="inline-flex size-11 shrink-0 items-center justify-center rounded-full hover:bg-on-band/10">
           <LogoMark inverse className="size-8" />
         </Link>
         <div className="min-w-0 flex-1">
@@ -55,7 +56,7 @@ export function SessionHeader({ title, roundNumber, roundStatus, sync, canRename
                 onBlur={save}
                 onKeyDown={(e) => e.key === "Escape" && (setDraft(title ?? ""), setEditing(false))}
                 placeholder="Restaurant or occasion"
-                className="w-full rounded-lg bg-on-tomato/15 px-2 py-1 font-display text-lg text-on-tomato placeholder:text-on-tomato/70 focus-visible:outline-on-tomato"
+                className="w-full rounded-lg bg-on-band/15 px-2 py-1 font-display text-lg text-on-band placeholder:text-on-band/70 focus-visible:outline-on-band"
               />
             </form>
           ) : canRename ? (
@@ -69,11 +70,11 @@ export function SessionHeader({ title, roundNumber, roundStatus, sync, canRename
           )}
           <div className="mt-0.5 flex items-center gap-2 truncate px-1">
             <span className="font-mono text-xs tracking-[0.12em] uppercase opacity-90">
-              Round {roundNumber} · {roundStatus === "DRAFT" ? "Open" : "Confirmed"}
+              {ended ? "Order ended" : `Round ${roundNumber} · ${roundStatus === "DRAFT" ? "Open" : "Confirmed"}`}
             </span>
           </div>
         </div>
-        <SyncPill state={sync} />
+        {ended ? null : <SyncPill state={sync} />}
         {actions}
       </div>
     </header>

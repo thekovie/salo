@@ -16,7 +16,7 @@ export async function addDish(page: Page, name: string, quantity = 1) {
 
 /** Opens Details and picks who the next dishes are for. */
 export async function orderFor(page: Page, kind: "Me" | "Anyone" | "Whole table" | "A person" | "A group", name?: string) {
-  const details = page.getByRole("button", { name: /Details/ });
+  const details = page.getByRole("button", { name: /details/i });
   if ((await details.getAttribute("aria-expanded")) !== "true") await details.click();
   await page.getByRole("radio", { name: kind }).click();
   if (name) await page.getByLabel(kind === "A group" ? "Group name" : "Person's name").fill(name);

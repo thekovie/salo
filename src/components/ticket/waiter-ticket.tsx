@@ -11,13 +11,15 @@ interface WaiterTicketProps {
   justConfirmed?: boolean;
   size?: "waiter" | "compact";
   className?: string;
+  /** Host, open round: each correction line gets a Remove control (ids in the same order as ticket.corrections). */
+  removableCorrections?: { id: string; onRemove: () => void }[];
 }
 
 /**
  * The ticket the waiter sees (brief 5.13): big counts, preparations indented, corrections apart from new dishes,
  * the total. Each round prints on its own carbon-copy colour; a confirmed round carries the rubber stamp.
  */
-export function WaiterTicket({ ticket, confirmed, justConfirmed, size = "waiter", className }: WaiterTicketProps) {
+export function WaiterTicket({ ticket, confirmed, justConfirmed, size = "waiter", className, removableCorrections }: WaiterTicketProps) {
   const big = size === "waiter";
   return (
     <section aria-label={`Round ${ticket.roundNumber}${confirmed ? ", confirmed with the waiter" : ""}`} className={cn("ticket px-6", big && "sm:px-10", copyClass(ticket.roundNumber), className)}>
@@ -58,9 +60,19 @@ export function WaiterTicket({ ticket, confirmed, justConfirmed, size = "waiter"
         <div className={cn("tear mt-2 pt-3", big ? "pb-1" : "")}>
           <h3 className={cn("font-mono tracking-[0.14em] text-tomato-ink uppercase", big ? "text-base" : "text-xs")}>Corrections</h3>
           <ul className={cn("mt-1 space-y-1", big ? "text-[clamp(1.15rem,4vw,1.6rem)]" : "text-sm")}>
-            {ticket.corrections.map((c) => (
-              <li key={c}>{c}</li>
-            ))}
+            {ticket.corrections.map((c, i) => {
+              const removable = removableCorrections?.[i];
+              return (
+                <li key={removable?.id ?? c} className={removable ? "flex items-center justify-between gap-2" : undefined}>
+                  <span>{c}</span>
+                  {removable ? (
+                    <button type="button" onClick={removable.onRemove} className="inline-flex min-h-11 shrink-0 cursor-pointer items-center rounded-full px-3 text-sm font-semibold text-ink-soft hover:bg-ink/6 hover:text-ink">
+                      Remove<span className="sr-only">: {c}</span>
+                    </button>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         </div>
       ) : null}

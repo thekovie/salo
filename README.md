@@ -36,7 +36,9 @@ pnpm dev          # http://localhost:3000 (migrations run at startup)
 | `pnpm e2e` | Playwright end-to-end tests (builds and starts the app on port 3100) |
 | `pnpm db:generate` | Generate a migration after editing `src/server/db/schema.ts` |
 | `docker compose --profile app up --build` | Run the production image with its own PostgreSQL |
+| `node scripts/sse-proxy-check.mjs <url>` | Check live updates through a reverse proxy |
+| `scripts/backup-restore-drill.sh` | Back up, restore into a scratch database, compare |
 
 ## Documentation
 
-`docs/` describes implemented behaviour only: [architecture](docs/architecture.md), [data model](docs/data-model.md), [API](docs/api.md), [UX specification](docs/ux-specification.md), [real time](docs/realtime.md), [security](docs/security.md), [testing](docs/testing.md), [deployment](docs/deployment.md). Design system: [DESIGN.md](DESIGN.md). More documents are added as each phase ships (see HANDOFF.md).
+`docs/` describes implemented behaviour only: [architecture](docs/architecture.md), [data model](docs/data-model.md), [API](docs/api.md), [UX specification](docs/ux-specification.md), [real time](docs/realtime.md), [security](docs/security.md), [testing](docs/testing.md), [deployment](docs/deployment.md), [backups](docs/backups.md). Design system: [DESIGN.md](DESIGN.md). More documents are added as each phase ships (see HANDOFF.md).

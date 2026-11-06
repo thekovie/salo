@@ -58,7 +58,7 @@ export function ReviewPanel({ snapshot, entries, ticket, unsaved, notSaved, onBa
         </div>
       </div>
       <div className="mx-auto max-w-2xl space-y-4 px-3 pt-2">
-        <ul className="space-y-3 rounded-2xl bg-ticket p-4 shadow-ticket ring-[1.5px] ring-rule" aria-label="Checks">
+        <ul className="ticket space-y-3 px-5" aria-label="Checks">
           <Check ok={unsaved === 0 && notSaved === 0 ? true : unsaved > 0 ? "wait" : false}>
             {notSaved > 0 ? `${notSaved} ${notSaved === 1 ? "change was" : "changes were"} not saved. Go back to see which.` : unsaved > 0 ? `${unsaved} ${unsaved === 1 ? "change is" : "changes are"} still saving…` : "Everything is saved."}
           </Check>
@@ -114,7 +114,7 @@ export function ReviewPanel({ snapshot, entries, ticket, unsaved, notSaved, onBa
               onConfirm={onConfirm}
               trigger={(open) => (
                 <Button size="lg" onClick={open} disabled={blocked}>
-                  <CircleCheck className="size-5" aria-hidden /> Confirmed with waiter
+                  <CircleCheck className="size-5" aria-hidden /> Mark confirmed with waiter
                 </Button>
               )}
             />

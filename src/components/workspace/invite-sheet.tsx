@@ -66,7 +66,7 @@ export function InviteSheet({ appUrl, joinCode, title, peopleCount }: InviteShee
           setOpened(true);
           dialog.current?.showModal();
         }}
-        className="inline-flex min-h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-on-tomato px-3.5 text-sm font-semibold text-tomato-ink shadow-sm hover:brightness-95"
+        className="inline-flex min-h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-on-band px-3.5 text-sm font-semibold text-band shadow-sm hover:brightness-95"
       >
         <UserPlus className="size-4" aria-hidden />
         Invite

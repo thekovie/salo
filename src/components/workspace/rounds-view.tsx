@@ -1,12 +1,12 @@
 "use client";
 
-import { Plus, Undo2, Wrench } from "lucide-react";
+import { Plus, Wrench } from "lucide-react";
 import { useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { WaiterTicket } from "@/components/ticket/waiter-ticket";
 import { consolidate, preparationLabel } from "@/lib/consolidate";
 import type { SessionSnapshot, SnapshotEntry } from "@/lib/snapshot";
-import { correctionText, liveTicket } from "@/lib/ticket";
+import { liveTicket } from "@/lib/ticket";
 import { cn } from "@/lib/utils";
 import { ConfirmDialog } from "./confirm-dialog";
 import { Stepper } from "./stepper";
@@ -181,19 +181,12 @@ export function RoundsView({ snapshot, entries, justConfirmedRoundId, onOpenRoun
           const corrections = snapshot.corrections.filter((c) => c.targetRoundId === round.id);
           return (
             <div key={round.id} className="space-y-2">
-              <WaiterTicket ticket={ticket} size="compact" />
-              {corrections.length && isHost && isOpen ? (
-                <ul className="space-y-1 px-1" aria-label={`Corrections going out with round ${round.number}`}>
-                  {corrections.map((c) => (
-                    <li key={c.id} className="flex items-center justify-between gap-2 text-sm">
-                      <span className="text-ink-soft">{correctionText(c)}</span>
-                      <button type="button" onClick={() => onRemoveCorrection(c.id, c.dishName)} className="inline-flex min-h-11 shrink-0 cursor-pointer items-center gap-1 rounded-full px-3 font-semibold hover:bg-ink/6">
-                        <Undo2 className="size-4" aria-hidden /> Remove
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
+              <WaiterTicket
+                ticket={ticket}
+                size="compact"
+                removableCorrections={isHost && isOpen ? corrections.map((c) => ({ id: c.id, onRemove: () => onRemoveCorrection(c.id, c.dishName) })) : undefined}
+              />
+              {!isOpen ? <p className="px-1 text-sm text-ink-soft">Never confirmed with the waiter.</p> : null}
             </div>
           );
         }
