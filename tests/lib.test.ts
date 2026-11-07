@@ -92,3 +92,14 @@ describe("createTieredLimiter", () => {
     expect(limiter.hit("203.0.113.2").allowed).toBe(true);
   });
 });
+
+describe("isMetaCrawler", () => {
+  it("spots Meta's preview crawlers only", async () => {
+    const { isMetaCrawler } = await import("@/lib/crawlers");
+    expect(isMetaCrawler("facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)")).toBe(true);
+    expect(isMetaCrawler("meta-externalagent/1.1")).toBe(true);
+    expect(isMetaCrawler("Facebot")).toBe(true);
+    expect(isMetaCrawler("Mozilla/5.0 Googlebot/2.1")).toBe(false);
+    expect(isMetaCrawler(null)).toBe(false);
+  });
+});
