@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { META_CRAWLER_PATTERN } from "./src/lib/crawlers";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
@@ -33,6 +34,8 @@ const nextConfig: NextConfig = {
       {
         // Sessions and invites are private: never in search results, even if a link leaks.
         source: "/:prefix(s|j|api)/:path*",
+        // Except for Meta's preview crawlers, which treat noindex as a robots block (see src/lib/crawlers.ts).
+        missing: [{ type: "header", key: "user-agent", value: `.*(${META_CRAWLER_PATTERN}).*` }],
         headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
       },
     ];

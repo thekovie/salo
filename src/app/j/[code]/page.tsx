@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { LogoMark } from "@/components/brand/logo";
 import { JoinNameForm } from "@/components/join/join-name-form";
 import { PolicyLinks } from "@/components/policy/policy-links";
+import { isMetaCrawler } from "@/lib/crawlers";
 import { INVITE_DESCRIPTION, inviteTitle } from "@/lib/invite";
 import { resolveActor } from "@/server/auth/actor";
 import { credentialCookieName } from "@/server/auth/credentials";
@@ -27,7 +28,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: { absolute: `${title} · Salo` },
     description,
-    robots: { index: false, follow: false },
+    // Out of search engines, but not for Meta's preview crawlers, which read noindex as "blocked" and show no card.
+    robots: isMetaCrawler((await headers()).get("user-agent")) ? undefined : { index: false, follow: false },
     // og:url names the invite itself, so a preview cached for this link is the card for this order.
     openGraph: { title, description, type: "website", siteName: "Salo", url: `/j/${encodeURIComponent(code)}` },
     twitter: { card: "summary_large_image", title, description },

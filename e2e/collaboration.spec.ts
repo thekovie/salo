@@ -80,6 +80,15 @@ test("invite link preview names the order but never its dishes or people", async
   expect(image.status()).toBe(200);
   expect(image.headers()["content-type"]).toBe("image/png");
 
+  // Meta's crawler reads noindex as a robots block (Sharing Debugger 403), so it gets the invite without it;
+  // everyone else, search engines included, still gets noindex.
+  const meta = await request.get(`/j/${code}`, { headers: { "User-Agent": "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)" } });
+  expect(meta.headers()["x-robots-tag"]).toBeUndefined();
+  expect(await meta.text()).not.toContain('name="robots"');
+  const google = await request.get(`/j/${code}`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1)" } });
+  expect(google.headers()["x-robots-tag"]).toBe("noindex, nofollow");
+  expect(await google.text()).toContain('name="robots" content="noindex, nofollow"');
+
   // Preview crawlers that honour robots.txt must be allowed to fetch invites; noindex keeps them out of search.
   const robots = await (await request.get("/robots.txt")).text();
   expect(robots).not.toMatch(/Disallow: \/(j|s)\//);

@@ -349,3 +349,9 @@ Tests:
 - The UX review pass is clean (121 checks).
 - Totals: 122 unit/integration, 34 e2e.
 
+## Messenger preview, root cause (`fix/messenger-noindex`)
+
+Submitting robots.txt to the Sharing Debugger didn't help. The owner then scraped `/privacy` (no noindex), which got 200, while a fresh invite still got 403. Meta's debugger was reading the invite's `noindex, nofollow` (header and meta tag) as a robots block.
+- Fix: invite and order pages skip noindex for Meta's crawlers only (`src/lib/crawlers.ts`, plus a `missing` user-agent condition on the `X-Robots-Tag` rule in `next.config.ts`). Search engines and everyone else still get noindex.
+- Tests: `isMetaCrawler` unit test; e2e checks that the Facebook user agent gets no robots header or tag while Googlebot gets `noindex, nofollow`.
+
