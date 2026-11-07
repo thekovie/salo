@@ -18,7 +18,7 @@ export async function PATCH(request: Request, { params }: Params) {
   return handle(async () => {
     const { actor, entryId, key } = await context(request, params);
     const input = await readJson(request, updateEntrySchema);
-    return ok(await runMutation(getDb(), actor, { idempotencyKey: key, type: "entry.update" }, (tx, s) => updateEntry(tx, s, actor, entryId, input)));
+    return ok(await runMutation(getDb(), actor, { idempotencyKey: key, type: `entry.update:${entryId}` }, (tx, s) => updateEntry(tx, s, actor, entryId, input)));
   });
 }
 
@@ -26,6 +26,6 @@ export async function PATCH(request: Request, { params }: Params) {
 export async function DELETE(request: Request, { params }: Params) {
   return handle(async () => {
     const { actor, entryId, key } = await context(request, params);
-    return ok(await runMutation(getDb(), actor, { idempotencyKey: key, type: "entry.remove" }, (tx, s) => setEntryRemoved(tx, s, actor, entryId, true)));
+    return ok(await runMutation(getDb(), actor, { idempotencyKey: key, type: `entry.remove:${entryId}` }, (tx, s) => setEntryRemoved(tx, s, actor, entryId, true)));
   });
 }

@@ -12,7 +12,11 @@ export const dynamic = "force-dynamic";
 export default function robots(): MetadataRoute.Robots {
   const base = getEnv().APP_URL;
   return {
-    rules: [{ userAgent: "*", allow: "/", disallow: "/api/" }],
+    rules: [
+      // Named explicitly, as Meta's Sharing Debugger asks: Messenger previews come from these crawlers.
+      { userAgent: ["facebookexternalhit", "Facebot", "meta-externalagent"], allow: "/", disallow: "/api/" },
+      { userAgent: "*", allow: "/", disallow: "/api/" },
+    ],
     sitemap: new URL("/sitemap.xml", base).toString(),
   };
 }

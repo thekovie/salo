@@ -305,3 +305,26 @@ Tests:
 - Integration: stale vs current round on add.
 - e2e (`offline.spec.ts`): the pill and its waiting count, reload keeps an unsent dish and sends it once, an offline add across a round boundary offers "Add to round 2".
 - Totals: 112 unit/integration, 32 e2e.
+
+## PRD review fixes, part B: server hardening (`fix/server-hardening`)
+
+- **Shared Wi-Fi (reproduced).** The per-address live-stream cap goes from 12 to 64, so a whole restaurant fits behind one public address. A phone turned away, or with its stream down, polls `/sync` every 10 s.
+- **Idempotency (reproduced).**
+  - Mutation types now include their target (`entry.update:<id>`, `entry.remove:<id>`, `entry.restore:<id>`, `claim.approve/reject:<id>`, `round.confirm:<id>`, `correction.remove:<id>`), so one key can't replay onto a different target (422).
+  - Starting and joining accept an `Idempotency-Key` and remember the outcome for 10 minutes (in process memory, single instance). A retry after a lost response gets the same order or guest, and the same cookie.
+- **Body limit (reproduced).** `readCapped` streams the body and stops at 8 KB, with or without a Content-Length.
+- **Expired orders (reproduced).** An order past `expires_at` is gone before the hourly cleanup: no credential resolves, the invite is unknown, joining is refused, and changes get 404, so it can't be revived.
+- **Database integrity (partly reproduced), migration `0006_integrity_v2`.**
+  - Entries can't move out of a confirmed round.
+  - An entry must sit in its batch's round, in the same session.
+  - Batches of a confirmed round keep their attribution and submitter frozen, and their round must be in their session.
+  - Claims and group members stay inside one session.
+  - Whole-order deletion still cascades.
+- **Restore drill (reproduced).** It now covers all 15 tables, plus five self-contained rule probes that must be refused. A vacuous pass is no longer possible.
+- **robots.txt** names `facebookexternalhit`, `Facebot` and `meta-externalagent` explicitly, as Meta's debugger asks.
+
+Tests:
+- New: chunked 9 KB body gets 413; key reuse on another target gets 422; the replay store remembers then expires; an expired order can't be read, joined or changed and isn't revived; 25 streams from one address; the 0006 rules (move, attribution, same session, cascade).
+- Drill passes locally.
+- Totals: 121 unit/integration, 32 e2e.
+

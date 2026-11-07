@@ -43,6 +43,13 @@
       "when": 1793965623753,
       "tag": "0005_participant_removal",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794016238925,
+      "tag": "0006_integrity_v2",
+      "breakpoints": true
     }
   ]
 }

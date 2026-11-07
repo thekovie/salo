@@ -32,11 +32,32 @@ export async function handle(run: () => Promise<Response>): Promise<Response> {
   }
 }
 
+/**
+ * The body as text, read in pieces and abandoned as soon as it passes `limit` bytes, so a request without a
+ * Content-Length (chunked) can't make the server hold more than the limit in memory.
+ */
+export async function readCapped(request: Request, limit: number): Promise<string> {
+  if (!request.body) return "";
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > limit) {
+      await reader.cancel().catch(() => undefined);
+      throw new AppError(413, "TOO_LARGE", "That request is too large.");
+    }
+    chunks.push(value);
+  }
+  return new TextDecoder().decode(Buffer.concat(chunks));
+}
+
 export async function readJson<S extends z.ZodType>(request: Request, schema: S): Promise<z.infer<S>> {
   const declared = Number(request.headers.get("content-length") ?? 0);
   if (declared > MAX_BODY_BYTES) throw new AppError(413, "TOO_LARGE", "That request is too large.");
-  const text = await request.text();
-  if (Buffer.byteLength(text, "utf8") > MAX_BODY_BYTES) throw new AppError(413, "TOO_LARGE", "That request is too large.");
+  const text = await readCapped(request, MAX_BODY_BYTES);
   let body: unknown;
   try {
     body = text === "" ? {} : JSON.parse(text);

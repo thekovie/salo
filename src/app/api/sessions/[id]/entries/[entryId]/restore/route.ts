@@ -12,6 +12,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!isUuid(entryId)) throw new AppError(404, "ENTRY_NOT_FOUND", "That dish isn’t in this order any more.");
     const actor = await requireActor(id);
     const key = idempotencyKey(request);
-    return ok(await runMutation(getDb(), actor, { idempotencyKey: key, type: "entry.restore" }, (tx, s) => setEntryRemoved(tx, s, actor, entryId, false)));
+    return ok(await runMutation(getDb(), actor, { idempotencyKey: key, type: `entry.restore:${entryId}` }, (tx, s) => setEntryRemoved(tx, s, actor, entryId, false)));
   });
 }

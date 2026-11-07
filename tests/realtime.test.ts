@@ -153,3 +153,13 @@ describe("event stream", () => {
     abort.abort();
   });
 });
+
+describe("shared restaurant Wi-Fi (finding 4)", () => {
+  it("lets a whole table on one address hold live connections", async () => {
+    const { hub, MAX_STREAMS_PER_ADDRESS } = await import("@/server/realtime/hub");
+    expect(MAX_STREAMS_PER_ADDRESS).toBeGreaterThanOrEqual(30);
+    const subs = await Promise.all(Array.from({ length: 25 }, (_, i) => hub().subscribe("00000000-0000-4000-8000-000000000001", `p-${i}`, "203.0.113.9", () => {})));
+    expect(subs.every((s) => s !== null)).toBe(true);
+    for (const unsubscribe of subs) unsubscribe?.();
+  });
+});

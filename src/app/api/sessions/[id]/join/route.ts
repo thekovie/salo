@@ -5,6 +5,7 @@ import { resolveActor } from "@/server/auth/actor";
 import { clientIp } from "@/server/auth/client-ip";
 import { credentialCookieName, credentialCookieOptions } from "@/server/auth/credentials";
 import { createTieredLimiter } from "@/server/auth/rate-limit";
+import { createReplayStore, optionalIdempotencyKey } from "@/server/auth/replay";
 import { getDb } from "@/server/db/client";
 import { AppError } from "@/server/errors";
 import { handle, ok, readJson } from "@/server/http";
@@ -15,6 +16,8 @@ import { singleton } from "@/server/singleton";
 const HOUR_MS = 60 * 60 * 1000;
 /** Also slows down guessing join codes (brief 11.3). */
 const limiter = singleton("join-limiter", () => createTieredLimiter({ limit: 30, windowMs: HOUR_MS }, { limit: 600, windowMs: HOUR_MS }));
+
+const joins = createReplayStore<{ sessionId: string; token: string }>("join");
 
 const bodySchema = z.object({
   code: z.string().trim().min(1).max(12),
@@ -36,7 +39,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const store = await cookies();
     // Already in this order on this browser (a second tab, a double tap): keep that identity, host or guest.
     if (await resolveActor(getDb(), id, store.get(credentialCookieName(id))?.value)) return ok({ id }, 200);
+    // A retry after a lost response (the cookie never arrived): the same guest, not a duplicate.
+    const key = optionalIdempotencyKey(request);
+    const replayKey = key ? `${id}:${key}` : undefined;
+    const previous = replayKey ? joins.get(replayKey) : undefined;
+    if (previous) {
+      store.set(credentialCookieName(previous.sessionId), previous.token, credentialCookieOptions(getEnv().APP_URL));
+      return ok({ id: previous.sessionId }, 200);
+    }
     const joined = await joinSession(getDb(), code, displayName, id);
+    if (replayKey) joins.set(replayKey, { sessionId: joined.sessionId, token: joined.token });
     store.set(credentialCookieName(joined.sessionId), joined.token, credentialCookieOptions(getEnv().APP_URL));
     return ok({ id: joined.sessionId }, 201);
   });

@@ -2,7 +2,7 @@
 
 import { ArrowRight, LoaderCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api, ApiError } from "@/lib/api-client";
@@ -13,6 +13,7 @@ export function JoinNameForm({ sessionId, code }: { sessionId: string; code: str
   const id = useId();
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
+  const attemptKey = useRef<string | null>(null);
   const [error, setError] = useState("");
 
   async function submit(event: React.FormEvent) {
@@ -23,7 +24,9 @@ export function JoinNameForm({ sessionId, code }: { sessionId: string; code: str
     }
     setBusy(true);
     try {
-      const { id: joined } = await api<{ id: string }>(`/api/sessions/${sessionId}/join`, { method: "POST", body: { code, displayName: name } });
+      // One key per attempt series: a retry after a lost response joins as the same guest, not a duplicate.
+      attemptKey.current ??= crypto.randomUUID();
+      const { id: joined } = await api<{ id: string }>(`/api/sessions/${sessionId}/join`, { method: "POST", body: { code, displayName: name }, idempotencyKey: attemptKey.current });
       track({ name: "guest_joined" });
       router.replace(`/s/${joined}?joined=1`);
     } catch (err) {

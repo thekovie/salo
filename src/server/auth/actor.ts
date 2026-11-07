@@ -1,6 +1,6 @@
 import { and, eq, gt, isNull, or, sql } from "drizzle-orm";
 import type { Db } from "@/server/db/client";
-import { participantCredentials, participants } from "@/server/db/schema";
+import { participantCredentials, participants, sessions } from "@/server/db/schema";
 import type { Actor } from "@/lib/permissions";
 import { hashToken } from "./credentials";
 
@@ -23,6 +23,8 @@ async function lookup(db: Db, sessionId: string, token: string | undefined): Pro
     })
     .from(participantCredentials)
     .innerJoin(participants, eq(participants.id, participantCredentials.participantId))
+    // An order past its deletion date is gone, even before the hourly cleanup removes it.
+    .innerJoin(sessions, and(eq(sessions.id, participantCredentials.sessionId), gt(sessions.expiresAt, sql`now()`)))
     .where(
       and(
         eq(participantCredentials.credentialHash, hashToken(token)),
