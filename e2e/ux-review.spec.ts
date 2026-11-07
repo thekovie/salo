@@ -129,7 +129,7 @@ for (const [label, viewport, dark] of [
   test(`tour: ${label}`, async ({ browser }) => {
     const { ctx, page } = await context(browser, { viewport, dark, fresh: true });
     await page.goto("/");
-    await page.getByRole("button", { name: "Start an order" }).click();
+    await page.getByRole("link", { name: "Start an order" }).click();
     await page.waitForURL(/\/s\//);
     await addDish(page, "Chicken Katsu", 2);
     await addDish(page, "Gyoza");
@@ -147,7 +147,7 @@ for (const [label, viewport, dark] of [
 test("tour: guest phone", async ({ browser }) => {
   const host = await context(browser, { viewport: PHONE });
   await host.page.goto("/");
-  await host.page.getByRole("button", { name: "Start an order" }).click();
+  await host.page.getByRole("link", { name: "Start an order" }).click();
   await host.page.waitForURL(/\/s\//);
   await addDish(host.page, "Sisig");
   const code = await inviteCode(host.page);

@@ -32,6 +32,9 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     timeout: 240_000,
     // POSTHOG_KEY empty: tests never send analytics, even if a developer's .env has the real key.
-    env: { APP_URL: `http://localhost:${PORT}`, NEW_ORDERS_PER_HOUR: "1000", POSTHOG_KEY: "", DATABASE_URL: process.env.DATABASE_URL ?? "postgres://salo@localhost:5433/salo" },
+    env: { APP_URL: `http://localhost:${PORT}`, NEW_ORDERS_PER_HOUR: "1000", POSTHOG_KEY: "",
+      // Cloudflare's published Turnstile test keys: the real widget and server check run, and always pass.
+      TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
+      TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA", DATABASE_URL: process.env.DATABASE_URL ?? "postgres://salo@localhost:5433/salo" },
   },
 });
