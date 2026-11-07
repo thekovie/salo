@@ -23,8 +23,8 @@ export function WaiterTicket({ ticket, confirmed, justConfirmed, size = "waiter"
   const big = size === "waiter";
   return (
     <section data-ph-mask="" aria-label={`Round ${ticket.roundNumber}${confirmed ? ", confirmed with the waiter" : ""}`} className={cn("ticket px-6", big && "sm:px-10", copyClass(ticket.roundNumber), justConfirmed && "thunk", className)}>
-      <div className="flex items-baseline justify-between gap-4 pt-2">
-        <h2 className={cn("font-mono font-medium tracking-[0.16em] text-tomato-ink uppercase", big ? "text-lg" : "text-sm")}>Round {ticket.roundNumber}</h2>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 pt-2">
+        <h2 className={cn("whitespace-nowrap font-mono font-medium tracking-[0.16em] text-tomato-ink uppercase", big ? "text-lg" : "text-sm")}>Round {ticket.roundNumber}</h2>
         {confirmed ? (
           // The stamp sits in the header row's empty space: it shows the word without covering any dish or count.
           <Stamp animate={justConfirmed} className={cn("-my-2 mr-1", big ? "text-xl" : "text-sm")} />

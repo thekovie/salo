@@ -58,13 +58,20 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: (id: number)
   );
 }
 
-/** Polite live region: toasts never steal focus. */
-export function Toasts({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: number) => void }) {
+/**
+ * The one floating stack, sitting just above the dock at its measured height (`--dock-h`, set by the workspace), so
+ * nothing covers the composer or the content's top. `notices` (connection, who added what) stack above the toasts.
+ * Polite live region: toasts never steal focus.
+ */
+export function Toasts({ toasts, onDismiss, notices }: { toasts: Toast[]; onDismiss: (id: number) => void; notices?: React.ReactNode }) {
   return (
-    <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+9.5rem)] z-50 mx-auto flex max-w-md flex-col gap-2 px-4">
-      {toasts.map((toast) => (
-        <ToastItem key={toast.id} toast={toast} onDismiss={onDismiss} />
-      ))}
+    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--dock-h,9.5rem)+0.5rem)] z-50 mx-auto flex max-w-md flex-col gap-2 px-4">
+      {notices}
+      <div aria-live="polite" className="flex flex-col gap-2">
+        {toasts.map((toast) => (
+          <ToastItem key={toast.id} toast={toast} onDismiss={onDismiss} />
+        ))}
+      </div>
     </div>
   );
 }

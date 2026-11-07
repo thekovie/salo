@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { cookies, headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
+import Link from "next/link";
 import { LogoMark } from "@/components/brand/logo";
 import { JoinNameForm } from "@/components/join/join-name-form";
 import { PolicyLinks } from "@/components/policy/policy-links";
@@ -44,6 +45,9 @@ export default async function JoinPage({ params }: Props) {
       <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-4 px-4 text-center">
         <h1 className="text-3xl">Too many wrong codes</h1>
         <p className="text-ink-soft">Wait a while, then ask the host to show the QR code or send the link again.</p>
+      <Link href="/" className="text-center text-sm font-semibold text-ink underline-offset-4 hover:underline">
+        Not now, back to Salo
+      </Link>
       </main>
     );
   }
@@ -71,6 +75,9 @@ export default async function JoinPage({ params }: Props) {
         <JoinNameForm sessionId={invite.sessionId} code={code} />
       </div>
       <p className="text-center text-sm text-ink-soft">No app or account. Your name is only shown to this table.</p>
+      <Link href="/" className="text-center text-sm font-semibold text-ink underline-offset-4 hover:underline">
+        Not now, back to Salo
+      </Link>
       <PolicyLinks className="justify-center" />
     </main>
   );

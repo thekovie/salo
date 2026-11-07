@@ -21,6 +21,8 @@ interface ComposerProps {
   /** Group labels already used in this order. */
   groups: string[];
   disabled?: boolean;
+  /** Changes when the person switches tab: the "who's it for" panel closes so it doesn't cover the new view. */
+  view?: string;
   onAdd: (input: AddInput) => void;
 }
 
@@ -37,12 +39,17 @@ function suggestionsFor(query: string, names: string[]): string[] {
  * the quantity, and Add. Size and instructions sit one step further in.
  * After adding: dish, quantity, size and instructions reset; the recipient stays for the next dish.
  */
-export function Composer({ dishNames, people, names, groups, disabled, onAdd }: ComposerProps) {
+export function Composer({ dishNames, people, names, groups, disabled, view, onAdd }: ComposerProps) {
   const id = useId();
   const dishRef = useRef<HTMLInputElement>(null);
   const [dish, setDish] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [open, setOpen] = useState(false);
+  const [lastView, setLastView] = useState(view);
+  if (view !== lastView) {
+    setLastView(view);
+    setOpen(false);
+  }
   const [notesOpen, setNotesOpen] = useState(false);
   const [recipient, setRecipient] = useState<Recipient>({ kind: "ME" });
   const [typed, setTyped] = useState("");
@@ -80,6 +87,8 @@ export function Composer({ dishNames, people, names, groups, disabled, onAdd }: 
     setVariant("");
     setInstructions("");
     setError("");
+    // Close the panel after adding: an open panel plus the composer covered most of a small screen (density review).
+    setOpen(false);
     dishRef.current?.focus();
   }
 
@@ -187,7 +196,8 @@ export function Composer({ dishNames, people, names, groups, disabled, onAdd }: 
         />
       </div>
 
-      <div className="mt-1.5 flex items-center gap-1">
+      {/* Under 360 px "For …" takes its own row so every label stays visible (no icon-only Add). */}
+      <div className="mt-1.5 flex flex-wrap items-center gap-1">
         <button
           type="button"
           onClick={() => {
@@ -197,10 +207,10 @@ export function Composer({ dishNames, people, names, groups, disabled, onAdd }: 
           aria-expanded={open}
           aria-controls={open ? `${id}-panel` : undefined}
           data-tour="for"
-          className={cn("relative inline-flex min-h-11 min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-full px-3 text-left hover:bg-ink/6", open && "bg-ink/8")}
+          className={cn("relative inline-flex min-h-11 min-w-0 flex-1 cursor-pointer max-[359px]:basis-full items-center gap-1.5 rounded-full px-3 text-left hover:bg-ink/6", open && "bg-ink/8")}
         >
           <ForIcon className="size-4 shrink-0 text-ink-soft" aria-hidden />
-          <span className="hidden shrink-0 text-sm text-ink-soft min-[360px]:inline">For</span>
+          <span className="shrink-0 text-sm text-ink-soft">For</span>
           <span className="truncate font-semibold" data-ph-mask="">{summary(current, typed)}</span>
           <ChevronDown className={cn("size-4 shrink-0 text-ink-soft transition-transform duration-200", open && "rotate-180")} aria-hidden />
           {!open && hasNotes ? <span className="absolute top-2 right-2 size-2 rounded-full bg-tomato" aria-hidden /> : null}
@@ -210,11 +220,10 @@ export function Composer({ dishNames, people, names, groups, disabled, onAdd }: 
         <button
           type="submit"
           disabled={disabled}
-          className="inline-flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center gap-1 rounded-full bg-tomato font-semibold text-on-tomato transition-[background-color,transform] duration-100 ease-out hover:bg-tomato/90 active:scale-[0.97] disabled:opacity-45 min-[360px]:pr-4 min-[360px]:pl-3"
+          className="inline-flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center gap-1 rounded-full bg-tomato font-semibold text-on-tomato transition-[background-color,transform] duration-100 ease-out hover:bg-tomato/90 active:scale-[0.97] disabled:opacity-45 max-[359px]:ml-auto pr-4 pl-3"
         >
           <Plus className="size-5" aria-hidden />
-          {/* Under 360 px the word goes (screen readers keep it) so the name in "For …" has room. */}
-          <span className="max-[359px]:sr-only">Add</span>
+          <span>Add</span>
         </button>
       </div>
       <p id={`${id}-error`} role="alert" className={cn("px-3 text-sm text-bad", error ? "pt-1.5 pb-0.5" : "sr-only")}>

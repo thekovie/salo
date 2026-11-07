@@ -69,7 +69,7 @@ export function InviteSheet({ appUrl, joinCode, title, peopleCount }: InviteShee
         track({ name: "invite_opened" });
       }}
     >
-      <DrawerTrigger data-tour="invite" className="inline-flex min-h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-on-band px-3.5 text-sm font-semibold text-band shadow-sm hover:brightness-95">
+      <DrawerTrigger data-tour="invite" className="inline-flex min-h-11 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-full bg-on-band px-3.5 text-sm font-semibold text-band shadow-sm hover:brightness-95">
         <UserPlus className="size-4" aria-hidden />
         Invite
       </DrawerTrigger>

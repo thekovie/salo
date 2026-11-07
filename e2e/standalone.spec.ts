@@ -56,13 +56,14 @@ test("variants and instructions stay distinct; recipient is kept between entries
   await openNotes(page);
   await page.getByRole("textbox", { name: "Size or variant" }).fill("Large");
   await addDish(page, "Iced Tea");
-  // Size resets, recipient stays (now a one-tap chip).
+  // The panel closes after Add (it covered small screens); the recipient stays and size resets.
+  await expect(page.getByRole("button", { name: /^For Miguel/ })).toHaveAttribute("aria-expanded", "false");
+  await openNotes(page);
   await expect(page.getByRole("textbox", { name: "Size or variant" })).toHaveValue("");
   await expect(page.getByRole("radio", { name: "Miguel", exact: true })).toHaveAttribute("aria-checked", "true");
-  await expect(page.getByRole("button", { name: /^For Miguel/ })).toBeVisible();
   await page.getByRole("textbox", { name: "Instructions" }).fill("Less ice");
   await addDish(page, "Iced Tea");
-  await page.getByRole("radio", { name: "Anyone" }).click();
+  await orderFor(page, "Anyone");
   await addDish(page, "Iced Tea");
 
   const row = page.getByTestId("dish-row");
