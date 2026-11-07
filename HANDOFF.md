@@ -46,19 +46,13 @@ All 14 brief end-to-end scenarios are covered by Playwright (see `docs/testing.m
 ## Owner tasks (cannot be done from the repository)
 
 1. ~~**Deploy** on Coolify~~: done 2026-11-06. Keep `APP_URL` set to the real https domain.
-2. **Backups**: daily schedule, S3 off-VPS destination, retention, failure alerts on the PostgreSQL resource (`docs/backups.md`); run the first production restore drill and note the date here.
-3. **Proxy check in production**: `node scripts/sse-proxy-check.mjs https://<domain> 75`.
-4. **Real phones**: try a full order on Android and iPhone over mobile data (QR join, live updates, waiter ticket in sunlight and in a dim place, screen reader spot check with TalkBack/VoiceOver).
+2. **Backups** (owner: next session): daily schedule, S3 off-VPS destination, retention, failure alerts on the PostgreSQL resource (`docs/backups.md`); run the first production restore drill and note the date here.
+3. **Proxy check in production** (live updates look fine in use, script not run yet): `node scripts/sse-proxy-check.mjs https://<domain> 75`. Since Turnstile, production refuses the script's order creation (403), so it needs a way to reuse a browser-created order before it can run there.
+4. **Real phones** (Android done 2026-11-08; iPhone and screen reader spot check still open): try a full order on Android and iPhone over mobile data (QR join, live updates, waiter ticket in sunlight and in a dim place, screen reader spot check with TalkBack/VoiceOver).
 5. ~~**Link previews**~~: done 2026-11-07, confirmed by the owner in the Sharing Debugger and in Messenger. Invites live at `/i/<code>` (`/j/` redirects); the history is in `docs/deployment.md` → Link previews.
-6. **Usability test** against Notes with a real table (brief 15.6): time to record ten dishes, mistakes, corrections, confidence.
-8. **Turnstile (bot check)**: in Cloudflare → Turnstile, add a widget for `salo.thekovie.com` (managed). Set `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` in Coolify and redeploy. Until then, starting an order skips the check.
-7. **PostHog**:
-   - In Coolify, set `POSTHOG_KEY` to the US project's `phc_…` key and redeploy.
-   - In PostHog project settings, turn on Session replay (sample rate 100%), Heatmaps, Autocapture and Exception autocapture. Consider "Discard client IP data", which the privacy policy allows for but doesn't promise.
-   - Suggested insights:
-     - funnel order_started → dish_added → round_confirmed → order_ended;
-     - tour_offer_shown → tour_started → tour_completed;
-     - rage clicks and dead clicks by page.
+6. **Usability test** (one run done on the pre-November-8 UI; repeat on the current UI) against Notes with a real table (brief 15.6): time to record ten dishes, mistakes, corrections, confidence.
+7. ~~**PostHog**~~: done 2026-11-08; key set in Coolify, owner is monitoring (insight ideas: funnel order_started → dish_added → round_confirmed → order_ended; tour funnel; rage/dead clicks by page).
+8. ~~**Turnstile (bot check)**~~: done 2026-11-08, keys set in Coolify; confirmed by the owner on a phone browser and the installed PWA.
 
 ## Known limitations
 
