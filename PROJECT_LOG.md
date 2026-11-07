@@ -394,3 +394,12 @@ Owner feedback: people didn't know when or how to end the order after the last r
   - Live "added" pills moved below the tab row.
   - The tour step was updated.
 
+## Escape routes (`fix/escape-routes`)
+
+Owner found that there was no exit or back button. The earlier critique was scoped to the end-of-meal flow and missed it.
+- **Order header:** the home link was a logo only. It is now **‹ + logo** ("Back to Salo home"); the order stays saved and reopens from home.
+- **Invite page:** it had no way out. Added "Not now, back to Salo", on the rate-limited state too.
+- **Already fine:** every drawer has an X or Cancel, the waiter view has Back, and /new, the policies and 404 link home.
+- **Guard:** `e2e/escape-routes.spec.ts` visits the policies, 404, the order (host and guest), the invite page and the waiter view, and fails if a screen has no visible way out. It was verified to fail on the old invite page.
+- **Process:** UX reviews now always include a whole-app structural pass (ways out, dead ends, what comes next), not only the flow asked about.
+

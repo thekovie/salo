@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, CircleHelp } from "lucide-react";
+import { ChevronDown, ChevronLeft, CircleHelp } from "lucide-react";
 import Link from "next/link";
 import { LogoMark } from "@/components/brand/logo";
 import type { SyncState } from "@/hooks/use-session";
@@ -29,8 +29,10 @@ export function SessionHeader({ title, roundNumber, roundStatus, ended = null, s
   return (
     <header className="sticky top-0 z-30 bg-band text-on-band pt-[env(safe-area-inset-top)] shadow-[0_6px_16px_-10px_oklch(0.3_0.1_30/0.6)]">
       <div className="mx-auto flex max-w-2xl items-center gap-1.5 px-2 py-2">
-        <Link href="/" aria-label="Salo home" className="inline-flex size-11 shrink-0 items-center justify-center rounded-full hover:bg-on-band/10">
-          <LogoMark inverse className="size-8" />
+        {/* A recognisable way out (a logo alone doesn't read as "back"). The order stays saved and reopens from home. */}
+        <Link href="/" aria-label="Back to Salo home" className="inline-flex h-11 shrink-0 items-center gap-0.5 rounded-full pr-1.5 pl-0.5 hover:bg-on-band/10">
+          <ChevronLeft className="size-5" aria-hidden />
+          <LogoMark inverse className="size-7" />
         </Link>
         <div className="min-w-0 flex-1 px-1">
           <h1 className="truncate font-display text-lg leading-tight" data-ph-mask="">
