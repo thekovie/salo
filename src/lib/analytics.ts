@@ -13,6 +13,9 @@ export interface AnalyticsClient {
  */
 export type AnalyticsEvent =
   | { name: "order_started" }
+  | { name: "turnstile_shown" }
+  | { name: "turnstile_passed" }
+  | { name: "turnstile_failed" }
   | { name: "guest_joined" }
   | { name: "dish_added"; props: { recipient: string; quantity: number; has_notes: boolean } }
   | { name: "add_failed"; props: { code: string } }

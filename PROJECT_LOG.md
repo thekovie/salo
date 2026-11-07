@@ -362,3 +362,19 @@ Live after #23: Meta's crawlers got `/j/<code>` with 200 and no noindex, yet the
 - `/j/<code>` gets a 308 to `/i/<code>`, so old links and printed QR codes still work.
 - Tests: e2e checks the `/j/` → `/i/` redirect; all invite flows run on `/i/`. 123 unit, 34 e2e.
 
+## Bot check before starting an order (`feat/bot-check`)
+
+Owner request: stop bots from creating orders.
+- "Start an order" now opens `/new`, a small ticket with the Cloudflare Turnstile widget (managed, shown only when interaction is needed).
+- On a pass, `POST /api/sessions` gets the token and the new order opens. On a failure or expiry: plain-English error, Try again, and a fresh token.
+- **Server** (`src/server/auth/turnstile.ts`):
+  - verifies with `siteverify` (secret, token, IP, idempotency key) and checks success, our hostname and the `create-order` action, with a 5 s timeout;
+  - `403 BOT_CHECK_FAILED`, or `503 BOT_CHECK_UNAVAILABLE`, never failing open;
+  - an idempotent replay skips re-verification (tokens are single-use).
+- **Config:** env `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY`; both unset means no check. The CSP allows `challenges.cloudflare.com` (script, frame, connect).
+- **Policies:** privacy and cookies mention Turnstile, and Cloudflare is listed as a processor.
+- **Tests:**
+  - Unit: pass; failed, wrong host or action; unreachable means unavailable; the test secret; CSP.
+  - e2e runs the real widget with Cloudflare's test keys. `new-order.spec.ts`: a direct API create without a token gets 403, and the page flow lands in the order.
+  - Totals: 127 unit/integration, 35 e2e.
+

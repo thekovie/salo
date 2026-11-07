@@ -2,8 +2,9 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
 
 export async function startOrder(page: Page) {
   await page.goto("/");
-  await page.getByRole("button", { name: "Start an order" }).click();
-  await expect(page).toHaveURL(/\/s\/[0-9a-f-]{36}$/);
+  await page.getByRole("link", { name: "Start an order" }).click();
+  // Through the bot check (/new): Cloudflare's widget can take a few seconds to answer.
+  await expect(page).toHaveURL(/\/s\/[0-9a-f-]{36}$/, { timeout: 20_000 });
 }
 
 export async function addDish(page: Page, name: string, quantity = 1) {

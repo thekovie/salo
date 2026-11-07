@@ -35,6 +35,10 @@ export default function PrivacyPage() {
             your order. Server and proxy logs may record IP address, time and page requested for security and troubleshooting, and are kept for a short time.
           </li>
           <li>
+            <strong>A bot check when you start an order:</strong> Cloudflare Turnstile looks at your IP address and browser signals to tell
+            people from bots. It runs only on the &ldquo;start an order&rdquo; step, and Salo keeps nothing from it.
+          </li>
+          <li>
             <strong>Usage analytics:</strong> see below.
           </li>
         </ul>
@@ -78,6 +82,7 @@ export default function PrivacyPage() {
         <ul>
           <li>Our own server (a virtual private server we run), which hosts the app and its database.</li>
           <li>PostHog, Inc., which processes analytics and replays for us in the United States.</li>
+          <li>Cloudflare, Inc., which runs the bot check when you start an order.</li>
         </ul>
         <p>We don&rsquo;t sell or rent personal data, and we don&rsquo;t share it with advertisers.</p>
       </PolicySection>

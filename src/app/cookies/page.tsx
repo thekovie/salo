@@ -13,6 +13,7 @@ const ROWS = [
   ["salo_s_<order>", "Essential cookie", "Keeps your browser in an order, so you can come back to it. Only Salo's server can read it.", "31 days, or until the order is deleted"],
   ["ph_phc_…_posthog", "Analytics cookie (PostHog)", "An anonymous ID so PostHog can tell one visit from another.", "About 1 year"],
   ["PostHog storage (localStorage, sessionStorage)", "Analytics", "Queues events and keeps session-replay state for the current visit.", "The visit, or about 1 year"],
+  ["Cloudflare Turnstile", "Security (on challenges.cloudflare.com)", "Tells people from bots when you start an order; may keep short-lived data in its own frame.", "Minutes"],
   ["theme", "Preference (localStorage)", "Your light or dark choice.", "Until you clear it"],
   ["salo:tour:host / salo:tour:guest", "Preference (localStorage)", "Remembers that you've seen the first-time tour offer.", "Until you clear it"],
   ["salo:removed-reload:…", "Essential (sessionStorage)", "Stops the page reloading in a loop if the host removed you from an order.", "Until you close the tab"],
