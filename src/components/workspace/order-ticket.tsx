@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Pencil } from "lucide-react";
 import { useState } from "react";
 import type { OverlayEntry } from "@/hooks/use-session";
 import { consolidate, hasSubLines, preparationLabel, type ConsolidatedDish } from "@/lib/consolidate";
@@ -15,6 +15,23 @@ export interface TicketActions {
   setQuantity: (entry: OverlayEntry, quantity: number) => void;
   remove: (entry: OverlayEntry) => void;
   canEdit: (entry: OverlayEntry) => boolean;
+  /** Open "Edit dish" (size, notes, who it's for). */
+  edit?: (entry: OverlayEntry) => void;
+}
+
+/** A small "Edit" control next to a dish's details (brief 5.12: the host can correct draft entries). */
+function EditButton({ entry, actions, name }: { entry: OverlayEntry; actions: TicketActions; name: string }) {
+  if (!actions.edit) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => actions.edit?.(entry)}
+      aria-label={`Edit ${name}`}
+      className="-my-2 ml-1 inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-full text-ink-soft hover:bg-ink/6 hover:text-ink"
+    >
+      <Pencil className="size-4" aria-hidden />
+    </button>
+  );
 }
 
 interface OrderTicketProps {
@@ -44,8 +61,9 @@ function SourceRow({ entry, people, actions, readOnly, underHeading }: { entry: 
   const unsaved = isUnsavedAdd(entry);
   return (
     <li className={cn("flex items-center justify-between gap-3 py-1 pl-3", entry.pending && "opacity-60")}>
-      <span className="min-w-0 text-[0.95rem] text-ink-soft">
-        {detail}
+      <span className="flex min-w-0 items-center text-[0.95rem] text-ink-soft">
+        <span className="min-w-0">{detail}</span>
+        {editable && !unsaved && !entry.pending ? <EditButton entry={entry} actions={actions} name={`${entry.dishName}, ${detail}`} /> : null}
         {entry.pending ? <span className="ml-2 text-xs font-semibold text-saffron-ink">Saving…</span> : null}
       </span>
       {editable ? (
@@ -80,7 +98,12 @@ function DishRow({ dish, people, actions, readOnly, washKey, fresh, tag }: { dis
               </span>
             ) : null}
           </p>
-          {sub ? <p className="text-sm text-ink-soft">{sub}</p> : null}
+          {sub || editableSingle ? (
+            <p className="flex items-center text-sm text-ink-soft">
+              {sub ? <span className="min-w-0">{sub}</span> : null}
+              {editableSingle && !isUnsavedAdd(single) && !single.pending ? <EditButton entry={single} actions={actions} name={dish.name} /> : null}
+            </p>
+          ) : null}
           {pending && single ? <p className="text-xs font-semibold text-saffron-ink">Saving…</p> : null}
         </div>
         {editableSingle ? (

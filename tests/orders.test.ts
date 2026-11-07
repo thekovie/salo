@@ -196,3 +196,31 @@ describe("adds carry their round (finding 1)", () => {
     expect((await getSnapshot(db, host)).entries.filter((e) => e.roundId === second.activeRoundId).map((e) => e.dishName)).toEqual(["Rice"]);
   });
 });
+
+describe("editing a draft dish (finding 6)", () => {
+  it("changes who it's for, size and notes; resets readiness; refused once confirmed", async () => {
+    const { host, sessionId } = await newSession(db);
+    const jd = await addGuest(db, sessionId, "JD");
+    const { result } = await add(db, host, { dishName: "Halo-halo", quantity: 1 });
+    const edit = (input: Record<string, unknown>) =>
+      runMutation(db, host, { idempotencyKey: key(), type: "t" }, async (tx, s) => {
+        const [e] = (await getSnapshot(db, host)).entries.filter((x) => x.id === result.entryId);
+        return updateEntry(tx, s, host, result.entryId, { expectedRevision: e.revision, ...input } as Parameters<typeof updateEntry>[4]);
+      });
+    await edit({ variant: "Large", instructions: "Less ice", attribution: { type: "INDIVIDUAL", participantId: jd.participantId } });
+    let [entry] = (await getSnapshot(db, host)).entries;
+    expect(entry).toMatchObject({ variant: "Large", instructions: "Less ice", attribution: { type: "INDIVIDUAL", participantId: jd.participantId } });
+    expect(entry.submittedBy).toBe(host.participantId); // edit rights stay with whoever added it
+    await edit({ attribution: { type: "TABLE" } });
+    [entry] = (await getSnapshot(db, host)).entries;
+    expect(entry.attribution).toMatchObject({ type: "TABLE", participantId: null });
+
+    const snap = await getSnapshot(db, host);
+    await runMutation(db, host, { idempotencyKey: key(), type: "t" }, (tx, s) => confirmRound(tx, s, host, snap.activeRoundId, s.revision));
+    const refused = await edit({ attribution: { type: "UNASSIGNED" } }).then(
+      () => null,
+      (e: { code?: string }) => e,
+    );
+    expect(refused).toMatchObject({ code: "ROUND_CONFIRMED" });
+  });
+});

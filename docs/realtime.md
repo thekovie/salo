@@ -23,4 +23,4 @@ Every change runs in `runMutation` (`src/server/mutations.ts`), joining runs in 
 Own changes queue on the device and go to the server one at a time, in order, each with its idempotency key; repeated taps on one stepper collapse into the final number; network failures retry automatically with backoff (2 s doubling to 30 s) and resume when the browser comes back online. A change leaves the screen only when a snapshot containing it has arrived; refused changes are listed by name with the reason.
 
 ## Proxy
-Coolify's Traefik does not buffer streamed responses by default; the 20 s heartbeat keeps idle connections below common proxy timeouts. After a redeploy the stream drops, the browser reconnects with `Last-Event-ID`, and missed events replay. Verify on the real proxy before launch (Phase 5).
+Coolify's Traefik does not buffer streamed responses by default; the 20 s heartbeat keeps idle connections below common proxy timeouts. After a redeploy the stream drops, the browser reconnects with `Last-Event-ID`, and missed events replay. CI runs the proxy check (`scripts/sse-proxy-check.mjs`) through Traefik; the production check stays an owner task.

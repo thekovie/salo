@@ -44,7 +44,9 @@ JSON over HTTPS. Implemented in `src/app/api/**` with shared helpers in `src/ser
 
 ## Error codes
 
-`NOT_FOUND`, `ENTRY_NOT_FOUND`, `FORBIDDEN`, `FORBIDDEN_ORIGIN`, `SESSION_CLOSED`, `NO_OPEN_ROUND`, `ROUND_CONFIRMED`, `ENTRY_REMOVED`, `CONFLICT`, `UNKNOWN_PERSON`, `TOO_MANY_ENTRIES`, `TOO_MANY_DISHES`, `IDEMPOTENCY_KEY_REUSED`, `IDEMPOTENCY_KEY`, `BAD_JSON`, `TOO_LARGE`, `INVALID`, `RATE_LIMITED`, `INVITE_NOT_FOUND`, `CLAIM_PENDING`, `ALREADY_YOURS`, `CLAIM_NOT_FOUND`, `CLAIM_RESOLVED`, `STALE_REVISION`, `ROUND_NOT_OPEN`, `ROUND_OPEN`, `EMPTY_ROUND`, `NOT_CONFIRMED`, `CORRECTION_NOT_FOUND`, `TABLE_FULL`, `TOO_MANY_STREAMS`, `INTERNAL`.
+`NOT_FOUND`, `ENTRY_NOT_FOUND`, `FORBIDDEN`, `FORBIDDEN_ORIGIN`, `SESSION_CLOSED`, `NO_OPEN_ROUND`, `ROUND_CONFIRMED`, `ENTRY_REMOVED`, `CONFLICT`, `UNKNOWN_PERSON`, `TOO_MANY_ENTRIES`, `TOO_MANY_DISHES`, `IDEMPOTENCY_KEY_REUSED`, `IDEMPOTENCY_KEY`, `BAD_JSON`, `TOO_LARGE`, `INVALID`, `RATE_LIMITED`, `INVITE_NOT_FOUND`, `CLAIM_PENDING`, `ALREADY_YOURS`, `CLAIM_NOT_FOUND`, `CLAIM_RESOLVED`, `STALE_REVISION`, `ROUND_NOT_OPEN`, `ROUND_OPEN`, `EMPTY_ROUND`, `NOT_CONFIRMED`, `CORRECTION_NOT_FOUND`, `TABLE_FULL`, `TOO_MANY_STREAMS`, `ROUND_CLOSED` (an add aimed at a round confirmed meanwhile), `ROUND_NOT_FOUND`, `REMOVED` (a guest the host removed), `ALREADY_REMOVED`, `CANNOT_REMOVE_HOST`, `PERSON_NOT_FOUND`, `CLAIM_STALE`, `TOO_LONG` (summary image), `TOO_MANY_ROUNDS`, `TOO_MANY_CORRECTIONS`, `TOO_MANY_GROUPS`, `ALREADY_CANCELLED`, `INTERNAL`.
+
+Idempotency: every change carries `Idempotency-Key`, bound to the change's kind *and target* (e.g. `entry.update:<id>`). Starting and joining an order accept one too, and a retry within 10 minutes gets the same order or guest. `POST …/entries` takes an optional `roundId` (refused with `ROUND_CLOSED` if that round is no longer open), and `PATCH …/entries/:id` takes `quantity`, `variant`, `instructions` and `attribution`. Bodies are capped at 8 KB while being read.
 
 
 
@@ -52,4 +54,9 @@ JSON over HTTPS. Implemented in `src/app/api/**` with shared helpers in `src/ser
 
 | Path | Notes |
 |---|---|
+| `/` | Landing page (scenes, start, resume, join by code). |
+| `/s/:id` | The order (members). Someone not in it is sent to the invite while it's open; a removed guest sees why; otherwise 404. |
+| `/s/:id/waiter` | Full-screen waiter ticket. |
+| `/privacy`, `/cookies` | Policies, plus the analytics switch. |
+| `/ingest/*` | Rewrite to PostHog US (analytics), only used when `POSTHOG_KEY` is set. |
 | `/j/:code` | Invite page. Server-rendered metadata and an Open Graph image (`/j/:code/opengraph-image`) with the order's name only; "This order has ended" when closed. Visitors who already belong to the order go straight to it. |

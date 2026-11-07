@@ -7,7 +7,7 @@ PostgreSQL, defined in `src/server/db/schema.ts`; migrations in `drizzle/` (appl
 | Table | Purpose |
 |---|---|
 | `sessions` | One table's ordering session. `status` OPEN/CLOSED, `revision` (+1 per committed change), `join_code` (6-character typed code), `last_activity_at`, `closed_at`, `expires_at` (when cleanup deletes it). |
-| `participants` | Host or guest identity. Display names may repeat; identity is the id. Exactly one HOST per session. |
+| `participants` | Host or guest identity. Display names may repeat; identity is the id. Exactly one HOST per session. `removed_at`/`removed_reason` (≤140) when the host removes a guest; CHECK: only guests can be removed (`0005`). |
 | `participant_credentials` | SHA-256 hash of each participant's cookie token (raw tokens are never stored). Type HOST or GUEST. |
 | `rounds` | Ordering rounds, numbered from 1. DRAFT or CONFIRMED. At most one DRAFT per session. |
 | `participant_round_readiness` | "I'm ready" per participant per round, with the revision they acknowledged. |
@@ -26,6 +26,12 @@ PostgreSQL, defined in `src/server/db/schema.ts`; migrations in `drizzle/` (appl
 - CHECK constraints on every status/role/type enum, `quantity BETWEEN 1 AND 99`, `revision >= 0`, and status/timestamp agreement (CLOSED ⇔ `closed_at`, CONFIRMED ⇔ `confirmed_at`).
 - Partial unique indexes: one DRAFT round per session, one HOST per session, one pending claim per batch and requester.
 - Triggers (`drizzle/0001_integrity_triggers.sql`): a confirmed snapshot can never be updated; a session revision can never go backwards; entries of a confirmed round cannot be inserted or updated.
+- `drizzle/0006_integrity_v2.sql`:
+  - an entry can't move out of a confirmed round;
+  - an entry must sit in its batch's round, in the same session;
+  - a batch's round is in its session, and a confirmed round's batches keep their attribution and submitter frozen;
+  - claims and group members stay inside one session.
+- An order past `expires_at` is treated as gone at once (credentials, invite, join, changes), and the hourly cleanup deletes it.
 - More triggers (`drizzle/0004_freeze_guards.sql`): a confirmed round cannot be reopened; snapshots, entries of confirmed rounds and corrections already given to the waiter cannot be deleted or changed, except when a whole session is deleted (cascade).
 - Covered by `tests/db-integrity.test.ts` and `tests/rounds.test.ts`.
 

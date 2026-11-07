@@ -41,4 +41,4 @@ pnpm dev          # http://localhost:3000 (migrations run at startup)
 
 ## Documentation
 
-`docs/` describes implemented behaviour only: [architecture](docs/architecture.md), [data model](docs/data-model.md), [API](docs/api.md), [UX specification](docs/ux-specification.md), [real time](docs/realtime.md), [security](docs/security.md), [testing](docs/testing.md), [deployment](docs/deployment.md), [backups](docs/backups.md). Design system: [DESIGN.md](DESIGN.md). More documents are added as each phase ships (see HANDOFF.md).
+`docs/` describes implemented behaviour only: [architecture](docs/architecture.md), [data model](docs/data-model.md), [API](docs/api.md), [UX specification](docs/ux-specification.md), [real time](docs/realtime.md), [security](docs/security.md), [testing](docs/testing.md), [deployment](docs/deployment.md), [backups](docs/backups.md). Design system: [DESIGN.md](DESIGN.md). All phases have shipped; status and owner tasks are in HANDOFF.md. Policies: `/privacy`, `/cookies`. Analytics: PostHog (only when `POSTHOG_KEY` is set).

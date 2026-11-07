@@ -52,8 +52,10 @@ export const updateEntrySchema = z
     quantity: z.number().int().min(1).max(LIMITS.quantity).optional(),
     variant: optional(LIMITS.variant),
     instructions: optional(LIMITS.instructions),
+    /** Who the dish is for (brief 4.1 "manage entry attribution", 5.12 "correct draft entries"). */
+    attribution: attributionSchema.optional(),
   })
-  .refine((v) => v.quantity !== undefined || v.variant !== undefined || v.instructions !== undefined, "Nothing to change.");
+  .refine((v) => v.quantity !== undefined || v.variant !== undefined || v.instructions !== undefined || v.attribution !== undefined, "Nothing to change.");
 
 export const renameSessionSchema = z.object({ title: optional(LIMITS.title) });
 

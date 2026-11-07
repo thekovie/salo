@@ -130,7 +130,8 @@ export function PeopleView({ snapshot, entries, canClaim, onClaim, onRemoveDupli
       {buckets.map((bucket) => {
         const isMe = bucket.participantId === snapshot.me.participantId;
         const guestReady = bucket.participantId ? ready.readyIds.has(bucket.participantId) : false;
-        const claimable = canClaim && (bucket.kind === "name" || bucket.kind === "unassigned") && bucket.entries.some((e) => hostIds.has(e.submittedBy));
+        // Dishes the host added under a typed name, for nobody, or straight onto this guest's own card can be claimed.
+        const claimable = canClaim && (bucket.kind === "name" || bucket.kind === "unassigned" || isMe) && bucket.entries.some((e) => hostIds.has(e.submittedBy));
         return (
           <section key={bucket.key} className="ticket px-5">
             <div className="mb-2 flex items-center justify-between gap-3">

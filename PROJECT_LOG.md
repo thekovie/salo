@@ -328,3 +328,24 @@ Tests:
 - Drill passes locally.
 - Totals: 121 unit/integration, 32 e2e.
 
+## PRD review fixes, part C: draft editing, claims, keyboard, docs (`feat/draft-editing`)
+
+- **Draft editing (reproduced).**
+  - "Edit dish" drawer from a pencil on each editable draft line: size or variant, instructions, and who it's for, with the same chips as the composer. The host can edit any dish; a guest their own.
+  - Server: `PATCH …/entries/:id` accepts `attribution`, which updates the batch and resets readiness for the old and new person; it is refused once the round is confirmed (also enforced by trigger 0006).
+  - The dish itself stays a remove-and-add.
+- **Undo (reproduced).** Quantity changes ("Gyoza ×3 → ×2 · Undo") and edits ("Updated … · Undo") get Undo toasts. Undo goes through the same ordered, conflict-safe queue.
+- **Claims (partly reproduced).** A host-added dish on the guest's own card now offers "That's mine"; the server already allowed it.
+- **Radio keyboard (reproduced).** `useRovingRadio`: one Tab stop, arrow keys and Home/End move and select. Used by the shared `RecipientPicker` (composer and edit drawer) and the correction "What changed?" group, which also gets a label and 44 px targets.
+- **Docs.**
+  - architecture (SSE shipped, analytics, cleanup, queue), data-model (removal, 0006, expiry);
+  - API (new error codes, idempotency scope, `roundId`, edit fields, pages and `/ingest`), realtime (cap 64, polling, CI proxy check);
+  - README; HANDOFF (env vars, the 1-day cancellation recorded as an owner decision, known limitations refreshed).
+- **Owner decision recorded:** cancelled orders are kept 1 day, deliberately not the PRD's 7.
+
+Tests:
+- Integration: edit attribution, size and notes; submitter unchanged; refused after confirm.
+- e2e (`editing.spec.ts`): edit drawer, quantity Undo, claim on the guest's own card, keyboard chips.
+- The UX review pass is clean (121 checks).
+- Totals: 122 unit/integration, 34 e2e.
+

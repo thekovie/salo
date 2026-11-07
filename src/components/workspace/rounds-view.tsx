@@ -10,6 +10,7 @@ import type { SessionSnapshot, SnapshotEntry } from "@/lib/snapshot";
 import { liveTicket } from "@/lib/ticket";
 import { cn } from "@/lib/utils";
 import { LocalTime } from "@/components/ui/local-time";
+import { useRovingRadio } from "@/hooks/use-roving-radio";
 import { Stepper } from "./stepper";
 
 export interface CorrectionRequest {
@@ -51,6 +52,7 @@ function CorrectionDialog({ roundNumber, entries, corrections, onCorrect }: { ro
   const options = preparationsOf(entries, corrections);
   const [choice, setChoice] = useState(0);
   const [type, setType] = useState<"QUANTITY" | "REPLACE">("QUANTITY");
+  const typeRadio = useRovingRadio(2, type === "QUANTITY" ? 0 : 1, (i) => setType(i === 0 ? "QUANTITY" : "REPLACE"));
   const [quantity, setQuantity] = useState(1);
   const [replacement, setReplacement] = useState("");
   const [note, setNote] = useState("");
@@ -103,16 +105,19 @@ function CorrectionDialog({ roundNumber, entries, corrections, onCorrect }: { ro
             ))}
           </select>
           <fieldset className="mt-4">
-            <legend className="text-sm font-semibold">What changed?</legend>
-            <div className="mt-1.5 flex gap-1.5" role="radiogroup">
-              {(["QUANTITY", "REPLACE"] as const).map((t) => (
+            <legend id="correction-type" className="text-sm font-semibold">
+              What changed?
+            </legend>
+            <div className="mt-1.5 flex gap-1.5" role="radiogroup" aria-labelledby="correction-type">
+              {(["QUANTITY", "REPLACE"] as const).map((t, i) => (
                 <button
                   key={t}
                   type="button"
                   role="radio"
                   aria-checked={type === t}
+                  {...typeRadio(i)}
                   onClick={() => setType(t)}
-                  className={cn("min-h-10 cursor-pointer rounded-full border-[1.5px] px-3.5 text-sm font-semibold", type === t ? "border-ink bg-ink text-paper" : "border-input bg-ticket")}
+                  className={cn("min-h-11 cursor-pointer rounded-full border-[1.5px] px-3.5 text-sm font-semibold", type === t ? "border-ink bg-ink text-paper" : "border-input bg-ticket")}
                 >
                   {t === "QUANTITY" ? "Cancel some" : "Change it"}
                 </button>
