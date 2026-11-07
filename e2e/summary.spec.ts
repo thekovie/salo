@@ -10,6 +10,10 @@ test("ending the order offers 'who ordered what' to copy or save; guests can ope
   await orderFor(page, "A person", "Miguel");
   await addDish(page, "Java Rice");
   await addDish(guest.page, "Halo-halo");
+  // The host reviews what they can see; wait for the guest's dish to arrive first, or confirming is (rightly)
+  // refused as out of date.
+  await expect(page.getByTestId("dish-row").filter({ hasText: "Halo-halo" })).toBeVisible();
+  await expect(page.locator('[data-sync="saved"]')).toBeVisible();
 
   // Confirm round 1 with the waiter.
   await page.getByRole("button", { name: "Review order" }).click();
