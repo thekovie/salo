@@ -283,3 +283,25 @@ Tests: 104 unit/integration (new: analytics no-op and safety, POSTHOG_KEY schema
 - Cause: Facebook's cached copy of the old robots.txt (`Disallow: /j/`, removed in PR #13 the same day). Facebook reports a robots block as 403 without fetching the page.
 - Resolution: wait for Facebook to re-read robots.txt, then Scrape Again. Documented in `docs/deployment.md` → Link previews. No code change.
 
+
+## PRD review fixes, part A: sync reliability (`fix/sync-reliability`)
+
+An external review of `11019b2` against PRD v1.2 listed candidate gaps. Each was verified on `main` first; this PR fixes the confirmed client-sync ones.
+- **Round identity (reproduced).**
+  - Adds now carry the round the person was adding to.
+  - The server refuses with `409 ROUND_CLOSED` when that round was confirmed meanwhile, instead of slipping the dish into the next round.
+  - The failed list offers "Add to round N" as an explicit choice.
+- **Strict order (reproduced).** The pump skipped items waiting for the network, so Undo could overtake its removal. The queue rules now live in `src/lib/queue.ts`: the first unfinished change holds the line; refused ones don't block; repeated taps also fold into a waiting update; Retry keeps the change in its place.
+- **Reload recovery (reproduced).** Unsent and refused changes are saved with their idempotency keys in `localStorage` (`salo:queue:<order>`) and restored on load, so nothing is lost and nothing is applied twice.
+- **Silent overwrite (partly reproduced).** A quantity change sent the latest revision with an old absolute quantity. It now sends the revision the person saw, moved forward only over this device's own committed changes, so a change made elsewhere comes back as "Changed elsewhere".
+- **Connection pill (owner request).** A pill under the header:
+  - "You're offline. Changes are kept on this phone…", with how many changes are waiting;
+  - "Reconnecting…" after 4 s without live updates;
+  - "Back online · all changes sent".
+- **Also:** the e2e server forces `POSTHOG_KEY` empty, so tests never send analytics from a developer's `.env`.
+
+Tests:
+- Unit: queue rules (strict order, refused not blocking, coalescing, revision choice, store and restore) and connection messages.
+- Integration: stale vs current round on add.
+- e2e (`offline.spec.ts`): the pill and its waiting count, reload keeps an unsent dish and sends it once, an offline add across a round boundary offers "Add to round 2".
+- Totals: 112 unit/integration, 32 e2e.

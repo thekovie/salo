@@ -64,6 +64,13 @@ async function assertRoomForEntry(tx: Tx, sessionId: string, isNew = false) {
 
 export async function addEntry(tx: Tx, session: SessionRow, actor: Actor, input: AddEntryInput): Promise<Applied<EntryRef>> {
   if (!can(actor, "entry.add")) throw forbidden();
+  // A dish added while offline belongs to the round the person was adding to. If that round was confirmed with the
+  // waiter meanwhile, refuse instead of quietly slipping it into the next round; the person decides what to do.
+  if (input.roundId) {
+    const [target] = await tx.select({ number: rounds.roundNumber, status: rounds.status }).from(rounds).where(and(eq(rounds.id, input.roundId), eq(rounds.sessionId, session.id)));
+    if (!target) throw new AppError(404, "ROUND_NOT_FOUND", "That round isn’t part of this order.");
+    if (target.status !== "DRAFT") throw new AppError(409, "ROUND_CLOSED", `Round ${target.number} was confirmed with the waiter before this dish was saved.`);
+  }
   const round = await draftRound(tx, session.id);
   await assertRoomForEntry(tx, session.id, true);
 

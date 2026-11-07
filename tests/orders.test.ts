@@ -5,6 +5,7 @@ import { resolveActor } from "@/server/auth/actor";
 import { rounds, sessionEvents, sessions } from "@/server/db/schema";
 import { runMutation } from "@/server/mutations";
 import { setEntryRemoved, updateEntry } from "@/server/orders/entries";
+import { confirmRound, openRound } from "@/server/orders/rounds";
 import { renameSession } from "@/server/sessions/rename";
 import { getSnapshot } from "@/server/sessions/snapshot";
 import { resetDb, testDb } from "./helpers/db";
@@ -175,5 +176,23 @@ describe("entries", () => {
     for (const bad of [{ dishName: "", quantity: 1 }, { dishName: "x", quantity: 0 }, { dishName: "x", quantity: 100 }, { dishName: "x".repeat(61), quantity: 1 }, { dishName: "Gyo\u0000za", quantity: 1 }]) {
       expect(() => add(db, host, bad)).toThrow();
     }
+  });
+});
+
+describe("adds carry their round (finding 1)", () => {
+  it("refuses an add aimed at a round that was confirmed meanwhile, and accepts the current round", async () => {
+    const { host } = await newSession(db);
+    const first = await getSnapshot(db, host);
+    await add(db, host, { dishName: "Gyoza", quantity: 1, roundId: first.activeRoundId });
+    await runMutation(db, host, { idempotencyKey: key(), type: "t" }, (tx, s) => confirmRound(tx, s, host, first.activeRoundId, s.revision));
+    await runMutation(db, host, { idempotencyKey: key(), type: "t" }, (tx, s) => openRound(tx, s, host));
+    const stale = await add(db, host, { dishName: "Rice", quantity: 1, roundId: first.activeRoundId }).then(
+      () => null,
+      (e: { code?: string; status?: number }) => e,
+    );
+    expect(stale).toMatchObject({ status: 409, code: "ROUND_CLOSED" });
+    const second = await getSnapshot(db, host);
+    await add(db, host, { dishName: "Rice", quantity: 1, roundId: second.activeRoundId });
+    expect((await getSnapshot(db, host)).entries.filter((e) => e.roundId === second.activeRoundId).map((e) => e.dishName)).toEqual(["Rice"]);
   });
 });

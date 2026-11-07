@@ -42,6 +42,8 @@ export const addEntrySchema = z.object({
   variant: optional(LIMITS.variant),
   instructions: optional(LIMITS.instructions),
   attribution: attributionSchema.default({ type: "UNASSIGNED" }),
+  /** The round the client was adding to (optional for older clients and the host's manual entry). */
+  roundId: z.uuid().optional(),
 });
 
 export const updateEntrySchema = z
