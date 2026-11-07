@@ -152,7 +152,7 @@ test("tour: guest phone", async ({ browser }) => {
   await addDish(host.page, "Sisig");
   const code = await inviteCode(host.page);
   const guest = await context(browser, { viewport: PHONE, fresh: true });
-  await guest.page.goto(`/j/${code}`);
+  await guest.page.goto(`/i/${code}`);
   await guest.page.getByLabel("Your name").fill("JD");
   await guest.page.getByRole("button", { name: "Join the order" }).click();
   await guest.page.waitForTimeout(1200);

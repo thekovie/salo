@@ -18,7 +18,7 @@ export default async function SessionPage({ params, searchParams }: Props) {
     if (removed) return <RemovedNotice reason={removed.reason} inviteCode={await openInviteCode(id)} />;
     // Someone forwarded the room link (or a link preview is fetching it): show them the invite instead.
     const code = await openInviteCode(id);
-    if (code) redirect(`/j/${code}`);
+    if (code) redirect(`/i/${code}`);
     // Ended, unknown or malformed: the same answer for all three.
     notFound();
   }

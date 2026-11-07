@@ -1,6 +1,6 @@
 /** The link people share, and the sentence that goes with it so the message explains itself even without a preview. */
 export function inviteUrl(appUrl: string, joinCode: string): string {
-  return new URL(`/j/${joinCode}`, appUrl).toString();
+  return new URL(`/i/${joinCode}`, appUrl).toString();
 }
 
 export function inviteMessage(title: string | null, url: string): string {

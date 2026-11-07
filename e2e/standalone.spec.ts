@@ -125,7 +125,7 @@ test("strangers cannot open someone else's order: a forwarded room link only off
   const other = await browser.newContext();
   const stranger = await other.newPage();
   await stranger.goto(page.url());
-  await expect(stranger).toHaveURL(/\/j\/[A-Z0-9]{6}$/);
+  await expect(stranger).toHaveURL(/\/i\/[A-Z0-9]{6}$/);
   await expect(stranger.getByText("Secret Dish")).toHaveCount(0);
   // Unknown and ended orders look the same: nothing there.
   const response = await stranger.goto("/s/00000000-0000-4000-8000-000000000000");

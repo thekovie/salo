@@ -105,10 +105,10 @@ test("capture every screen", async ({ page, browser, request }) => {
   await shot(page, "cap-11-rounds-history");
 
   await guest.page.emulateMedia({ reducedMotion: "reduce", colorScheme: "dark" });
-  await guest.page.goto(`/j/${code}`);
+  await guest.page.goto(`/i/${code}`);
   const joiner = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, colorScheme: "dark" });
   const joinPage = await joiner.newPage();
-  await joinPage.goto(`/j/${code}`);
+  await joinPage.goto(`/i/${code}`);
   await shot(joinPage, "cap-12-join-dark");
   await joiner.close();
 

@@ -43,7 +43,7 @@ test("a first-time guest gets the guest tour; Not now hides the offer; the ? but
   const code = await inviteCode(page);
 
   const { context, page: guest } = await freshPage(browser);
-  await guest.goto(`/j/${code}`);
+  await guest.goto(`/i/${code}`);
   await guest.getByLabel("Your name").fill("JD");
   await guest.getByRole("button", { name: "Join the order" }).click();
   // The offer waits until the "You're in!" tip has had its moment.

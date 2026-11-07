@@ -355,3 +355,10 @@ Submitting robots.txt to the Sharing Debugger didn't help. The owner then scrape
 - Fix: invite and order pages skip noindex for Meta's crawlers only (`src/lib/crawlers.ts`, plus a `missing` user-agent condition on the `X-Robots-Tag` rule in `next.config.ts`). Search engines and everyone else still get noindex.
 - Tests: `isMetaCrawler` unit test; e2e checks that the Facebook user agent gets no robots header or tag while Googlebot gets `noindex, nofollow`.
 
+## Invites move to `/i/` (`fix/invite-path`)
+
+Live after #23: Meta's crawlers got `/j/<code>` with 200 and no noindex, yet the Sharing Debugger still said 403. `/privacy` (never disallowed) worked. Meta was holding the old `Disallow: /j/` robots rule.
+- Invites are served at `/i/<code>`: the page and preview image moved, and share links, the QR code, join-by-code, the removed notice and the room-link redirect all use `/i/`.
+- `/j/<code>` gets a 308 to `/i/<code>`, so old links and printed QR codes still work.
+- Tests: e2e checks the `/j/` → `/i/` redirect; all invite flows run on `/i/`. 123 unit, 34 e2e.
+

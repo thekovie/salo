@@ -49,7 +49,7 @@ All 14 brief end-to-end scenarios are covered by Playwright (see `docs/testing.m
 2. **Backups**: daily schedule, S3 off-VPS destination, retention, failure alerts on the PostgreSQL resource (`docs/backups.md`); run the first production restore drill and note the date here.
 3. **Proxy check in production**: `node scripts/sse-proxy-check.mjs https://<domain> 75`.
 4. **Real phones**: try a full order on Android and iPhone over mobile data (QR join, live updates, waiter ticket in sunlight and in a dim place, screen reader spot check with TalkBack/VoiceOver).
-5. **Link previews**: the root cause is fixed. Meta reads `noindex` as a block, so Meta's crawlers no longer get it on invites (see `docs/deployment.md` → Link previews). To do after the deploy: press **Scrape Again** in the Sharing Debugger on a fresh invite link and confirm the card, then paste the link in Messenger.
+5. **Link previews**: invites now live at `/i/<code>`, since Meta kept the old `/j/` robots rule cached; `/j/` redirects. The root cause is fixed. Meta reads `noindex` as a block, so Meta's crawlers no longer get it on invites (see `docs/deployment.md` → Link previews). To do after the deploy: press **Scrape Again** in the Sharing Debugger on a fresh invite link and confirm the card, then paste the link in Messenger.
 6. **Usability test** against Notes with a real table (brief 15.6): time to record ten dishes, mistakes, corrections, confidence.
 7. **PostHog**:
    - In Coolify, set `POSTHOG_KEY` to the US project's `phc_…` key and redeploy.
