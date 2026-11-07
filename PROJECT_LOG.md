@@ -403,3 +403,15 @@ Owner found that there was no exit or back button. The earlier critique was scop
 - **Guard:** `e2e/escape-routes.spec.ts` visits the policies, 404, the order (host and guest), the invite page and the waiter view, and fails if a screen has no visible way out. It was verified to fail on the old invite page.
 - **Process:** UX reviews now always include a whole-app structural pass (ways out, dead ends, what comes next), not only the flow asked about.
 
+## Density pass (same branch)
+
+Owner: "assess the others as well… a domino effect will take place". Captured all 15 screens at 320 and 390 px (`e2e/density-review.spec.ts`, opt-in `UX_REVIEW=1`) and ran impeccable `critique` with crowding as the lens. Findings and fixes:
+- **P1, dock covered ~75% of a small screen.** The "who's it for" panel stayed open after Add and across tabs; it now closes on both.
+- **P1, guest dock overlap.** The count ran under "I'm ready". Under 360 px the two buttons get their own split row.
+- **P1, floating layers covered controls.** The toast sat at a guessed offset. Toasts, the connection pill and "added" pills are now one stack above the dock's measured height (`useDockHeight` → `--dock-h`). The page's bottom padding follows it too.
+- **P2, header truncated even at 390** ("N…", "R…"). It now has two rows: ‹ back, the name with status and sync under it, then Invite plus Options (or Help) in equal halves under 400 px. The ‹ + logo became a plain ‹.
+- **P2, composer hid labels at 320.** "For" was `display: none`, which also changed the accessible name, and Add went icon-only. Both labels now always show; under 360 px "For …" takes its own row.
+- **P2, guest "?" had no label.** It is now "Help".
+- **P3:** the waiter stamp no longer wraps "Round 1"; "0/1 guests ready" no longer wraps; tighter space above the tabs.
+- **Tests:** scenario 6 now expects the panel to close after Add (the recipient is kept); readiness wording updated. 127 unit, 36 e2e.
+

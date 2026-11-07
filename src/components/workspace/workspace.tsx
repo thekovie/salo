@@ -36,6 +36,7 @@ import { TourOffer } from "@/components/onboarding/tour-offer";
 import { GUEST_TOUR, HOST_TOUR, markTourSeen, subscribeTourSeen, tourSeen } from "@/components/onboarding/tour-steps";
 import { SessionHeader } from "./session-header";
 import { Toasts, useToasts } from "./toasts";
+import { useDockHeight } from "@/hooks/use-dock-height";
 
 /** Refusals that may succeed on a second try (server hiccup, too fast); conflicts and permissions will not. */
 const isRetryable = (code?: string) => code === "INTERNAL" || code === "RATE_LIMITED" || code === "UNKNOWN";
@@ -65,6 +66,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
   const anyConfirmed = snapshot.rounds.some((r) => r.status === "CONFIRMED");
   const ended = sessionOpen ? null : anyConfirmed ? "ended" : "cancelled";
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const dockRef = useDockHeight();
   const [optionsStart, setOptionsStart] = useState<"options" | "confirm">("options");
   const openOptions = () => {
     setOptionsStart("options");
@@ -314,7 +316,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
   }
 
   return (
-    <div className="min-h-dvh pb-[calc(env(safe-area-inset-bottom)+11rem)]">
+    <div className="min-h-dvh pb-[calc(var(--dock-h,11rem)+1.5rem)]">
       <SessionHeader
         title={snapshot.session.title}
         roundNumber={round.number}
@@ -329,11 +331,6 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
           ) : null
         }
       />
-      {/* Notices under the header: connection first, then who just added what. */}
-      <div className="pointer-events-none fixed inset-x-0 top-[calc(env(safe-area-inset-top)+8.5rem)] z-40 flex flex-col gap-1.5 px-4">
-        <ConnectionPill online={online} stream={stream} unsent={pending.filter((p) => p.status === "queued" || p.status === "waiting" || p.status === "sending").length} />
-        {sessionOpen ? <ArrivalPills arrivals={arrivals} onSelect={jumpTo} /> : null}
-      </div>
       <EditDishSheet entry={editing} onClose={() => setEditing(null)} meId={snapshot.me.participantId} {...recipients} onSave={saveEdit} />
       {touring ? <Tour steps={isHost ? HOST_TOUR : GUEST_TOUR} onClose={endTour} /> : null}
       {anyConfirmed ? <SummarySheet open={summaryOpen} onOpenChange={setSummaryOpen} snapshot={snapshot} /> : null}
@@ -351,7 +348,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
         />
       ) : null}
 
-      <main className="mx-auto max-w-2xl px-3 pt-5">
+      <main className="mx-auto max-w-2xl px-3 pt-3">
         {failed.length > 0 ? (
           <div role="alert" className="mb-4 space-y-2 rounded-2xl bg-bad-wash p-3 text-bad">
             <p className="text-sm font-semibold">Not saved. The ticket shows what the order really has now.</p>
@@ -489,21 +486,23 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
       </main>
 
       {sessionOpen ? (
-      <div className="fixed inset-x-0 bottom-0 z-30 bg-gradient-to-t from-paper from-70% to-transparent pt-6 pb-[calc(env(safe-area-inset-bottom)+0.5rem)]">
+      <div ref={dockRef} className="fixed inset-x-0 bottom-0 z-30 bg-gradient-to-t from-paper from-70% to-transparent pt-6 pb-[calc(env(safe-area-inset-bottom)+0.5rem)]">
         <div className="mx-auto max-w-2xl space-y-2 px-3">
-          {isOpen ? <Composer dishNames={snapshot.dishNames} {...recipients} onAdd={(input) => void add({ ...input, roundId: round.id })} /> : null}
-          <div className="flex items-center justify-between gap-3 px-2">
+          {isOpen ? <Composer dishNames={snapshot.dishNames} {...recipients} view={view} onAdd={(input) => void add({ ...input, roundId: round.id })} /> : null}
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-2">
             <div className="min-w-0">
               <p className="whitespace-nowrap text-ink-soft" data-testid="round-total">
                 <Ticker value={total} className="tally text-xl text-ink" /> {total === 1 ? "item" : "items"}
                 <span className="hidden sm:inline"> this round</span>
               </p>
               {isHost && isOpen && ready.total > 0 ? (
-                <p className="text-sm text-ink-soft">
-                  {ready.ready} of {ready.total} {ready.total === 1 ? "guest" : "guests"} ready
+                <p className="whitespace-nowrap text-sm text-ink-soft">
+                  {ready.ready}/{ready.total} {ready.total === 1 ? "guest" : "guests"} ready
                 </p>
               ) : null}
             </div>
+            {/* Guest: "I'm ready" and "Ticket" get their own split row under 360 px instead of overlapping the count. */}
+            <div className={cn("flex gap-2", !isHost && isOpen && "max-[359px]:basis-full max-[359px]:*:flex-1 max-[359px]:*:justify-center")}>
             {!isHost && isOpen ? (
               <button
                 type="button"
@@ -530,6 +529,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
                 Ticket
               </Button>
             ) : null}
+            </div>
           </div>
         </div>
       </div>
@@ -562,7 +562,16 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
           onConfirm={confirmRound}
         />
       ) : null}
-      <Toasts toasts={toasts} onDismiss={dismissToast} />
+      <Toasts
+        toasts={toasts}
+        onDismiss={dismissToast}
+        notices={
+          <>
+            <ConnectionPill online={online} stream={stream} unsent={pending.filter((p) => p.status === "queued" || p.status === "waiting" || p.status === "sending").length} />
+            {sessionOpen ? <ArrivalPills arrivals={arrivals} onSelect={jumpTo} /> : null}
+          </>
+        }
+      />
     </div>
   );
 }

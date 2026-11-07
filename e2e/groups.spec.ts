@@ -40,11 +40,11 @@ test("hybrid: a guest claims a dish the host recorded for them; duplicate hint; 
   await addDish(page, "Chicken Katsu");
   await addDish(page, "Halo-halo");
   await guest.page.getByRole("button", { name: "I’m ready" }).click();
-  await expect(page.getByText("1 of 1 guest ready")).toBeVisible();
+  await expect(page.getByText("1/1 guest ready")).toBeVisible();
 
   // The guest also adds Chicken Katsu: the host sees a possible double order and their readiness resets.
   await addDish(guest.page, "Chicken Katsu");
-  await expect(page.getByText("0 of 1 guest ready")).toBeVisible();
+  await expect(page.getByText("0/1 guest ready")).toBeVisible();
   await page.getByRole("tab", { name: /People/ }).click();
   await expect(page.getByText(/Rafa added Chicken Katsu ×1, and you also added it for them/)).toBeVisible();
   await page.getByRole("button", { name: "Remove your copy" }).click();

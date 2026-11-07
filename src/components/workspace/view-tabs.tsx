@@ -25,7 +25,7 @@ export function ViewTabs({ view, onChange, counts }: { view: View; onChange: (vi
     refs.current[next]?.focus();
   }
   return (
-    <div role="tablist" aria-label="Views" className="mb-4 grid grid-cols-4 border-b-[1.5px] border-rule">
+    <div role="tablist" aria-label="Views" className="mb-3 grid grid-cols-4 border-b-[1.5px] border-rule">
       {VIEWS.map((v, i) => (
         <button
           key={v.id}

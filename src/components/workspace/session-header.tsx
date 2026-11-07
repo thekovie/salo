@@ -2,7 +2,6 @@
 
 import { ChevronDown, ChevronLeft, CircleHelp } from "lucide-react";
 import Link from "next/link";
-import { LogoMark } from "@/components/brand/logo";
 import type { SyncState } from "@/hooks/use-session";
 import { SyncPill } from "./sync-pill";
 
@@ -28,14 +27,15 @@ export function SessionHeader({ title, roundNumber, roundStatus, ended = null, s
   const status = ended === "cancelled" ? "Cancelled" : ended ? "Order ended" : `Round ${roundNumber} · ${roundStatus === "DRAFT" ? "Open" : "Confirmed"}`;
   return (
     <header className="sticky top-0 z-30 bg-band text-on-band pt-[env(safe-area-inset-top)] shadow-[0_6px_16px_-10px_oklch(0.3_0.1_30/0.6)]">
-      <div className="mx-auto flex max-w-2xl items-center gap-1.5 px-2 py-2">
-        {/* A recognisable way out (a logo alone doesn't read as "back"). The order stays saved and reopens from home. */}
-        <Link href="/" aria-label="Back to Salo home" className="inline-flex h-11 shrink-0 items-center gap-0.5 rounded-full pr-1.5 pl-0.5 hover:bg-on-band/10">
-          <ChevronLeft className="size-5" aria-hidden />
-          <LogoMark inverse className="size-7" />
-        </Link>
-        <div className="min-w-0 flex-1 px-1">
-          <h1 className="truncate font-display text-lg leading-tight" data-ph-mask="">
+      {/* Two rows so nothing fights for width (density review 2026-11-08): who/what on top, actions below, every label visible. */}
+      <div className="mx-auto max-w-2xl px-2 pt-1.5 pb-2">
+        <div className="flex items-center gap-1">
+          {/* A recognisable way out (a logo alone doesn't read as "back"). The order stays saved and reopens from home. */}
+          <Link href="/" aria-label="Back to Salo home" className="inline-flex size-11 shrink-0 items-center justify-center rounded-full hover:bg-on-band/10">
+            <ChevronLeft className="size-6" aria-hidden />
+          </Link>
+          <div className="min-w-0 flex-1">
+          <h1 className="truncate font-display text-xl leading-tight" data-ph-mask="">
             {onOptions ? (
               // A bigger tap target for the same options; keyboard and screen-reader users get the labelled button.
               <button type="button" tabIndex={-1} onClick={onOptions} className="block max-w-full cursor-pointer truncate text-left">
@@ -45,30 +45,41 @@ export function SessionHeader({ title, roundNumber, roundStatus, ended = null, s
               (title ?? "Table order")
             )}
           </h1>
-          <div className="mt-0.5 flex min-w-0 items-center gap-2">
-            <span className="truncate font-mono text-xs tracking-[0.12em] uppercase opacity-90">{status}</span>
-            {ended ? null : <SyncPill state={sync} compact className="shrink-0 px-1.5 py-0.5" />}
+            <div className="mt-0.5 flex min-w-0 items-center gap-2">
+              <span className="truncate font-mono text-xs tracking-[0.12em] uppercase opacity-90">{status}</span>
+              {ended ? null : <SyncPill state={sync} compact className="shrink-0 px-1.5 py-0.5" />}
+            </div>
           </div>
         </div>
-        {actions}
-        {onOptions ? (
-          // A labelled button (was a bare ⋯): rename, end or cancel the order live here.
-          <button
-            type="button"
-            onClick={onOptions}
-                        aria-label="Order options"
-            data-tour="options"
-            className="inline-flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-full pr-2.5 pl-3.5 font-semibold ring-1 ring-on-band/40 hover:bg-on-band/10"
-          >
-            <span>Options</span>
-            <ChevronDown className="size-4" aria-hidden />
-          </button>
-        ) : null}
-        {onHelp ? (
-          <button type="button" onClick={onHelp} aria-label="How Salo works" data-tour="help" className="inline-flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full hover:bg-on-band/10">
-            <CircleHelp className="size-6" aria-hidden />
-          </button>
-        ) : null}
+        {/* Actions get their own row: equal halves on small phones, right-aligned on wider ones. */}
+        <div className="mt-1.5 flex items-center justify-end gap-2 max-[399px]:*:flex-1 empty:hidden">
+          {actions}
+          {onOptions ? (
+            // A labelled button (was a bare ⋯): rename, end or cancel the order live here.
+            <button
+              type="button"
+              onClick={onOptions}
+              aria-label="Order options"
+              data-tour="options"
+              className="inline-flex min-h-11 shrink-0 cursor-pointer items-center justify-center gap-1 rounded-full pr-2.5 pl-3.5 font-semibold ring-1 ring-on-band/40 hover:bg-on-band/10"
+            >
+              <span>Options</span>
+              <ChevronDown className="size-4" aria-hidden />
+            </button>
+          ) : null}
+          {onHelp ? (
+            <button
+              type="button"
+              onClick={onHelp}
+              aria-label="How Salo works"
+              data-tour="help"
+              className="inline-flex min-h-11 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-full px-3.5 font-semibold ring-1 ring-on-band/40 hover:bg-on-band/10"
+            >
+              <CircleHelp className="size-5" aria-hidden />
+              <span>Help</span>
+            </button>
+          ) : null}
+        </div>
       </div>
     </header>
   );
