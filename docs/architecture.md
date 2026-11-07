@@ -24,7 +24,7 @@ One Next.js 16 application (App Router) and one dedicated PostgreSQL database. N
 
 ## Real time
 
-Events are already written durably per revision and announced with `pg_notify('salo_events', '<session>:<revision>')`. The SSE stream that delivers them to other devices ships in M2 (see realtime.md then).
+Events are already written durably per revision and announced with `pg_notify('salo_events', '<session>:<revision>')`. The SSE stream delivers them to other devices (`docs/realtime.md`). Also in the app: product analytics (`src/lib/analytics.ts`, PostHog through `/ingest`, only when `POSTHOG_KEY` is set), and the hourly retention cleanup (`src/server/maintenance/cleanup.ts`). On the client, the change queue's rules live in `src/lib/queue.ts`: strict order, conflict-safe revisions, and saved across reloads.
 
 ## Security boundaries
 

@@ -4,7 +4,7 @@ import { CircleCheck, Hand, Lock, Plus, ReceiptText } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { WaiterTicket } from "@/components/ticket/waiter-ticket";
 import { Button } from "@/components/ui/button";
-import { describeOp, useSession, type AddInput, type OverlayEntry } from "@/hooks/use-session";
+import { describeOp, useSession, type AddInput, type EntryChanges, type OverlayEntry } from "@/hooks/use-session";
 import { consolidate } from "@/lib/consolidate";
 import { arrivalsBetween, type Arrival } from "@/lib/arrivals";
 import { setAnalyticsContext, track } from "@/lib/analytics";
@@ -30,6 +30,7 @@ import { ArrivalPills, ARRIVAL_MS } from "./arrival-pills";
 import { ConnectionPill } from "./connection-pill";
 import { OrderOptionsSheet } from "./order-options-sheet";
 import { SummarySheet } from "./summary-sheet";
+import { EditDishSheet } from "./edit-dish-sheet";
 import { Tour } from "@/components/onboarding/tour";
 import { TourOffer } from "@/components/onboarding/tour-offer";
 import { GUEST_TOUR, HOST_TOUR, markTourSeen, subscribeTourSeen, tourSeen } from "@/components/onboarding/tour-steps";
@@ -38,6 +39,13 @@ import { Toasts, useToasts } from "./toasts";
 
 /** Refusals that may succeed on a second try (server hiccup, too fast); conflicts and permissions will not. */
 const isRetryable = (code?: string) => code === "INTERNAL" || code === "RATE_LIMITED" || code === "UNKNOWN";
+
+/** An entry's attribution as the API takes it (for Undo after an edit). */
+function asAttribution(a: OverlayEntry["attribution"]): AddInput["attribution"] {
+  if (a.type === "TABLE" || a.type === "UNASSIGNED") return { type: a.type };
+  if (a.type === "GROUP") return { type: "GROUP", label: a.label ?? "" };
+  return a.participantId ? { type: "INDIVIDUAL", participantId: a.participantId } : { type: "INDIVIDUAL", label: a.label };
+}
 
 const copyFor = (roundNumber: number): 1 | 2 | 3 => (roundNumber >= 3 ? 3 : roundNumber === 2 ? 2 : 1);
 
@@ -204,9 +212,27 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
     [mutate, show, entryById],
   );
 
+  const [editing, setEditing] = useState<OverlayEntry | null>(null);
+  // Brief 6.5: accidental draft changes can be undone. Undo goes through the same queue (after the change) and the
+  // same conflict check, so it can't overwrite someone else's newer change either.
+  function saveEdit(entry: OverlayEntry, changes: EntryChanges) {
+    void mutate({ kind: "edit", entry, changes });
+    const previous: EntryChanges = {};
+    if (changes.variant !== undefined) previous.variant = entry.variant;
+    if (changes.instructions !== undefined) previous.instructions = entry.instructions;
+    if (changes.attribution) previous.attribution = asAttribution(entry.attribution);
+    show({ message: `Updated ${entry.dishName}.`, action: { label: "Undo", run: () => void mutate({ kind: "edit", entry, changes: previous }) } });
+  }
   const actions: TicketActions = {
     canEdit: (entry) => canEditEntry(snapshot.me, entry),
-    setQuantity: (entry: OverlayEntry, quantity) => void mutate({ kind: "update", entry, quantity }),
+    edit: isOpen ? (entry) => setEditing(entry) : undefined,
+    setQuantity: (entry: OverlayEntry, quantity) => {
+      void mutate({ kind: "update", entry, quantity });
+      show({
+        message: `${entry.dishName} ×${entry.quantity} → ×${quantity}.`,
+        action: { label: "Undo", run: () => void mutate({ kind: "update", entry, quantity: entry.quantity }) },
+      });
+    },
     remove: (entry: OverlayEntry) => {
       // The row fades and the rest of the ticket closes the gap (View Transition where supported).
       withViewTransition(() => void mutate({ kind: "remove", entry }));
@@ -299,6 +325,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
         <ConnectionPill online={online} stream={stream} unsent={pending.filter((p) => p.status === "queued" || p.status === "waiting" || p.status === "sending").length} />
         {sessionOpen ? <ArrivalPills arrivals={arrivals} onSelect={jumpTo} /> : null}
       </div>
+      <EditDishSheet entry={editing} onClose={() => setEditing(null)} meId={snapshot.me.participantId} {...recipients} onSave={saveEdit} />
       {touring ? <Tour steps={isHost ? HOST_TOUR : GUEST_TOUR} onClose={endTour} /> : null}
       {anyConfirmed ? <SummarySheet open={summaryOpen} onOpenChange={setSummaryOpen} snapshot={snapshot} /> : null}
       {isHost && sessionOpen ? (

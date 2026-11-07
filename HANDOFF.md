@@ -29,7 +29,7 @@ All 14 brief end-to-end scenarios are covered by Playwright (see `docs/testing.m
 
 - **Deployed on Coolify by the owner on 2026-11-06.** `main` at `8e0c088` (PR #16) is the latest build; redeploy from `main` to get everything above.
 - Database migrations run when the app starts. The latest is `0005_participant_removal` (from PR #14). Check the first start after deploying it logs no migration error.
-- Environment: `APP_URL` must be the real https domain (invite links, QR codes, link previews and the CSRF origin check depend on it). Optional: `NEW_ORDERS_PER_HOUR` (default 20; leave it in production), `CLOSED_RETENTION_DAYS` (default 7). See `docs/deployment.md`.
+- Environment: `APP_URL` must be the real https domain (invite links, QR codes, link previews and the CSRF origin check depend on it). Optional: `NEW_ORDERS_PER_HOUR` (default 20; leave it in production), `CLOSED_RETENTION_DAYS` (default 7), `INACTIVE_RETENTION_DAYS` (default 30), `POSTHOG_KEY` (analytics on when set). A cancelled order (ended before anything was confirmed) is deleted after **1 day**: an owner decision, recorded 2026-11-07, that deliberately differs from the PRD's 7 days, since nothing was ordered. See `docs/deployment.md`.
 - After each deploy, a quick smoke check:
   - `/api/health` returns 200;
   - start an order on a phone, and join it from a second phone by QR;
@@ -61,9 +61,10 @@ All 14 brief end-to-end scenarios are covered by Playwright (see `docs/testing.m
 
 ## Known limitations
 
-- If a guest's join request succeeds but the response is lost, retrying creates a second guest with the same name (harmless; shows twice in People).
-- Reusing one idempotency key for a different target by the same participant returns the earlier result (only affects that participant's own retries).
-- Rate limits and live-update fan-out live in one process: run one app instance (brief 7.7). Counters reset on restart. Move limits to PostgreSQL before scaling out.
+- Rate limits, live-update fan-out and the 10-minute create/join replay memory live in one process: run one app instance (brief 7.7). They reset on restart. Move them to PostgreSQL before scaling out.
+- Idempotency keys are bound to a change's kind and target, but not to its exact body. Clients generate a fresh key per change, so this only matters for a buggy client.
+- Changes waiting on a phone are kept in that browser's `localStorage`. Clearing site data, or a private window, loses them; the page says when changes are waiting.
+- Editing a dish changes its size, notes and who it's for; changing the dish itself is a remove-and-add, by design (dish identity drives consolidation).
 - Join codes are 6 characters. Wrong codes are limited per address (40/hour) and across all addresses (2,000/hour), so a guessing attack from many addresses is capped. The price: during such an attack, invite pages wait out the hour.
 - A large table behind one shared carrier address (some mobile networks) shares the 30 joins per hour.
 - Removing a guest also takes them out of their groups, so a shared group dish lists only the remaining members in "Who ordered what".

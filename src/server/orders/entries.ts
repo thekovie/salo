@@ -97,7 +97,7 @@ export async function addEntry(tx: Tx, session: SessionRow, actor: Actor, input:
 /** The entry with what permission checks need, scoped to this session (an id from another session is "not found"). */
 async function loadEntry(tx: Tx, sessionId: string, entryId: string) {
   const [row] = await tx
-    .select({ id: orderEntries.id, revision: orderEntries.revision, deletedAt: orderEntries.deletedAt, submittedBy: orderBatches.submittedBy, attributedParticipantId: orderBatches.attributedParticipantId, roundId: orderEntries.roundId, roundStatus: rounds.status })
+    .select({ id: orderEntries.id, batchId: orderEntries.batchId, revision: orderEntries.revision, deletedAt: orderEntries.deletedAt, submittedBy: orderBatches.submittedBy, attributedParticipantId: orderBatches.attributedParticipantId, roundId: orderEntries.roundId, roundStatus: rounds.status })
     .from(orderEntries)
     .innerJoin(orderBatches, eq(orderBatches.id, orderEntries.batchId))
     .innerJoin(rounds, eq(rounds.id, orderEntries.roundId))
@@ -130,7 +130,14 @@ export async function updateEntry(tx: Tx, session: SessionRow, actor: Actor, ent
       ...(input.instructions !== undefined ? { specialInstructions: optionalText(input.instructions) } : {}),
     })
     .where(eq(orderEntries.id, entryId));
-  await resetReadiness(tx, entry.roundId, [actor.participantId, entry.submittedBy, entry.attributedParticipantId]);
+  // Who it's for lives on the batch (one batch per added dish). The submitter, and so edit rights, stay as they were.
+  let newlyFor: string | null = null;
+  if (input.attribution) {
+    const values = await batchValues(tx, session, actor, input.attribution);
+    await tx.update(orderBatches).set({ ...values, groupId: null }).where(eq(orderBatches.id, entry.batchId));
+    newlyFor = values.attributedParticipantId;
+  }
+  await resetReadiness(tx, entry.roundId, [actor.participantId, entry.submittedBy, entry.attributedParticipantId, newlyFor]);
   return { result: { entryId, revision }, event: { type: "entry.updated", payload: { entryId } } };
 }
 

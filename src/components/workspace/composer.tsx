@@ -5,19 +5,10 @@ import { useId, useMemo, useRef, useState } from "react";
 import type { AddInput } from "@/hooks/use-session";
 import { track } from "@/lib/analytics";
 import { normalizeText } from "@/lib/dish-name";
+import { attributionOf, summary, type Recipient } from "@/lib/recipient";
+import { RecipientPicker } from "./recipient-picker";
 import { cn } from "@/lib/utils";
 import { Stepper } from "./stepper";
-
-/** Who the next dish is for. Picked from the order itself, so nobody types a name twice. */
-export type Recipient =
-  | { kind: "ME" }
-  | { kind: "PERSON"; id: string; name: string }
-  | { kind: "NAMED"; name: string }
-  | { kind: "GROUP"; label: string }
-  | { kind: "TABLE" }
-  | { kind: "ANYONE" }
-  | { kind: "NEW_PERSON" }
-  | { kind: "NEW_GROUP" };
 
 const MAX_SUGGESTIONS = 4;
 
@@ -39,51 +30,6 @@ function suggestionsFor(query: string, names: string[]): string[] {
   const starts = names.filter((n) => normalizeText(n).startsWith(q));
   const contains = names.filter((n) => !normalizeText(n).startsWith(q) && normalizeText(n).includes(q));
   return [...starts, ...contains].filter((n) => normalizeText(n) !== q).slice(0, MAX_SUGGESTIONS);
-}
-
-const same = (a: Recipient, b: Recipient) => JSON.stringify(a) === JSON.stringify(b);
-
-function summary(r: Recipient, typed: string): string {
-  switch (r.kind) {
-    case "ME":
-      return "Me";
-    case "PERSON":
-    case "NAMED":
-      return r.name;
-    case "GROUP":
-      return r.label;
-    case "TABLE":
-      return "Whole table";
-    case "ANYONE":
-      return "Anyone";
-    case "NEW_PERSON":
-      return typed.trim() || "Someone else";
-    case "NEW_GROUP":
-      return typed.trim() || "New group";
-  }
-}
-
-function attributionOf(r: Recipient, typed: string): AddInput["attribution"] | null {
-  switch (r.kind) {
-    case "ME":
-      return { type: "INDIVIDUAL" };
-    case "PERSON":
-      return { type: "INDIVIDUAL", participantId: r.id };
-    case "NAMED":
-      return { type: "INDIVIDUAL", label: r.name };
-    case "GROUP":
-      return { type: "GROUP", label: r.label };
-    case "TABLE":
-      return { type: "TABLE" };
-    case "ANYONE":
-      return { type: "UNASSIGNED" };
-    case "NEW_PERSON":
-    case "NEW_GROUP": {
-      const label = typed.trim();
-      if (!label) return null;
-      return r.kind === "NEW_GROUP" ? { type: "GROUP", label } : { type: "INDIVIDUAL", label };
-    }
-  }
 }
 
 /**
@@ -137,16 +83,6 @@ export function Composer({ dishNames, people, names, groups, disabled, onAdd }: 
     dishRef.current?.focus();
   }
 
-  const chips: { r: Recipient; label: string; group?: boolean }[] = [
-    { r: { kind: "ME" }, label: "Me" },
-    ...people.map((p): { r: Recipient; label: string } => ({ r: { kind: "PERSON", id: p.id, name: p.displayName }, label: p.displayName })),
-    ...names.map((name): { r: Recipient; label: string } => ({ r: { kind: "NAMED", name }, label: name })),
-    ...groups.map((label): { r: Recipient; label: string; group: boolean } => ({ r: { kind: "GROUP", label }, label, group: true })),
-    { r: { kind: "TABLE" }, label: "Whole table", group: true },
-    { r: { kind: "ANYONE" }, label: "Anyone" },
-    { r: { kind: "NEW_PERSON" }, label: "+ Someone else" },
-    { r: { kind: "NEW_GROUP" }, label: "+ New group", group: true },
-  ];
   const ForIcon = current.kind === "GROUP" || current.kind === "NEW_GROUP" || current.kind === "TABLE" ? UsersRound : UserRound;
 
   return (
@@ -183,51 +119,20 @@ export function Composer({ dishNames, people, names, groups, disabled, onAdd }: 
           >
             <X className="size-5" aria-hidden />
           </button>
-          <div>
-            <span className="block pr-10 text-sm font-semibold" id={`${id}-for`}>
-              Who&rsquo;s it for?
-            </span>
-            <div role="radiogroup" aria-labelledby={`${id}-for`} className="mt-1.5 flex flex-wrap gap-1.5" data-ph-mask="">
-              {chips.map(({ r, label, group }) => {
-                const checked = same(current, r);
-                return (
-                  <button
-                    key={JSON.stringify(r)}
-                    type="button"
-                    role="radio"
-                    aria-checked={checked}
-                    onClick={() => {
-                      setRecipient(r);
-                      setError("");
-                    }}
-                    className={cn(
-                      "inline-flex min-h-11 max-w-full cursor-pointer items-center gap-1.5 rounded-full border-[1.5px] px-3.5 text-sm font-semibold transition-colors",
-                      checked ? "border-ink bg-ink text-paper" : "border-input bg-ticket text-ink hover:bg-paper",
-                    )}
-                  >
-                    {group ? <UsersRound className="size-4 shrink-0" aria-hidden /> : null}
-                    <span className="truncate">{label}</span>
-                  </button>
-                );
-              })}
-            </div>
-            {isNew ? (
-              <>
-                <label htmlFor={`${id}-label`} className="sr-only">
-                  {current.kind === "NEW_GROUP" ? "Group name" : "Person's name"}
-                </label>
-                <input
-                  id={`${id}-label`}
-                  autoFocus
-                  value={typed}
-                  onChange={(e) => setTyped(e.target.value)}
-                  maxLength={40}
-                  placeholder={current.kind === "NEW_GROUP" ? "Group name, e.g. Miguel's group" : "Name, e.g. Miguel"}
-                  className="mt-2 min-h-11 w-full rounded-xl border-[1.5px] border-input bg-ticket px-3 text-base"
-                />
-              </>
-            ) : null}
-          </div>
+          <RecipientPicker
+            id={id}
+            label="Who’s it for?"
+            value={current}
+            onChange={(r) => {
+              setRecipient(r);
+              setError("");
+            }}
+            typed={typed}
+            onTyped={setTyped}
+            people={people}
+            names={names}
+            groups={groups}
+          />
 
           <div>
             <button

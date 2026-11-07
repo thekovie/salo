@@ -16,9 +16,17 @@ export type AddInput = {
   roundId?: string;
 };
 
+/** What "Edit dish" can change on a draft entry (the dish itself is a remove-and-add). */
+export interface EntryChanges {
+  variant?: string | null;
+  instructions?: string | null;
+  attribution?: AddInput["attribution"];
+}
+
 export type Op =
   | { kind: "add"; input: AddInput }
   | { kind: "update"; entry: SnapshotEntry; quantity: number }
+  | { kind: "edit"; entry: SnapshotEntry; changes: EntryChanges }
   | { kind: "remove"; entry: SnapshotEntry }
   | { kind: "restore"; entry: SnapshotEntry }
   | { kind: "rename"; title: string | null }
@@ -67,9 +75,9 @@ const REFRESH_RETRY_MS = 3000;
 const POLL_WITHOUT_STREAM_MS = 10_000;
 
 /** The entry a change is about, if any (for coalescing and revision tracking). */
-export const entryOf = (op: Op): string | null => (op.kind === "update" || op.kind === "remove" || op.kind === "restore" ? op.entry.id : null);
+export const entryOf = (op: Op): string | null => (op.kind === "update" || op.kind === "edit" || op.kind === "remove" || op.kind === "restore" ? op.entry.id : null);
 
-const OP_KINDS = new Set(["add", "update", "remove", "restore", "rename", "ready", "claim", "resolveClaim", "groupMembers", "confirm", "openRound", "correction", "removeCorrection", "close", "removeGuest", "restoreGuest"]);
+const OP_KINDS = new Set(["add", "update", "edit", "remove", "restore", "rename", "ready", "claim", "resolveClaim", "groupMembers", "confirm", "openRound", "correction", "removeCorrection", "close", "removeGuest", "restoreGuest"]);
 const isOp = (value: unknown): value is Op => typeof value === "object" && value !== null && OP_KINDS.has((value as { kind?: string }).kind ?? "");
 
 function request(sessionId: string, op: Op, latest: SessionSnapshot, ownRevisions: ReadonlyMap<string, ReadonlySet<number>>) {
@@ -83,6 +91,11 @@ function request(sessionId: string, op: Op, latest: SessionSnapshot, ownRevision
       const current = latest.entries.find((e) => e.id === op.entry.id);
       const expectedRevision = revisionToSend(op.entry.revision, current?.revision, ownRevisions.get(op.entry.id));
       return { path: `${base}/entries/${op.entry.id}`, method: "PATCH", body: { expectedRevision, quantity: op.quantity } };
+    }
+    case "edit": {
+      const current = latest.entries.find((e) => e.id === op.entry.id);
+      const expectedRevision = revisionToSend(op.entry.revision, current?.revision, ownRevisions.get(op.entry.id));
+      return { path: `${base}/entries/${op.entry.id}`, method: "PATCH", body: { expectedRevision, ...op.changes } };
     }
     case "remove":
       return { path: `${base}/entries/${op.entry.id}`, method: "DELETE", body: undefined };
@@ -122,6 +135,8 @@ export function describeOp(op: Op): string {
       return `Add ${tidyText(op.input.dishName)} ×${op.input.quantity}`;
     case "update":
       return `Change ${op.entry.dishName} to ×${op.quantity}`;
+    case "edit":
+      return `Edit ${op.entry.dishName}`;
     case "remove":
       return `Remove ${op.entry.dishName}`;
     case "restore":
@@ -458,6 +473,7 @@ export function overlay(snapshot: SessionSnapshot, pending: Pending[]): OverlayE
   for (const { op, key, status } of pending) {
     if (status === "failed") continue;
     if (op.kind === "update") list = list.map((e) => (e.id === op.entry.id ? { ...e, quantity: op.quantity, pending: true } : e));
+    if (op.kind === "edit") list = list.map((e) => (e.id === op.entry.id ? { ...applyChanges(e, op.changes, snapshot.me.participantId), pending: true } : e));
     if (op.kind === "remove") list = list.filter((e) => e.id !== op.entry.id);
     if (op.kind === "restore" && !list.some((e) => e.id === op.entry.id)) list = [...list, { ...op.entry, pending: true }];
     if (op.kind === "add") {
@@ -470,6 +486,23 @@ export function overlay(snapshot: SessionSnapshot, pending: Pending[]): OverlayE
     if (op.kind === "add" && status === "committed") list = [...list, pendingAdd(snapshot, op.input, key, latest, order++)];
   }
   return list;
+}
+
+/** An entry with an edit drawn on top (before the server confirms it). */
+function applyChanges(entry: SnapshotEntry, changes: EntryChanges, meId: string): SnapshotEntry {
+  const next = { ...entry };
+  if (changes.variant !== undefined) next.variant = optionalText(changes.variant ?? undefined);
+  if (changes.instructions !== undefined) next.instructions = optionalText(changes.instructions ?? undefined);
+  if (changes.attribution) next.attribution = toEntryAttribution(changes.attribution, meId);
+  return next;
+}
+
+function toEntryAttribution(attribution: AddInput["attribution"], meId: string): SnapshotEntry["attribution"] {
+  const label = "label" in attribution ? (attribution.label ?? null) : null;
+  const participantId = "participantId" in attribution ? (attribution.participantId ?? null) : null;
+  // "Me" is sent as INDIVIDUAL without a name or id; the server fills in the person who made the change.
+  const forMe = attribution.type === "INDIVIDUAL" && !label && !participantId;
+  return { type: attribution.type, label, participantId: forMe ? meId : participantId };
 }
 
 function pendingAdd(snapshot: SessionSnapshot, input: AddInput, key: string, latest: string, order: number): OverlayEntry {
