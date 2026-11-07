@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { api, ApiError, newKey } from "@/lib/api-client";
+import { coalesceTarget, fromStored, nextToSend, revisionToSend, toStored } from "@/lib/queue";
 import { normalizeText, optionalText, tidyText } from "@/lib/dish-name";
 import type { SessionSnapshot, SnapshotEntry } from "@/lib/snapshot";
 
@@ -11,6 +12,8 @@ export type AddInput = {
   variant?: string | null;
   instructions?: string | null;
   attribution: { type: "UNASSIGNED" | "TABLE" } | { type: "INDIVIDUAL"; label?: string | null; participantId?: string | null } | { type: "GROUP"; label: string };
+  /** The round the person was adding to. The server refuses (ROUND_CLOSED) if it was confirmed meanwhile. */
+  roundId?: string;
 };
 
 export type Op =
@@ -61,15 +64,23 @@ const STREAM_RESTART_MS = 5000;
 const STREAM_RESTART_MAX_MS = 60_000;
 const REFRESH_RETRY_MS = 3000;
 
-function request(sessionId: string, op: Op, latest: SessionSnapshot) {
+/** The entry a change is about, if any (for coalescing and revision tracking). */
+export const entryOf = (op: Op): string | null => (op.kind === "update" || op.kind === "remove" || op.kind === "restore" ? op.entry.id : null);
+
+const OP_KINDS = new Set(["add", "update", "remove", "restore", "rename", "ready", "claim", "resolveClaim", "groupMembers", "confirm", "openRound", "correction", "removeCorrection", "close", "removeGuest", "restoreGuest"]);
+const isOp = (value: unknown): value is Op => typeof value === "object" && value !== null && OP_KINDS.has((value as { kind?: string }).kind ?? "");
+
+function request(sessionId: string, op: Op, latest: SessionSnapshot, ownRevisions: ReadonlyMap<string, ReadonlySet<number>>) {
   const base = `/api/sessions/${sessionId}`;
   switch (op.kind) {
     case "add":
       return { path: `${base}/entries`, method: "POST", body: op.input as unknown };
     case "update": {
-      // The revision is read when the request is sent, after earlier changes to this entry have settled.
+      // The revision the person saw when they made the change, moved forward only over this device's own changes:
+      // if someone else changed the entry meanwhile, the server says so (409) instead of being silently overwritten.
       const current = latest.entries.find((e) => e.id === op.entry.id);
-      return { path: `${base}/entries/${op.entry.id}`, method: "PATCH", body: { expectedRevision: current?.revision ?? op.entry.revision, quantity: op.quantity } };
+      const expectedRevision = revisionToSend(op.entry.revision, current?.revision, ownRevisions.get(op.entry.id));
+      return { path: `${base}/entries/${op.entry.id}`, method: "PATCH", body: { expectedRevision, quantity: op.quantity } };
     }
     case "remove":
       return { path: `${base}/entries/${op.entry.id}`, method: "DELETE", body: undefined };
@@ -157,11 +168,25 @@ export function useSession(initial: SessionSnapshot) {
   const pumping = useRef(false);
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const online = useSyncExternalStore(subscribeOnline, () => navigator.onLine, () => true);
+  // Entry revisions produced by this device's own committed changes (see revisionToSend).
+  const ownRevisions = useRef(new Map<string, Set<number>>());
+  const storageKey = `salo:queue:${sessionId}`;
 
-  const setQueue = useCallback((update: (list: Pending[]) => Pending[]) => {
-    queueRef.current = update(queueRef.current);
-    setPendingState(queueRef.current);
-  }, []);
+  const setQueue = useCallback(
+    (update: (list: Pending[]) => Pending[]) => {
+      queueRef.current = update(queueRef.current);
+      setPendingState(queueRef.current);
+      // Unsent and refused changes survive a reload, with their idempotency keys (never applied twice).
+      try {
+        const stored = toStored(queueRef.current);
+        if (stored.length) localStorage.setItem(storageKey, JSON.stringify(stored));
+        else localStorage.removeItem(storageKey);
+      } catch {
+        // Storage blocked: the queue lives in memory only.
+      }
+    },
+    [storageKey],
+  );
 
   const patch = useCallback((key: string, fields: Partial<Pending>) => setQueue((list) => list.map((p) => (p.key === key ? { ...p, ...fields } : p))), [setQueue]);
 
@@ -260,12 +285,17 @@ export function useSession(initial: SessionSnapshot) {
     pumping.current = true;
     try {
       for (;;) {
-        const item = queueRef.current.find((p) => p.status === "queued");
+        // Strictly in order: a change still waiting for the network holds back everything after it.
+        const item = nextToSend(queueRef.current);
         if (!item) break;
         patch(item.key, { status: "sending" });
-        const { path, method, body } = request(sessionId, item.op, snapshotRef.current);
+        const { path, method, body } = request(sessionId, item.op, snapshotRef.current, ownRevisions.current);
         try {
           const response = await api<MutationResponse>(path, { method, body, idempotencyKey: item.key });
+          const entryId = entryOf(item.op);
+          if (entryId && typeof response.result.revision === "number") {
+            ownRevisions.current.set(entryId, (ownRevisions.current.get(entryId) ?? new Set()).add(response.result.revision));
+          }
           patch(item.key, { status: "committed", committedRevision: response.revision });
           finish(item.key, response.result);
           // If this refresh fails, the change stays drawn as committed and the resync timer catches up.
@@ -302,11 +332,12 @@ export function useSession(initial: SessionSnapshot) {
 
   const mutate = useCallback(
     (op: Op, options: { onError?: (message: string) => void } = {}): Promise<MutationResponse["result"] | null> => {
-      // Several taps on one stepper while the first is still queued: keep only the final number.
+      // Several taps on one stepper before the earlier one was sent (queued or waiting for the network): keep one
+      // change with the final number, still based on the revision the first tap saw.
       if (op.kind === "update") {
-        const queued = queueRef.current.find((p) => p.status === "queued" && p.op.kind === "update" && p.op.entry.id === op.entry.id);
-        if (queued) {
-          patch(queued.key, { op: { ...op, entry: (queued.op as Extract<Op, { kind: "update" }>).entry } });
+        const target = coalesceTarget(queueRef.current, op.entry.id, entryOf);
+        if (target) {
+          patch(target.key, { op: { ...op, entry: (target.op as Extract<Op, { kind: "update" }>).entry } });
           return Promise.resolve(null);
         }
       }
@@ -320,14 +351,36 @@ export function useSession(initial: SessionSnapshot) {
   );
 
   const dismiss = useCallback((key: string) => setQueue((list) => list.filter((p) => p.key !== key)), [setQueue]);
-  /** Send a refused change again with the same idempotency key (it can never be applied twice). */
+  /**
+   * Send a refused change again, in its original place in the order. Same idempotency key, so it can never be applied
+   * twice; a changed request (e.g. "add to round 2 instead") gets a new key, since it is a different change.
+   */
   const retry = useCallback(
-    (key: string) => {
-      setQueue((list) => list.map((p) => (p.key === key ? { ...p, status: "queued", error: undefined, code: undefined } : p)));
+    (key: string, changeOp?: (op: Op) => Op) => {
+      setQueue((list) =>
+        list.map((p) => (p.key === key ? { ...p, ...(changeOp ? { op: changeOp(p.op), key: newKey() } : {}), status: "queued", error: undefined, code: undefined } : p)),
+      );
       void pump();
     },
     [setQueue, pump],
   );
+
+  // After a reload: bring back changes that were never sent (or were refused), then send them in order.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      let stored: ReturnType<typeof fromStored<Op>> = [];
+      try {
+        stored = fromStored(localStorage.getItem(storageKey), isOp);
+      } catch {
+        return;
+      }
+      if (stored.length === 0) return;
+      const known = new Set(queueRef.current.map((p) => p.key));
+      setQueue((list) => [...stored.filter((s) => !known.has(s.key)).map((s) => ({ ...s, attempts: s.attempts ?? 0 })), ...list]);
+      void pump();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [storageKey, setQueue, pump]);
 
   // Catch up whenever we may have missed something: back online, tab visible again, and while changes await a snapshot.
   useEffect(() => {
@@ -369,7 +422,7 @@ export function useSession(initial: SessionSnapshot) {
   /** The latest committed version of an entry (for Undo after an add). */
   const entryById = useCallback((id: string) => snapshotRef.current.entries.find((e) => e.id === id), []);
 
-  return { snapshot, entries, pending, failed, sync, mutate, dismiss, retry, refresh, entryById };
+  return { snapshot, entries, pending, failed, sync, mutate, dismiss, retry, refresh, entryById, online, stream };
 }
 
 function subscribeOnline(onChange: () => void) {
@@ -414,7 +467,7 @@ function pendingAdd(snapshot: SessionSnapshot, input: AddInput, key: string, lat
   const attribution = input.attribution;
   return {
     id: `pending:${key}`,
-    roundId: snapshot.activeRoundId,
+    roundId: input.roundId ?? snapshot.activeRoundId,
     batchId: `pending:${key}`,
     dishId: existing?.dishId ?? `pending-dish:${normalizeText(name)}`,
     dishName: existing?.dishName ?? name,

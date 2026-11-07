@@ -27,6 +27,7 @@ import { ViewTabs, type View } from "./view-tabs";
 import { InviteSheet } from "./invite-sheet";
 import { OrderTicket, type TicketActions } from "./order-ticket";
 import { ArrivalPills, ARRIVAL_MS } from "./arrival-pills";
+import { ConnectionPill } from "./connection-pill";
 import { OrderOptionsSheet } from "./order-options-sheet";
 import { SummarySheet } from "./summary-sheet";
 import { Tour } from "@/components/onboarding/tour";
@@ -41,7 +42,7 @@ const isRetryable = (code?: string) => code === "INTERNAL" || code === "RATE_LIM
 const copyFor = (roundNumber: number): 1 | 2 | 3 => (roundNumber >= 3 ? 3 : roundNumber === 2 ? 2 : 1);
 
 export function Workspace({ initial, appUrl, justJoined = false }: { initial: SessionSnapshot; appUrl: string; justJoined?: boolean }) {
-  const { snapshot, entries, pending, failed, sync, mutate, dismiss, retry, entryById } = useSession(initial);
+  const { snapshot, entries, pending, failed, sync, mutate, dismiss, retry, entryById, online, stream } = useSession(initial);
   const { toasts, show, dismiss: dismissToast } = useToasts();
   const round = snapshot.rounds.find((r) => r.id === snapshot.activeRoundId) ?? snapshot.rounds[0];
   const roundEntries = useMemo(() => entries.filter((e) => e.roundId === round.id), [entries, round.id]);
@@ -293,7 +294,11 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
           ) : null
         }
       />
-      {sessionOpen ? <ArrivalPills arrivals={arrivals} onSelect={jumpTo} /> : null}
+      {/* Notices under the header: connection first, then who just added what. */}
+      <div className="pointer-events-none fixed inset-x-0 top-[calc(env(safe-area-inset-top)+4.5rem)] z-40 flex flex-col gap-1.5 px-4">
+        <ConnectionPill online={online} stream={stream} unsent={pending.filter((p) => p.status === "queued" || p.status === "waiting" || p.status === "sending").length} />
+        {sessionOpen ? <ArrivalPills arrivals={arrivals} onSelect={jumpTo} /> : null}
+      </div>
       {touring ? <Tour steps={isHost ? HOST_TOUR : GUEST_TOUR} onClose={endTour} /> : null}
       {anyConfirmed ? <SummarySheet open={summaryOpen} onOpenChange={setSummaryOpen} snapshot={snapshot} /> : null}
       {isHost && sessionOpen ? (
@@ -318,6 +323,15 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
                 <span className="flex-1">
                   <span className="font-semibold">{describeOp(item.op)}:</span> {item.error}
                 </span>
+                {item.code === "ROUND_CLOSED" && item.op.kind === "add" && isOpen ? (
+                  <button
+                    type="button"
+                    onClick={() => retry(item.key, (op) => (op.kind === "add" ? { ...op, input: { ...op.input, roundId: round.id } } : op))}
+                    className="min-h-11 shrink-0 cursor-pointer rounded-full border-[1.5px] border-bad px-3 font-semibold hover:bg-bad/10"
+                  >
+                    Add to round {round.number}
+                  </button>
+                ) : null}
                 {isRetryable(item.code) ? (
                   <button type="button" onClick={() => retry(item.key)} className="min-h-11 shrink-0 cursor-pointer rounded-full border-[1.5px] border-bad px-3 font-semibold hover:bg-bad/10">
                     Retry
@@ -422,7 +436,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
       {sessionOpen ? (
       <div className="fixed inset-x-0 bottom-0 z-30 bg-gradient-to-t from-paper from-70% to-transparent pt-6 pb-[calc(env(safe-area-inset-bottom)+0.5rem)]">
         <div className="mx-auto max-w-2xl space-y-2 px-3">
-          {isOpen ? <Composer dishNames={snapshot.dishNames} {...recipients} onAdd={(input) => void add(input)} /> : null}
+          {isOpen ? <Composer dishNames={snapshot.dishNames} {...recipients} onAdd={(input) => void add({ ...input, roundId: round.id })} /> : null}
           <div className="flex items-center justify-between gap-3 px-2">
             <div className="min-w-0">
               <p className="whitespace-nowrap text-ink-soft" data-testid="round-total">
