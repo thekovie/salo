@@ -14,6 +14,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const actor = await requireActor(id);
     const key = idempotencyKey(request);
     const { expectedRevision } = await readJson(request, confirmSchema);
-    return ok(await runMutation(getDb(), actor, { idempotencyKey: key, type: "round.confirm" }, (tx, s) => confirmRound(tx, s, actor, roundId, expectedRevision)));
+    return ok(await runMutation(getDb(), actor, { idempotencyKey: key, type: `round.confirm:${roundId}` }, (tx, s) => confirmRound(tx, s, actor, roundId, expectedRevision)));
   });
 }

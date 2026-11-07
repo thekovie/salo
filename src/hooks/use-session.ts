@@ -63,6 +63,8 @@ const RESYNC_INTERVAL_MS = 5000;
 const STREAM_RESTART_MS = 5000;
 const STREAM_RESTART_MAX_MS = 60_000;
 const REFRESH_RETRY_MS = 3000;
+/** Without live updates (stream refused or down), catch up this often so the ticket never goes stale. */
+const POLL_WITHOUT_STREAM_MS = 10_000;
 
 /** The entry a change is about, if any (for coalescing and revision tracking). */
 export const entryOf = (op: Op): string | null => (op.kind === "update" || op.kind === "remove" || op.kind === "restore" ? op.entry.id : null);
@@ -403,6 +405,15 @@ export function useSession(initial: SessionSnapshot) {
       if (retryTimer.current) clearTimeout(retryTimer.current);
     };
   }, [pump, refresh, setQueue]);
+
+  // No live connection (refused when a crowded Wi-Fi hits the per-address cap, or simply down): poll instead.
+  useEffect(() => {
+    if (stream === "live") return;
+    const timer = setInterval(() => {
+      if (navigator.onLine && document.visibilityState === "visible") void refresh().catch(() => undefined);
+    }, POLL_WITHOUT_STREAM_MS);
+    return () => clearInterval(timer);
+  }, [stream, refresh]);
 
   const entries = useMemo(() => overlay(snapshot, pending), [snapshot, pending]);
 

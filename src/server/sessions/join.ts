@@ -1,4 +1,4 @@
-import { and, count, eq, isNull, sql } from "drizzle-orm";
+import { and, count, eq, gt, isNull, sql } from "drizzle-orm";
 import { getEnv } from "@/env";
 import { tidyText } from "@/lib/dish-name";
 import { isJoinCode, normalizeJoinCode } from "@/lib/join-code";
@@ -34,7 +34,8 @@ export async function findInvite(db: Db, rawCode: string): Promise<InviteInfo | 
     .select({ sessionId: sessions.id, title: sessions.title, status: sessions.status, roundNumber: sql<number>`coalesce(max(${rounds.roundNumber}), 1)` })
     .from(sessions)
     .leftJoin(rounds, eq(rounds.sessionId, sessions.id))
-    .where(eq(sessions.joinCode, code))
+    // Past its deletion date: treated as unknown, even before the hourly cleanup removes it.
+    .where(and(eq(sessions.joinCode, code), gt(sessions.expiresAt, sql`now()`)))
     .groupBy(sessions.id);
   return row ?? null;
 }
@@ -59,7 +60,8 @@ export async function joinSession(db: Db, rawCode: string, rawName: string, expe
 
   return db.transaction(async (tx) => {
     const [session] = await tx.select().from(sessions).where(eq(sessions.joinCode, code)).for("update");
-    if (!session || (expectedSessionId && session.id !== expectedSessionId)) throw new AppError(404, "INVITE_NOT_FOUND", "That code doesn’t match an order. Check it with the host.");
+    const expired = session && session.expiresAt.getTime() <= Date.now();
+    if (!session || expired || (expectedSessionId && session.id !== expectedSessionId)) throw new AppError(404, "INVITE_NOT_FOUND", "That code doesn’t match an order. Check it with the host.");
     if (session.status === "CLOSED") throw closed();
     const [{ value: people }] = await tx.select({ value: count() }).from(participants).where(and(eq(participants.sessionId, session.id), isNull(participants.removedAt)));
     if (people >= LIMITS.participantsPerSession) throw new AppError(422, "TABLE_FULL", `This order already has ${LIMITS.participantsPerSession} people.`);

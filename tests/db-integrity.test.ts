@@ -89,3 +89,49 @@ describe("database integrity rules", () => {
     expect(await db.select().from(t.participants)).toHaveLength(0);
   });
 });
+
+describe("integrity rules, part 2 (0006)", () => {
+  async function confirmedOrder() {
+    const { newSession, add, key } = await import("./helpers/session");
+    const { runMutation } = await import("@/server/mutations");
+    const { confirmRound, openRound } = await import("@/server/orders/rounds");
+    const { getSnapshot } = await import("@/server/sessions/snapshot");
+    const { host, sessionId } = await newSession(db);
+    await add(db, host, { dishName: "Gyoza", quantity: 2 });
+    const first = await getSnapshot(db, host);
+    await runMutation(db, host, { idempotencyKey: key(), type: "t" }, (tx, s) => confirmRound(tx, s, host, first.activeRoundId, s.revision));
+    await runMutation(db, host, { idempotencyKey: key(), type: "t" }, (tx, s) => openRound(tx, s, host));
+    const second = await getSnapshot(db, host);
+    const [entry] = await db.select().from(t.orderEntries);
+    return { sessionId, host, entry, confirmedRound: first.activeRoundId, draftRound: second.activeRoundId };
+  }
+
+  it("won't move an entry out of a confirmed round", async () => {
+    const { entry, draftRound } = await confirmedOrder();
+    await expect(db.update(t.orderEntries).set({ roundId: draftRound }).where(eq(t.orderEntries.id, entry.id))).rejects.toThrow();
+  });
+
+  it("freezes who a confirmed dish is for and who submitted it", async () => {
+    const { entry } = await confirmedOrder();
+    await expect(db.update(t.orderBatches).set({ attributionType: "TABLE", attributedParticipantId: null }).where(eq(t.orderBatches.id, entry.batchId))).rejects.toMatchObject({ cause: { message: expect.stringMatching(/attribution of a confirmed round/) } });
+  });
+
+  it("keeps an entry in its batch's round, and claims and group members inside one session", async () => {
+    const { entry, draftRound } = await confirmedOrder();
+    const [batch] = await db.select().from(t.orderBatches).where(eq(t.orderBatches.id, entry.batchId));
+    // A new entry whose round differs from its batch's round.
+    await expect(db.insert(t.orderEntries).values({ batchId: batch.id, roundId: draftRound, dishId: entry.dishId, quantity: 1 })).rejects.toThrow();
+    // A claim or a group member from another order.
+    const { newSession } = await import("./helpers/session");
+    const other = await newSession(db);
+    await expect(db.insert(t.entryClaims).values({ sessionId: other.sessionId, batchId: batch.id, requestedBy: other.host.participantId })).rejects.toMatchObject({ cause: { message: expect.stringMatching(/one session/) } });
+    const [group] = await db.insert(t.orderGroups).values({ sessionId: batch.sessionId, label: "Barkada", normalizedLabel: "barkada" }).returning();
+    await expect(db.insert(t.orderGroupMembers).values({ groupId: group.id, participantId: other.host.participantId })).rejects.toMatchObject({ cause: { message: expect.stringMatching(/group's session/) } });
+  });
+
+  it("still deletes a whole order (retention cleanup)", async () => {
+    const { sessionId } = await confirmedOrder();
+    await db.delete(t.sessions).where(eq(t.sessions.id, sessionId));
+    expect(await db.select().from(t.orderBatches)).toHaveLength(0);
+  });
+});

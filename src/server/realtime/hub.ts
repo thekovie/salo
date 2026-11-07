@@ -8,8 +8,11 @@ type Listener = (revision: number) => void;
 /** Caps so one table or one script cannot exhaust the single app instance (brief 7.8). */
 export const MAX_STREAMS = 500;
 export const MAX_STREAMS_PER_PARTICIPANT = 4;
-/** One phone may hold several orders open, but a single address cannot take the whole instance. */
-export const MAX_STREAMS_PER_ADDRESS = 12;
+/**
+ * A whole restaurant shares one public address on its Wi-Fi (30 people at a table, a few tables), so this is
+ * generous; it still stops one address from taking the whole instance. Phones turned away fall back to polling.
+ */
+export const MAX_STREAMS_PER_ADDRESS = 64;
 
 /**
  * One LISTEN connection per process, fanned out to the open streams of each session. NOTIFY is only the doorbell:

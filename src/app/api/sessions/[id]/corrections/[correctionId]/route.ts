@@ -12,6 +12,6 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     if (!isUuid(correctionId)) throw new AppError(404, "CORRECTION_NOT_FOUND", "That correction isn’t there any more.");
     const actor = await requireActor(id);
     const key = idempotencyKey(request);
-    return ok(await runMutation(getDb(), actor, { idempotencyKey: key, type: "correction.remove" }, (tx, s) => removeCorrection(tx, s, actor, correctionId)));
+    return ok(await runMutation(getDb(), actor, { idempotencyKey: key, type: `correction.remove:${correctionId}` }, (tx, s) => removeCorrection(tx, s, actor, correctionId)));
   });
 }

@@ -12,6 +12,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!isUuid(claimId)) throw new AppError(404, "CLAIM_NOT_FOUND", "That request isn’t there any more.");
     const actor = await requireActor(id);
     const key = idempotencyKey(request);
-    return ok(await runMutation(getDb(), actor, { idempotencyKey: key, type: "claim.reject" }, (tx, s) => resolveClaim(tx, s, actor, claimId, false)));
+    return ok(await runMutation(getDb(), actor, { idempotencyKey: key, type: `claim.reject:${claimId}` }, (tx, s) => resolveClaim(tx, s, actor, claimId, false)));
   });
 }

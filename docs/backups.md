@@ -27,9 +27,16 @@ When the live database is lost or must be rolled back:
 
 ## Restore drill (periodic test)
 
-`scripts/backup-restore-drill.sh` dumps the database, restores the dump into a scratch database on the same server, compares row counts for every order table, checks the restored schema still enforces its rules, and drops the scratch database. It never changes the source database.
+`scripts/backup-restore-drill.sh` dumps the database, restores the dump into a scratch database on the same server, compares row counts for **every table** (all 15 in `schema.ts`), then checks that the restored schema still enforces its rules, and drops the scratch database. It never changes the source database.
 
-- Locally: `pnpm db:up && scripts/backup-restore-drill.sh` (last run 2026-11-06: PASS, 211 sessions / 488 entries / 984 events identical after restore).
+The rule checks build their own fixture inside a transaction that is rolled back, so they work even on an empty backup. Each probe must be refused with its rule, or the drill fails:
+- a zero quantity;
+- removing the host;
+- changing a confirmed snapshot;
+- reopening a confirmed round;
+- changing a confirmed dish's attribution.
+
+- Locally: `pnpm db:up && scripts/backup-restore-drill.sh`. Last run 2026-11-07: PASS, with all 15 tables identical (855 sessions, 4,963 entries, 7,143 events), and all five probes refused. The first attempt that day correctly failed on a database that hadn't applied migration 0006 yet.
 - Production: run it monthly against a **downloaded Coolify backup** restored into a throwaway PostgreSQL (e.g. `docker run --rm -e POSTGRES_HOST_AUTH_METHOD=trust -p 5499:5432 postgres:17-alpine`, then `PGHOST=localhost PGPORT=5499 PGUSER=postgres SALO_DB=salo scripts/backup-restore-drill.sh` after `pg_restore`). Record the date in HANDOFF.md.
 
 Not yet done (owner): configure the schedule, S3 destination and alerts in Coolify, and run the first production restore test.

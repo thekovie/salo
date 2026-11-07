@@ -67,13 +67,16 @@ export async function runMutation<T>(
         ),
       );
     if (previous) {
-      // A key belongs to one change; reusing it for a different kind of change is a client bug, not a retry.
+      // A key belongs to one change (its kind and its target, e.g. `entry.update:<id>`); reusing it for another change
+      // is a client bug, not a retry.
       if (previous.mutationType !== options.type) throw new AppError(422, "IDEMPOTENCY_KEY_REUSED", "This request key was already used for a different change.");
       const stored = previous.result as { result: T; revision: number };
       return { result: stored.result, revision: stored.revision, replayed: true };
     }
 
     if (session.status === "CLOSED" && !options.allowClosed) throw closed();
+    // Past its deletion date: gone (and never revived by a late change), even before the hourly cleanup runs.
+    if (session.expiresAt.getTime() <= Date.now()) throw notFound();
 
     const { result, event } = await apply(tx, session);
     const revision = session.revision + 1;
