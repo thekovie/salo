@@ -14,11 +14,13 @@ interface CspOptions {
 export function buildCsp({ nonce, isDev, isHttps }: CspOptions): string {
   const directives = [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
+    // challenges.cloudflare.com: the Turnstile bot check on /new (older browsers ignore strict-dynamic and use the list).
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://challenges.cloudflare.com${isDev ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self'",
-    "connect-src 'self'",
+    "connect-src 'self' https://challenges.cloudflare.com",
+    "frame-src https://challenges.cloudflare.com",
     // PostHog's session-replay recorder compresses in a worker built from a blob.
     "worker-src 'self' blob:",
     "object-src 'none'",

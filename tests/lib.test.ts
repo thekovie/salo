@@ -48,6 +48,9 @@ describe("buildCsp", () => {
     expect(csp).toContain("connect-src 'self'");
     // PostHog's replay recorder compresses in a blob worker; analytics itself goes through this origin (/ingest).
     expect(csp).toContain("worker-src 'self' blob:");
+    // The Turnstile bot check on /new loads from Cloudflare and runs in its frame.
+    expect(csp).toContain("frame-src https://challenges.cloudflare.com");
+    expect(csp).toContain("connect-src 'self' https://challenges.cloudflare.com");
   });
 
   it("allows eval only in development and upgrades only over https", () => {

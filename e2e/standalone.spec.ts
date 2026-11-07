@@ -4,8 +4,9 @@ import { openNotes, orderFor } from "./support/helpers";
 
 async function startOrder(page: Page) {
   await page.goto("/");
-  await page.getByRole("button", { name: "Start an order" }).click();
-  await expect(page).toHaveURL(/\/s\/[0-9a-f-]{36}$/);
+  await page.getByRole("link", { name: "Start an order" }).click();
+  // Through the bot check (/new): Cloudflare's widget can take a few seconds to answer.
+  await expect(page).toHaveURL(/\/s\/[0-9a-f-]{36}$/, { timeout: 20_000 });
   await expect(page.getByText("Wala pang order.")).toBeVisible();
 }
 
@@ -140,7 +141,7 @@ test("landing and workspace have no automatically detectable accessibility viola
   await page.goto("/");
   const landing = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
   expect(landing.violations).toEqual([]);
-  await page.getByRole("button", { name: "Start an order" }).click();
+  await page.getByRole("link", { name: "Start an order" }).click();
   await expect(page).toHaveURL(/\/s\//);
   await addDish(page, "Gyoza", 2);
   const workspace = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
