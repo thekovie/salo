@@ -378,3 +378,19 @@ Owner request: stop bots from creating orders.
   - e2e runs the real widget with Cloudflare's test keys. `new-order.spec.ts`: a direct API create without a token gets 403, and the page flow lands in the order.
   - Totals: 127 unit/integration, 35 e2e.
 
+## Finishing an order: usability check and fixes (`feat/finish-order-ux`)
+
+Owner feedback: people didn't know when or how to end the order after the last round, and the header ⋯ hid it.
+- **Review:** impeccable `critique` (design review only) on Playwright captures of the end-of-meal journey at 390 and 320 px (`e2e/finish-review.spec.ts`, opt-in `UX_REVIEW=1`). First pass scored 28/40 and found:
+  - P1: End hidden under the dock and toast at 320 px; the header button turning icon-only (sliders reads as "filters").
+  - P2: inverted button weight (the entry point filled, the final confirm outline); no next step on the waiter view; live pills covering the tabs.
+  - P3: vague guest and panel copy.
+- **Changes:**
+  - After a round is confirmed, the host sees **What's next?** with **Add more (round N)** and **End the order** as equal outline buttons. End opens the existing confirm step directly (the filled red "Yes, end the order" stays the strong one). The panel scrolls into view and keeps clear of the dock.
+  - The ⋯ became a labelled **Options ▾** button at every width (accessible name "Order options").
+  - Rounds tab: **End the order** next to **Start round N**.
+  - Waiter view after the stamp: "Kain na! Tap Back to add another round, or to end the order when everyone's done."
+  - Guests: "The host can add another round or end the order when everyone's done."
+  - Live "added" pills moved below the tab row.
+  - The tour step was updated.
+

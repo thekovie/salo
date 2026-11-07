@@ -53,7 +53,7 @@ export function WaiterPanel({ ticket, confirmed, justConfirmed, canConfirm, onBa
           </div>
         ) : null}
         <p className="mt-4 px-6 text-center text-sm text-ink-soft">
-          {confirmed ? "Confirmed. Add-ons go in a new round. Kain na!" : "Showing this ticket doesn’t confirm or send anything."}
+          {confirmed ? "Confirmed. Kain na! Tap Back to add another round, or to end the order when everyone’s done." : "Showing this ticket doesn’t confirm or send anything."}
         </p>
       </div>
     </FullScreenSheet>

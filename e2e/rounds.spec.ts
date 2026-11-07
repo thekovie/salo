@@ -40,7 +40,7 @@ test("review, waiter view, host-only confirmation, round 2 with a correction, en
   await expect(guest.page.getByRole("textbox", { name: "Dish" })).toHaveCount(0);
 
   // Round 2 (scenario 11): only new dishes plus an explicit correction.
-  await page.getByRole("button", { name: "Start round 2" }).click();
+  await page.getByRole("button", { name: "Add more (round 2)" }).click();
   await addDish(guest.page, "Extra Rice", 3);
   await page.getByRole("tab", { name: /Rounds/ }).click();
   await page.getByRole("button", { name: "Correct a dish" }).click();

@@ -65,6 +65,15 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
   const anyConfirmed = snapshot.rounds.some((r) => r.status === "CONFIRMED");
   const ended = sessionOpen ? null : anyConfirmed ? "ended" : "cancelled";
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const [optionsStart, setOptionsStart] = useState<"options" | "confirm">("options");
+  const openOptions = () => {
+    setOptionsStart("options");
+    setOptionsOpen(true);
+  };
+  const openEnd = () => {
+    setOptionsStart("confirm");
+    setOptionsOpen(true);
+  };
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [touring, setTouring] = useState(false);
   const role = snapshot.me.role;
@@ -312,7 +321,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
         roundStatus={round.status}
         ended={ended}
         sync={sync}
-        onOptions={isHost && sessionOpen ? () => setOptionsOpen(true) : undefined}
+        onOptions={isHost && sessionOpen ? openOptions : undefined}
         onHelp={!isHost && sessionOpen ? () => startTour("replay") : undefined}
         actions={
           sessionOpen ? (
@@ -321,7 +330,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
         }
       />
       {/* Notices under the header: connection first, then who just added what. */}
-      <div className="pointer-events-none fixed inset-x-0 top-[calc(env(safe-area-inset-top)+4.5rem)] z-40 flex flex-col gap-1.5 px-4">
+      <div className="pointer-events-none fixed inset-x-0 top-[calc(env(safe-area-inset-top)+8.5rem)] z-40 flex flex-col gap-1.5 px-4">
         <ConnectionPill online={online} stream={stream} unsent={pending.filter((p) => p.status === "queued" || p.status === "waiting" || p.status === "sending").length} />
         {sessionOpen ? <ArrivalPills arrivals={arrivals} onSelect={jumpTo} /> : null}
       </div>
@@ -332,6 +341,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
         <OrderOptionsSheet
           open={optionsOpen}
           onOpenChange={setOptionsOpen}
+          startAt={optionsStart}
           title={snapshot.session.title}
           anyConfirmed={anyConfirmed}
           unsentRound={round.status === "DRAFT" && roundEntries.length > 0 ? round.number : null}
@@ -424,11 +434,28 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
               <WaiterTicket ticket={confirmedTicket} size="compact" confirmed justConfirmed={justConfirmed === round.id} />
               {sessionOpen ? (
                 isHost ? (
-                  <Button size="lg" className="w-full" onClick={() => void openRound()}>
-                    <Plus className="size-5" aria-hidden /> Start round {round.number + 1}
-                  </Button>
+                  // The moment people are done: both next steps, side by side (usability check, 2026-11-07).
+                  <section
+                    aria-labelledby="what-next"
+                    // Kept clear of the dock, and brought into view when it appears (small phones, critique P1).
+                    ref={(el) => el?.scrollIntoView({ block: "nearest", behavior: "smooth" })}
+                    className="scroll-mb-48 rounded-2xl bg-paper p-4"
+                  >
+                    <h2 id="what-next" className="text-lg">
+                      What&rsquo;s next?
+                    </h2>
+                    <p className="mt-0.5 text-sm text-ink-soft">Ordering more later? Start another round. All done eating? End the order to see who ordered what.</p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <Button variant="outline" onClick={() => void openRound()}>
+                        <Plus className="size-5" aria-hidden /> Add more (round {round.number + 1})
+                      </Button>
+                      <Button variant="outline" onClick={openEnd}>
+                        <CircleCheck className="size-5" aria-hidden /> End the order
+                      </Button>
+                    </div>
+                  </section>
                 ) : (
-                  <p className="text-center text-ink-soft">The host confirmed round {round.number} with the waiter. Want more? The host can start a new round.</p>
+                  <p className="text-center text-ink-soft">The host confirmed round {round.number} with the waiter. The host can add another round or end the order when everyone’s done.</p>
                 )
               ) : null}
             </div>
@@ -440,6 +467,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
               entries={entries}
               justConfirmedRoundId={justConfirmed}
               onOpenRound={() => void openRound()}
+              onEnd={isHost && sessionOpen ? openEnd : undefined}
               onCorrect={correct}
               onRemoveCorrection={(correctionId, dishName) => void mutate({ kind: "removeCorrection", correctionId, dishName })}
             />
