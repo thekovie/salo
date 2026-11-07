@@ -47,7 +47,7 @@ All 14 brief end-to-end scenarios are covered by Playwright (see `docs/testing.m
 
 1. ~~**Deploy** on Coolify~~: done 2026-11-06. Keep `APP_URL` set to the real https domain.
 2. **Backups** (owner: next session): daily schedule, S3 off-VPS destination, retention, failure alerts on the PostgreSQL resource (`docs/backups.md`); run the first production restore drill and note the date here.
-3. **Proxy check in production** (live updates look fine in use, script not run yet): `node scripts/sse-proxy-check.mjs https://<domain> 75`. Since Turnstile, production refuses the script's order creation (403), so it needs a way to reuse a browser-created order before it can run there.
+3. **Proxy check in production** (live updates look fine in use, script not run yet): start an order on your phone, then `SALO_ORDER=<order link> SALO_CODE=<join code> node scripts/sse-proxy-check.mjs https://salo.thekovie.com 75` (the bot check blocks the script from creating its own order; it joins yours as "Proxy check" and removes its test dishes).
 4. **Real phones** (Android done 2026-11-08; iPhone and screen reader spot check still open): try a full order on Android and iPhone over mobile data (QR join, live updates, waiter ticket in sunlight and in a dim place, screen reader spot check with TalkBack/VoiceOver).
 5. ~~**Link previews**~~: done 2026-11-07, confirmed by the owner in the Sharing Debugger and in Messenger. Invites live at `/i/<code>` (`/j/` redirects); the history is in `docs/deployment.md` → Link previews.
 6. **Usability test** (one run done on the pre-November-8 UI; repeat on the current UI) against Notes with a real table (brief 15.6): time to record ten dishes, mistakes, corrections, confidence.

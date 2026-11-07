@@ -2,6 +2,9 @@
 // Checks live updates through a reverse proxy (brief 7.8): events arrive promptly and unbuffered, heartbeats keep an
 // idle stream open past common proxy timeouts, and a reconnect with Last-Event-ID replays what was missed.
 // Usage: node scripts/sse-proxy-check.mjs [base-url] [idle-seconds]   (default http://localhost:8080, 75)
+// With the bot check on (production), start an order in a browser and pass it in: the script joins it as a guest
+// named "Proxy check" instead of creating one, and removes its test dishes at the end.
+//   SALO_ORDER=https://salo.example.com/s/<id> SALO_CODE=<join code> node scripts/sse-proxy-check.mjs https://salo.example.com 75
 const base = process.argv[2] ?? "http://localhost:8080";
 const idleSeconds = Number(process.argv[3] ?? 75);
 const headers = { "Content-Type": "application/json", Origin: base };
@@ -11,11 +14,15 @@ function fail(message) {
   process.exit(1);
 }
 
-const created = await fetch(`${base}/api/sessions`, { method: "POST", headers, body: "{}" });
-if (created.status !== 201) fail(`create session: HTTP ${created.status}`);
-const { data } = await created.json();
-const cookie = created.headers.getSetCookie().map((c) => c.split(";")[0]).join("; ");
+const joinId = process.env.SALO_ORDER?.split("/s/").pop()?.split(/[/?#]/)[0];
+const response = joinId
+  ? await fetch(`${base}/api/sessions/${joinId}/join`, { method: "POST", headers, body: JSON.stringify({ code: process.env.SALO_CODE ?? "", displayName: "Proxy check" }) })
+  : await fetch(`${base}/api/sessions`, { method: "POST", headers, body: "{}" });
+if (response.status !== 201 && response.status !== 200) fail(`${joinId ? "join" : "create"} session: HTTP ${response.status} ${await response.text()}`);
+const { data } = await response.json();
+const cookie = response.headers.getSetCookie().map((c) => c.split(";")[0]).join("; ");
 const id = data.id;
+const added = [];
 
 async function addDish(name) {
   const r = await fetch(`${base}/api/sessions/${id}/entries`, {
@@ -24,7 +31,9 @@ async function addDish(name) {
     body: JSON.stringify({ dishName: name, quantity: 1 }),
   });
   if (r.status !== 201) fail(`add ${name}: HTTP ${r.status}`);
-  return (await r.json()).data.revision;
+  const { data } = await r.json();
+  added.push(data.entryId);
+  return data.revision;
 }
 
 /** Opens the stream and resolves every frame as it arrives, with its arrival time. */
@@ -97,5 +106,11 @@ const replay = await openStream({ "Last-Event-ID": String(late) });
 await replay.waitFor((f) => f.text.includes(`id: ${missed}`), 5000, `replay of ${missed}`);
 replay.close();
 console.log("ok  reconnect with Last-Event-ID replayed the missed event");
+if (joinId) {
+  for (const entryId of added) {
+    await fetch(`${base}/api/sessions/${id}/entries/${entryId}`, { method: "DELETE", headers: { ...headers, Cookie: cookie, "Idempotency-Key": crypto.randomUUID() } });
+  }
+  console.log(`ok  removed the ${added.length} test dishes (remove the "Proxy check" guest from the order if you like)`);
+}
 console.log("PASS");
 process.exit(0);
