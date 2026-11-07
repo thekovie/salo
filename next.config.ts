@@ -11,6 +11,11 @@ const nextConfig: NextConfig = {
     /[\w-]+-Google|Google-[\w-]+|Chrome-Lighthouse|Slurp|DuckDuckBot|baiduspider|yandex|sogou|bitlybot|tumblr|vkShare|quora link preview|redditbot|ia_archiver|Bingbot|BingPreview|applebot|facebookexternalhit|facebookcatalog|Facebot|meta-externalagent|Twitterbot|LinkedInBot|Slackbot|Discordbot|WhatsApp|SkypeUriPreview|Yeti|googleweblight|Viber|TelegramBot|Pinterest|Embedly|Signal|iMessage|Iframely|Mastodon/i,
   // PostHog goes through this origin (/ingest): no ad-blocker losses, and the CSP stays same-origin.
   skipTrailingSlashRedirect: true,
+  // Invites moved from /j/ to /i/ (2026-11-07): Meta kept an old robots.txt rule ("Disallow: /j/") cached and
+  // refused to preview /j/ links. Old links and printed QR codes still work.
+  async redirects() {
+    return [{ source: "/j/:code", destination: "/i/:code", permanent: true }];
+  },
   async rewrites() {
     return [
       { source: "/ingest/static/:path*", destination: "https://us-assets.i.posthog.com/static/:path*" },
@@ -33,7 +38,7 @@ const nextConfig: NextConfig = {
       },
       {
         // Sessions and invites are private: never in search results, even if a link leaks.
-        source: "/:prefix(s|j|api)/:path*",
+        source: "/:prefix(s|i|j|api)/:path*",
         // Except for Meta's preview crawlers, which treat noindex as a robots block (see src/lib/crawlers.ts).
         missing: [{ type: "header", key: "user-agent", value: `.*(${META_CRAWLER_PATTERN}).*` }],
         headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],

@@ -18,7 +18,7 @@ export function RemovedNotice({ reason, inviteCode }: { reason: string | null; i
         ) : null}
         <div className="mt-6 grid gap-2">
           {inviteCode ? (
-            <Link href={`/j/${inviteCode}`} className={buttonVariants({ variant: "primary" })}>
+            <Link href={`/i/${inviteCode}`} className={buttonVariants({ variant: "primary" })}>
               Join again
             </Link>
           ) : null}

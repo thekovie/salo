@@ -7,7 +7,7 @@ import { setAnalyticsClient, setAnalyticsContext } from "@/lib/analytics";
 function pageKind(path: string): string {
   if (path === "/") return "landing";
   if (path.startsWith("/s/")) return "workspace";
-  if (path.startsWith("/j/")) return "invite";
+  if (path.startsWith("/i/") || path.startsWith("/j/")) return "invite";
   if (path === "/privacy" || path === "/cookies") return "policy";
   return "other";
 }

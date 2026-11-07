@@ -20,7 +20,7 @@ export function JoinForm() {
       setError(`Codes are ${JOIN_CODE_LENGTH} characters, like K7P2QX.`);
       return;
     }
-    router.push(`/j/${clean}`);
+    router.push(`/i/${clean}`);
   }
 
   return (

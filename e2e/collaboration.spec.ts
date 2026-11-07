@@ -71,21 +71,21 @@ test("invite link preview names the order but never its dishes or people", async
   await addDish(page, "Secret Dish");
   const code = await inviteCode(page);
 
-  const html = await (await request.get(`/j/${code}`)).text();
+  const html = await (await request.get(`/i/${code}`)).text();
   expect(html).toContain('property="og:title" content="Join the order at Ramen Nagi"');
   expect(html).toContain("og:image");
   expect(html).toContain("noindex");
   expect(html).not.toContain("Secret Dish");
-  const image = await request.get(`/j/${code}/opengraph-image`);
+  const image = await request.get(`/i/${code}/opengraph-image`);
   expect(image.status()).toBe(200);
   expect(image.headers()["content-type"]).toBe("image/png");
 
   // Meta's crawler reads noindex as a robots block (Sharing Debugger 403), so it gets the invite without it;
   // everyone else, search engines included, still gets noindex.
-  const meta = await request.get(`/j/${code}`, { headers: { "User-Agent": "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)" } });
+  const meta = await request.get(`/i/${code}`, { headers: { "User-Agent": "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)" } });
   expect(meta.headers()["x-robots-tag"]).toBeUndefined();
   expect(await meta.text()).not.toContain('name="robots"');
-  const google = await request.get(`/j/${code}`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1)" } });
+  const google = await request.get(`/i/${code}`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1)" } });
   expect(google.headers()["x-robots-tag"]).toBe("noindex, nofollow");
   expect(await google.text()).toContain('name="robots" content="noindex, nofollow"');
 
@@ -94,7 +94,7 @@ test("invite link preview names the order but never its dishes or people", async
   expect(robots).not.toMatch(/Disallow: \/(j|s)\//);
   // A forwarded room link (no cookie: a friend or a crawler) lands on the invite, preview and all.
   const room = await request.get(new URL(page.url()).pathname);
-  expect(room.url()).toContain(`/j/${code}`);
+  expect(room.url()).toContain(`/i/${code}`);
   expect(await room.text()).toContain('content="Join the order at Ramen Nagi"');
 });
 
@@ -113,7 +113,11 @@ test("the host can cancel an order nothing was confirmed for; guests see it canc
 });
 
 test("unknown codes and strangers get nothing", async ({ request }) => {
-  expect((await request.get("/j/ZZZZZZ")).status()).toBe(404);
+  expect((await request.get("/i/ZZZZZZ")).status()).toBe(404);
+  // Old /j/ links and printed QR codes still lead to the invite.
+  const legacy = await request.get("/j/ABC123", { maxRedirects: 0 });
+  expect(legacy.status()).toBe(308);
+  expect(legacy.headers()["location"]).toMatch(/\/i\/ABC123$/);
   expect((await request.get("/api/sessions/00000000-0000-4000-8000-000000000000/events")).status()).toBe(404);
 });
 
@@ -160,7 +164,7 @@ test("the host removes a guest with a reason; the guest sees it and can join aga
   // The guest's screen explains, with the host's note, and offers the way back.
   await expect(guest.page.getByRole("heading", { name: "You’re no longer in this order" })).toBeVisible({ timeout: 10_000 });
   await expect(guest.page.getByText("Wrong table, sorry!")).toBeVisible();
-  await expect(guest.page.getByRole("link", { name: "Join again" })).toHaveAttribute("href", `/j/${code}`);
+  await expect(guest.page.getByRole("link", { name: "Join again" })).toHaveAttribute("href", `/i/${code}`);
 
   // Undo on the host's toast brings JD and the dishes back.
   await page.getByRole("button", { name: "Undo" }).click();

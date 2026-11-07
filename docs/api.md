@@ -59,4 +59,5 @@ Idempotency: every change carries `Idempotency-Key`, bound to the change's kind 
 | `/s/:id/waiter` | Full-screen waiter ticket. |
 | `/privacy`, `/cookies` | Policies, plus the analytics switch. |
 | `/ingest/*` | Rewrite to PostHog US (analytics), only used when `POSTHOG_KEY` is set. |
-| `/j/:code` | Invite page. Server-rendered metadata and an Open Graph image (`/j/:code/opengraph-image`) with the order's name only; "This order has ended" when closed. Visitors who already belong to the order go straight to it. |
+| `/j/:code` | Old invite address: permanent redirect to `/i/:code`. |
+| `/i/:code` | Invite page. Server-rendered metadata and an Open Graph image (`/j/:code/opengraph-image`) with the order's name only; "This order has ended" when closed. Visitors who already belong to the order go straight to it. |

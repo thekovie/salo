@@ -31,7 +31,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     // Out of search engines, but not for Meta's preview crawlers, which read noindex as "blocked" and show no card.
     robots: isMetaCrawler((await headers()).get("user-agent")) ? undefined : { index: false, follow: false },
     // og:url names the invite itself, so a preview cached for this link is the card for this order.
-    openGraph: { title, description, type: "website", siteName: "Salo", url: `/j/${encodeURIComponent(code)}` },
+    openGraph: { title, description, type: "website", siteName: "Salo", url: `/i/${encodeURIComponent(code)}` },
     twitter: { card: "summary_large_image", title, description },
   };
 }

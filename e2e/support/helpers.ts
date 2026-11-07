@@ -44,7 +44,7 @@ export async function inviteCode(page: Page): Promise<string> {
 export async function joinAsGuest(browser: Browser, code: string, name: string) {
   const context = await browser.newContext({ ...test.info().project.use });
   const page = await context.newPage();
-  await page.goto(`/j/${code}`);
+  await page.goto(`/i/${code}`);
   await expect(page.getByText(/^Live · \d+ (person|people) · \d+ items? so far$/)).toBeVisible();
   await page.getByLabel("Your name").fill(name);
   await page.getByRole("button", { name: "Join the order" }).click();

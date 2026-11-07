@@ -21,7 +21,7 @@ test("expiration and deletion: an expired order and its invite stop working (sce
 
   await page.reload();
   await expect(page.getByText("Wala dito.")).toBeVisible();
-  expect((await request.get(`/j/${code}`)).status()).toBe(404);
+  expect((await request.get(`/i/${code}`)).status()).toBe(404);
   expect((await request.get(`/api/sessions/${sessionId}/sync`)).status()).toBe(404);
   // The landing page no longer offers to resume it.
   await page.goto("/");

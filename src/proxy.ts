@@ -52,5 +52,5 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   // Everything except static files and generated images (icons and link previews carry no scripts).
-  matcher: ["/((?!_next/static/|_next/image|favicon\\.ico$|icon\\.svg$|apple-icon$|opengraph-image$|(?:s|j)/[^/]+/opengraph-image$).*)"],
+  matcher: ["/((?!_next/static/|_next/image|favicon\\.ico$|icon\\.svg$|apple-icon$|opengraph-image$|(?:s|i)/[^/]+/opengraph-image$).*)"],
 };
