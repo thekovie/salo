@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleHelp, Ellipsis } from "lucide-react";
+import { ChevronDown, CircleHelp } from "lucide-react";
 import Link from "next/link";
 import { LogoMark } from "@/components/brand/logo";
 import type { SyncState } from "@/hooks/use-session";
@@ -50,8 +50,16 @@ export function SessionHeader({ title, roundNumber, roundStatus, ended = null, s
         </div>
         {actions}
         {onOptions ? (
-          <button type="button" onClick={onOptions} aria-label="Order options" data-tour="options" className="inline-flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full hover:bg-on-band/10">
-            <Ellipsis className="size-6" aria-hidden />
+          // A labelled button (was a bare ⋯): rename, end or cancel the order live here.
+          <button
+            type="button"
+            onClick={onOptions}
+                        aria-label="Order options"
+            data-tour="options"
+            className="inline-flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-full pr-2.5 pl-3.5 font-semibold ring-1 ring-on-band/40 hover:bg-on-band/10"
+          >
+            <span>Options</span>
+            <ChevronDown className="size-4" aria-hidden />
           </button>
         ) : null}
         {onHelp ? (

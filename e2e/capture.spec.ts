@@ -86,7 +86,7 @@ test("capture every screen", async ({ page, browser, request }) => {
   await page.getByRole("button", { name: "Back", exact: true }).click();
 
   // Rounds 2 (canary) and 3 (pink, open) with a correction.
-  await page.getByRole("button", { name: "Start round 2" }).click();
+  await page.getByRole("button", { name: "Add more (round 2)" }).click();
   await addDish(guest.page, "Extra Rice", 3);
   await expect(page.getByText("Extra Rice")).toBeVisible();
   await confirmCurrent(page, id);

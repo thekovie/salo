@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
 
 interface OrderOptionsSheetProps {
+  /** Open straight on the end/cancel confirmation (from "Done? End the order"). */
+  startAt?: "options" | "confirm";
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string | null;
@@ -34,10 +36,10 @@ export function OrderOptionsSheet(props: OrderOptionsSheetProps) {
   );
 }
 
-function OptionsBody({ onOpenChange, title, anyConfirmed, unsentRound, onRename, onEnd, onTour }: OrderOptionsSheetProps) {
+function OptionsBody({ onOpenChange, title, anyConfirmed, unsentRound, onRename, onEnd, onTour, startAt = "options" }: OrderOptionsSheetProps) {
   const id = useId();
   const [draft, setDraft] = useState(title ?? "");
-  const [step, setStep] = useState<"options" | "confirm">("options");
+  const [step, setStep] = useState<"options" | "confirm">(startAt);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const verb = anyConfirmed ? "End" : "Cancel";

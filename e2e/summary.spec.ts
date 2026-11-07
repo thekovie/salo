@@ -25,8 +25,9 @@ test("ending the order offers 'who ordered what' to copy or save; guests can ope
   await page.getByRole("button", { name: "Back" }).click();
 
   // End the order: the summary opens by itself for the host.
-  await page.getByRole("button", { name: "Order options" }).click();
-  await page.getByRole("button", { name: "End order" }).click();
+  // Right after confirming, the host sees both next steps; "End the order" goes straight to the confirmation.
+  await expect(page.getByRole("region", { name: "What’s next?" })).toBeVisible();
+  await page.getByRole("button", { name: "End the order" }).click();
   await page.getByRole("dialog", { name: "End this order?" }).getByRole("button", { name: "Yes, end the order" }).click();
   const sheet = page.getByRole("dialog", { name: "Who ordered what" });
   await expect(sheet).toBeVisible();

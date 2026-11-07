@@ -10,7 +10,7 @@ export const HOST_TOUR: readonly TourStep[] = [
   { target: "for", title: "Who’s it for?", body: "It starts on you. Tap to pick a friend, a group, the whole table, or nobody in particular." },
   { target: "invite", title: "Let the table add their own", body: "Show the QR or read out the code. Friends join from their phones, no app or sign-up." },
   { target: "review", title: "Check it, then show the waiter", body: "Review spots double orders and unsaved changes, opens a big ticket for the waiter, and marks the round confirmed." },
-  { target: "options", title: "Name, cancel or end", body: "Rename the order, cancel it, or end it when you’re done. At the end you get “who ordered what” for settling up." },
+  { target: "options", title: "Name, cancel or end", body: "The Options button: rename the order, cancel it, or end it when the table is done. Ending gives you “who ordered what” for settling up." },
 ];
 
 export const GUEST_TOUR: readonly TourStep[] = [
