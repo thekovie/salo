@@ -22,18 +22,24 @@ After M5 (owner feedback), all merged:
 | #14 | Local times, two-row composer with "who's it for" chips, host removes guests (with reason), live "added" pills, security-review fixes |
 | #15 | "Who ordered what" summary: copy as text or save as an image |
 | #16 | Landing page scenes, first-time guided tour, Playwright UX pass |
+| #18–#25 | PostHog analytics with masked replay, privacy/cookie policies, sync reliability (strict queue, poll fallback), server hardening, draft editing with Undo, invites at `/i/<code>` with working link previews |
+| #26–#30 | Turnstile bot check before starting an order, findable "End the order" (What's next?), a way out of every screen, density pass, proxy check joins a browser-started order |
+| #31 | **KKB**: optional prices per dish, each person's food subtotal, one receipt service charge split by food (largest remainder, exact), host Bill to for shared dishes, priced replacements; host name; **setup guide** (full-screen wizard with animated steps, Try it, checklist) replacing the spotlight tour; landing "Settle up" scene with prices |
+| #32 | Host is asked for their name as soon as the order opens ("What should the table call you?") |
 
 All 14 brief end-to-end scenarios are covered by Playwright (see `docs/testing.md`).
 
 ## Deployment
 
-- **Deployed on Coolify by the owner on 2026-11-06.** `main` at `8e0c088` (PR #16) is the latest build; redeploy from `main` to get everything above.
-- Database migrations run when the app starts. The latest is `0005_participant_removal` (from PR #14). Check the first start after deploying it logs no migration error.
+- **Deployed on Coolify by the owner on 2026-11-06**; redeploy from `main` (at `6423a0b`, PR #32) to get everything above.
+- Database migrations run when the app starts. The latest is `0007_settlement` (PR #31: `entry_settlements`, `correction_settlements`, `sessions.service_charge_*`; backward compatible, old orders load with no prices). Check the first start after deploying it logs no migration error.
 - Environment: `APP_URL` must be the real https domain (invite links, QR codes, link previews and the CSRF origin check depend on it). Optional: `NEW_ORDERS_PER_HOUR` (default 20; leave it in production), `CLOSED_RETENTION_DAYS` (default 7), `INACTIVE_RETENTION_DAYS` (default 30), `POSTHOG_KEY` (analytics on when set). A cancelled order (ended before anything was confirmed) is deleted after **1 day**: an owner decision, recorded 2026-11-07, that deliberately differs from the PRD's 7 days, since nothing was ordered. See `docs/deployment.md`.
 - After each deploy, a quick smoke check:
   - `/api/health` returns 200;
   - start an order on a phone, and join it from a second phone by QR;
-  - confirm a round, end the order, and check that "Who ordered what" opens.
+  - the host sees "What should the table call you?" right after starting; save a name;
+  - add a dish with a price (Size, notes or price), confirm a round, open Who ordered what → KKB, enter a service charge, and check the guest's phone shows their share;
+  - end the order, and check that "Who ordered what" opens.
 
 ## Working rules
 
@@ -51,8 +57,11 @@ All 14 brief end-to-end scenarios are covered by Playwright (see `docs/testing.m
 4. **Real phones** (Android done 2026-11-08; iPhone and screen reader spot check still open): try a full order on Android and iPhone over mobile data (QR join, live updates, waiter ticket in sunlight and in a dim place, screen reader spot check with TalkBack/VoiceOver).
 5. ~~**Link previews**~~: done 2026-11-07, confirmed by the owner in the Sharing Debugger and in Messenger. Invites live at `/i/<code>` (`/j/` redirects); the history is in `docs/deployment.md` → Link previews.
 6. **Usability test** (one run done on the pre-November-8 UI; repeat on the current UI) against Notes with a real table (brief 15.6): time to record ten dishes, mistakes, corrections, confidence.
-7. ~~**PostHog**~~: done 2026-11-08; key set in Coolify, owner is monitoring (insight ideas: funnel order_started → dish_added → round_confirmed → order_ended; tour funnel; rage/dead clicks by page).
+7. ~~**PostHog**~~: done 2026-11-08; key set in Coolify, owner is monitoring (insight ideas: funnel order_started → dish_added → round_confirmed → order_ended; setup-guide funnel, still named `tour_*` events; rage/dead clicks by page).
 8. ~~**Turnstile (bot check)**~~: done 2026-11-08, keys set in Coolify; confirmed by the owner on a phone browser and the installed PWA.
+9. **KKB on real phones**: decimal keypad opens for prices, the inline price editor stays above the keyboard, service charge entry, a guest sees their share live.
+10. **KKB pilot** with a real table of 7–12 doing KKB (see Next steps).
+11. **KKB decisions**: whether Copy text / Save image should get an explicit "include prices" option (deferred); confirm the limits (₱99,999.99 per dish, ₱999,999.99 service charge); whether guests may rename themselves (endpoint is host-only today).
 
 ## Known limitations
 
