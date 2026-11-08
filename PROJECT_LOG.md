@@ -415,3 +415,19 @@ Owner: "assess the others as well… a domino effect will take place". Captured 
 - **P3:** the waiter stamp no longer wraps "Round 1"; "0/1 guests ready" no longer wraps; tighter space above the tabs.
 - **Tests:** scenario 6 now expects the panel to close after Add (the recipient is kept); readiness wording updated. 127 unit, 36 e2e.
 
+## KKB subtotals, service charge, host name, setup guide (PR #31, `feat/kkb-subtotals`)
+
+Owner brief (2026-11-08): let a table of 7–12+ doing KKB see each person's food subtotal from the same entries, and their share of the receipt's service charge. Extends PRD v1.2, which excluded bill splitting.
+- **Verified on `main` first:** confirmed entries are frozen by `assertEditable`, `entries_draft_only` and `batches_guard`, so prices can't live on `order_entries`; claims close on confirm, so a confirmed shared dish had no route to a payer; every mutation bumps the session revision that confirm checks.
+- **Built:** `entry_settlements` and `correction_settlements` plus `sessions.service_charge_*` (`0007_settlement`); `PUT …/entries/:id/settlement`, `PUT …/corrections/:id/price`, `PUT …/service-charge`, `PATCH …/me`; a separate `settlement` map in the snapshot so prices can't flow into ticket code; pure `src/lib/kkb.ts` (one calculation for view and any export) and `src/lib/money.ts`; price in the composer; Items | KKB tabs with an inline price editor that saves straight to the server (kept value on failure, same-key retry, "someone changed this" with Use theirs / Keep mine); service charge block with the reasons it can't be split yet.
+- **Owner decisions:** the host can price a replacement (so "needs bill review" can clear); price-only, service-charge and name events don't make the waiter confirmation stale (`NON_TICKET_EVENTS`); **Bill to** gives a whole shared/unassigned dish to one payer (settlement only, no splitting); exports stay price-free for now (unanswered, defaulted).
+- **Host name:** the host was always "Host"; now set from Options, the guide and KKB (owner request).
+- **Setup guide** (owner: "setup wizard-like … guided on all features"): replaced the 5-step spotlight tour, which skipped controls not on screen and never reached People, Rounds or KKB. Full-screen wizard per role (host 9, guest 6) with an animated scene per step, Try it that lands on the feature (disabled with a reason when it can't work yet), done checks from the order's state and a final checklist. Landing "Settle up later" scene now animates prices and the service-charge split.
+- **Found in visual checks:** "₱0.00 shared" for unpriced shared dishes (now "No prices yet"); a finished save closed a newly opened editor; fully billed shared section said "Not confirmed"; landing service-charge row wrapped; the guide's last page pictured a full checklist above an empty real one.
+- **Review:** independent code review approved; three low findings fixed (future `expectedRevision` skipped the stale check, NFKC-expanded names hit a DB CHECK as a 500, conflict with a failed refresh showed nothing).
+- **Tests:** 163 unit/integration (`money`, `kkb`, `settlement`, `guide` new), 38 e2e (`kkb.spec.ts` two phones, onboarding rewritten for the guide).
+
+## Host name prompt (PR #32, `fix/host-name-prompt`)
+
+Owner: no prompt for the host's name when creating an order; it took the Help guide. Starting stays one tap, so a saffron card at the top of the order now asks "What should the table call you?" (Save / Later; Later hides it until the order is opened again) until a name is given. KKB reuses the same `HostNamePrompt`. Lesson: a new capability needs an entry point at first use, not only inside a guide or a later screen. 39 e2e.
+

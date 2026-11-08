@@ -1,6 +1,6 @@
 # Salo
 
-**One table. Everyone's order.** Salo collects a restaurant table's order in one place, merges identical dishes into exact counts (keeping every variant and instruction), and gives the waiter one clear ticket. No restaurant integration, no menus, no accounts.
+**One table. Everyone's order.** Salo collects a restaurant table's order in one place, merges identical dishes into exact counts (keeping every variant and instruction), and gives the waiter one clear ticket. No restaurant integration, no menus, no accounts. When the meal is done, "Who ordered what" lists everyone's dishes and, with prices typed from the receipt, KKB shows each person's total including their share of the service charge.
 
 - Product brief: [`docs/brief.md`](docs/brief.md) (the approved specification)
 - Current state and next steps: [`HANDOFF.md`](HANDOFF.md)

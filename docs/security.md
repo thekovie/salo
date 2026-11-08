@@ -7,6 +7,7 @@
 
 ## Authorization (brief 4, 11.2)
 - `src/lib/permissions.ts`: host-only rename, confirm, rounds, close, claim approval, removing guests, editing others' entries; guests add entries and change only their own.
+- KKB (`src/server/orders/settlement.ts`): the host may price any entry, a guest only the entries they submitted (`canEditPrice`, confirmed rounds included); Bill to, replacement prices, the service charge and renaming yourself are host-only. Every write checks the row's own revision (stale → `409 CONFLICT`), runs in `runMutation` (closed orders refused, idempotent replay), and stays in the caller's session (also enforced by `0007` triggers). Prices are visible to everyone in the order and never reach the waiter ticket, its snapshot, the invite or its preview, or the summary text/image.
 - Every session endpoint resolves the caller from the cookie; someone without a credential for that session gets `404` (the same as a session that does not exist). Entry ids are always scoped to the caller's session. A guest the host removed resolves to nobody (`resolveActor` returns null), so every route treats them as a stranger, except that session routes answer `403 REMOVED` so their screen can explain; their reason is only rendered on their own page. They may join again as a new guest.
 
 ## Invitations
@@ -46,4 +47,4 @@ Rate limits live in process memory (one instance) and key on the last `X-Forward
 ## Data minimization and retention
 Preview images for unknown or ended invites are a cached static card (fonts read once per process).
 
-Only display names are collected. Retention: an hourly job deletes every order whose deletion date has passed (closed + 7 days, or last activity + 30 days), with everything in it (`src/server/maintenance/cleanup.ts`). Backups follow their own retention ([backups.md](backups.md)).
+Only display names are collected (and, if someone types them, dish prices and the receipt's service charge, deleted with the order). Retention: an hourly job deletes every order whose deletion date has passed (closed + 7 days, or last activity + 30 days), with everything in it (`src/server/maintenance/cleanup.ts`). Backups follow their own retention ([backups.md](backups.md)).
