@@ -30,6 +30,7 @@ import { ArrivalPills, ARRIVAL_MS } from "./arrival-pills";
 import { ConnectionPill } from "./connection-pill";
 import { OrderOptionsSheet } from "./order-options-sheet";
 import { SummarySheet, type SummaryTab } from "./summary-sheet";
+import { HostNamePrompt } from "./host-name-prompt";
 import { EditDishSheet } from "./edit-dish-sheet";
 import { Guide } from "@/components/onboarding/guide";
 import { TourOffer } from "@/components/onboarding/tour-offer";
@@ -83,6 +84,9 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
   const [touring, setTouring] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [detailsSignal, setDetailsSignal] = useState(0);
+  // The host starts as "Host" (one-tap start); ask for a real name right away, until given or put off for now.
+  const [nameDeferred, setNameDeferred] = useState(false);
+  const askName = isHost && sessionOpen && !nameDeferred && snapshot.me.displayName.trim().toLowerCase() === "host";
   const role = snapshot.me.role;
   // Unknown on the server (no storage there): treat as seen, so the offer only ever appears after hydration.
   const seen = useSyncExternalStore(subscribeTourSeen, () => tourSeen(role), () => true);
@@ -496,6 +500,18 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
               </div>
             ))}
           </section>
+        ) : null}
+        {askName ? (
+          <div className="mb-4">
+            <HostNamePrompt
+              onSave={(displayName) => {
+                setNameDeferred(true);
+                void mutate({ kind: "renameMe", displayName });
+                show({ message: `Thanks, ${displayName}. The table sees your name now.` });
+              }}
+              onLater={() => setNameDeferred(true)}
+            />
+          </div>
         ) : null}
         {offerVisible ? (
           <TourOffer

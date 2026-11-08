@@ -1,12 +1,12 @@
 "use client";
 
 import { CircleAlert, CircleCheck, Pencil } from "lucide-react";
-import { useId, useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { useMemo, useState } from "react";
 import { buildKkb, type Kkb, type KkbLine, type KkbSection } from "@/lib/kkb";
 import { formatPeso } from "@/lib/money";
 import type { SessionSnapshot } from "@/lib/snapshot";
 import { cn } from "@/lib/utils";
+import { HostNamePrompt } from "./host-name-prompt";
 import { PriceEditor, type Payer } from "./price-editor";
 import { ServiceChargeBlock } from "./service-charge-block";
 
@@ -68,7 +68,7 @@ export function KkbView({ snapshot, refresh, onRenameMe }: KkbViewProps) {
   return (
     <div className="mt-4 space-y-4" data-ph-mask="">
       <StatusStrip kkb={kkb} />
-      {needsName ? <HostName onSave={onRenameMe} /> : null}
+      {needsName ? <HostNamePrompt onSave={onRenameMe} label="Add your name so the table knows which dishes are yours" /> : null}
 
       {mine ? (
         <Card section={mine} isMe>
@@ -126,48 +126,6 @@ function StatusStrip({ kkb }: { kkb: Kkb }) {
     );
   }
   return <p className="px-1 text-sm text-ink-soft">{charge.state === "none" ? "No service charge on this receipt." : "Service charge: not entered yet. It goes at the bottom, from the receipt."}</p>;
-}
-
-function HostName({ onSave }: { onSave: (name: string) => void }) {
-  const id = useId();
-  const [name, setName] = useState("");
-  const [error, setError] = useState("");
-  return (
-    <form
-      noValidate
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!name.trim()) return setError("Type your name so the table knows which dishes are yours.");
-        onSave(name.trim());
-      }}
-      className="rounded-2xl bg-paper p-3"
-    >
-      <label htmlFor={`${id}-name`} className="text-sm font-semibold">
-        Add your name so the table knows which dishes are yours
-      </label>
-      <div className="mt-1 flex flex-wrap gap-2">
-        <input
-          id={`${id}-name`}
-          value={name}
-          onChange={(e) => {
-            setName(e.target.value);
-            setError("");
-          }}
-          maxLength={40}
-          autoComplete="given-name"
-          placeholder="Your name"
-          aria-invalid={Boolean(error) || undefined}
-          className="min-h-11 min-w-0 flex-1 basis-40 rounded-xl border-[1.5px] border-input bg-ticket px-3 text-base aria-invalid:border-bad"
-        />
-        <Button type="submit" variant="outline">
-          Save
-        </Button>
-      </div>
-      <p role="alert" className={cn("text-sm text-bad", error ? "mt-1" : "sr-only")}>
-        {error}
-      </p>
-    </form>
-  );
 }
 
 function noteOf(section: KkbSection, isMe: boolean) {
