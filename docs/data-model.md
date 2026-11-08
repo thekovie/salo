@@ -20,6 +20,10 @@ PostgreSQL, defined in `src/server/db/schema.ts`; migrations in `drizzle/` (appl
 | `entry_claims` | A guest asking the host to hand over an entry recorded for them. |
 | `mutation_records` | Idempotency: (session, actor, key) unique; retries return the stored result. |
 | `session_events` | Durable, ordered event log (unique per session + revision) used for real-time replay. |
+| `entry_settlements` | KKB, per source entry: `unit_price_centavos` (null = unknown, 0–9,999,999), optional host-chosen payer for a shared or unassigned dish (`bill_to_participant_id` or `bill_to_label`, at most one), own `revision`. Separate from `order_entries` so prices can change after a round is confirmed without touching frozen order data. |
+| `correction_settlements` | KKB: price each for a replacement correction ("Change it to …"), host only, own `revision`. |
+
+`sessions` also holds the receipt's service charge: `service_charge_centavos` (null = not entered, 0 = none on the receipt, max 99,999,999) and `service_charge_revision`. Existing sessions and entries load with no prices (`0007_settlement`).
 
 ## Integrity rules enforced by the database
 
@@ -33,7 +37,8 @@ PostgreSQL, defined in `src/server/db/schema.ts`; migrations in `drizzle/` (appl
   - claims and group members stay inside one session.
 - An order past `expires_at` is treated as gone at once (credentials, invite, join, changes), and the hourly cleanup deletes it.
 - More triggers (`drizzle/0004_freeze_guards.sql`): a confirmed round cannot be reopened; snapshots, entries of confirmed rounds and corrections already given to the waiter cannot be deleted or changed, except when a whole session is deleted (cascade).
-- Covered by `tests/db-integrity.test.ts` and `tests/rounds.test.ts`.
+- `drizzle/0007_settlement.sql`: settlement rows stay in their session (entry via its batch, correction, bill-to person); CHECKs on amounts and revisions.
+- Covered by `tests/db-integrity.test.ts`, `tests/rounds.test.ts` and `tests/settlement.test.ts`.
 
 ## Deviations from brief section 8
 
@@ -42,6 +47,15 @@ PostgreSQL, defined in `src/server/db/schema.ts`; migrations in `drizzle/` (appl
 - `entry_claims` is added: section 10 lists claim endpoints but section 8 has no table for them.
 - `order_corrections.target_round_id` is added: the draft round whose waiter ticket carries the correction.
 - `order_batches.group_id` links a batch to an optional `order_groups` row; `collective_label` still works without one.
+
+## KKB calculation
+
+`src/lib/kkb.ts`, pure, integer centavos, the one calculation for the view (and any future export):
+
+- Confirmed entries only, per source entry: confirmed quantity cancellations lower the count; a confirmed replacement becomes "A → B" priced by its correction's price. Pending corrections are flagged, not applied.
+- Payer = the entry's individual attribution (joined person by id, or a typed name); otherwise the host's Bill to; otherwise it stays in a shared section (group, Whole table, Not assigned). Group membership never picks a payer.
+- Labels: Food subtotal (all priced, nothing pending), Priced subtotal (+ items without a price), No prices entered. Drafts are listed as Not yet confirmed and never counted.
+- Service charge: allocated only when nothing confirmed is unpriced, unbilled-shared or pending and the eligible food is above zero. Largest remainder in BigInt: floor shares, leftover centavos to the largest remainders, ties by payer key; shares add up exactly to the charge.
 
 ## Consolidation
 

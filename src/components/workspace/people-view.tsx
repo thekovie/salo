@@ -102,7 +102,7 @@ export function PeopleView({ snapshot, entries, canClaim, onClaim, onRemoveDupli
     <div className="space-y-3" data-ph-mask="">
       {onSummary ? (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-paper px-4 py-2.5">
-          <p className="text-sm text-ink-soft">For settling up: everyone&rsquo;s confirmed dishes.</p>
+          <p className="text-sm text-ink-soft">For settling up: who had what, and KKB with prices.</p>
           <button type="button" onClick={onSummary} className="inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-full px-3 font-semibold text-ink hover:bg-ink/6">
             <ReceiptText className="size-4" aria-hidden />
             Who ordered what

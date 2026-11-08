@@ -47,6 +47,9 @@ export const sessions = pgTable(
     closedAt: timestamp("closed_at", { withTimezone: true }),
     /** When cleanup deletes it: closed + 7 days, or last activity + 30 days. */
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    /** The receipt's service charge in centavos (KKB): null = not entered, 0 = the receipt has none. */
+    serviceChargeCentavos: integer("service_charge_centavos"),
+    serviceChargeRevision: integer("service_charge_revision").notNull().default(0),
   },
   (t) => [
     uniqueIndex("sessions_join_code_uq").on(t.joinCode),
@@ -54,6 +57,8 @@ export const sessions = pgTable(
     check("sessions_status_ck", inList("status", SESSION_STATUSES)),
     check("sessions_revision_ck", sql`revision >= 0`),
     check("sessions_closed_ck", sql`(status = 'CLOSED') = (closed_at IS NOT NULL)`),
+    check("sessions_service_charge_ck", sql`service_charge_centavos BETWEEN 0 AND 99999999`),
+    check("sessions_service_charge_revision_ck", sql`service_charge_revision >= 0`),
   ],
 );
 
@@ -329,4 +334,51 @@ export const sessionEvents = pgTable(
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("events_revision_uq").on(t.sessionId, t.revision)],
+);
+
+/**
+ * Settlement data for one source entry (KKB): its price each and, for shared dishes, a host-chosen payer. Separate
+ * from `order_entries` so it can change after the round is confirmed without touching the frozen order.
+ */
+export const entrySettlements = pgTable(
+  "entry_settlements",
+  {
+    entryId: uuid("entry_id")
+      .primaryKey()
+      .references(() => orderEntries.id, { onDelete: "cascade" }),
+    sessionId: sessionRef(),
+    unitPriceCentavos: integer("unit_price_centavos"),
+    billToParticipantId: uuid("bill_to_participant_id").references(() => participants.id, { onDelete: "cascade" }),
+    billToLabel: text("bill_to_label"),
+    revision: integer("revision").notNull().default(1),
+    updatedBy: uuid("updated_by").references(() => participants.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("entry_settlements_session_idx").on(t.sessionId),
+    check("entry_settlements_price_ck", sql`unit_price_centavos BETWEEN 0 AND 9999999`),
+    check("entry_settlements_label_ck", sql`char_length(bill_to_label) BETWEEN 1 AND 40`),
+    check("entry_settlements_one_payer_ck", sql`num_nonnulls(bill_to_participant_id, bill_to_label) <= 1`),
+    check("entry_settlements_revision_ck", sql`revision >= 1`),
+  ],
+);
+
+/** Price each for a replacement correction ("Change it to …"), host only (KKB). */
+export const correctionSettlements = pgTable(
+  "correction_settlements",
+  {
+    correctionId: uuid("correction_id")
+      .primaryKey()
+      .references(() => orderCorrections.id, { onDelete: "cascade" }),
+    sessionId: sessionRef(),
+    unitPriceCentavos: integer("unit_price_centavos"),
+    revision: integer("revision").notNull().default(1),
+    updatedBy: uuid("updated_by").references(() => participants.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("correction_settlements_session_idx").on(t.sessionId),
+    check("correction_settlements_price_ck", sql`unit_price_centavos BETWEEN 0 AND 9999999`),
+    check("correction_settlements_revision_ck", sql`revision >= 1`),
+  ],
 );

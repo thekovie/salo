@@ -10,7 +10,7 @@ export function TourOffer({ onStart, onDismiss }: { onStart: () => void; onDismi
       <p className="flex min-w-0 flex-1 items-center gap-2.5">
         <Compass className="size-5 shrink-0 text-saffron-ink" aria-hidden />
         <span>
-          <span className="font-semibold">New to Salo?</span> Take a 30-second tour.
+          <span className="font-semibold">New to Salo?</span> A short setup guide shows everything you can do here.
         </span>
       </p>
       <div className="flex justify-end gap-1">
@@ -18,7 +18,7 @@ export function TourOffer({ onStart, onDismiss }: { onStart: () => void; onDismi
           Not now
         </Button>
         <Button variant="outline" onClick={onStart}>
-          Show me
+          Start guide
         </Button>
       </div>
     </section>

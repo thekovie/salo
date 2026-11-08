@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Wrench } from "lucide-react";
+import { Plus, ReceiptText, Wrench } from "lucide-react";
 import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
@@ -31,6 +31,8 @@ interface RoundsViewProps {
   onRemoveCorrection: (id: string, dishName: string) => void;
   /** Host: end (or cancel) the order. */
   onEnd?: () => void;
+  /** Open KKB (prices and service charge) in "Who ordered what". */
+  onKkb?: () => void;
 }
 
 /** One option per preparation of a confirmed round; corrections attach to its largest source entry. */
@@ -164,7 +166,7 @@ function CorrectionDialog({ roundNumber, entries, corrections, onCorrect }: { ro
 }
 
 /** Round history (brief 5.3, 5.15): each confirmed round on its own carbon copy, stamped; corrections. Ending the order lives in the header's order options. */
-export function RoundsView({ snapshot, entries, justConfirmedRoundId, onOpenRound, onCorrect, onRemoveCorrection, onEnd }: RoundsViewProps) {
+export function RoundsView({ snapshot, entries, justConfirmedRoundId, onOpenRound, onCorrect, onRemoveCorrection, onEnd, onKkb }: RoundsViewProps) {
   const isHost = snapshot.me.role === "HOST";
   const isOpen = snapshot.session.status === "OPEN";
   const draft = snapshot.rounds.find((r) => r.status === "DRAFT");
@@ -184,6 +186,13 @@ export function RoundsView({ snapshot, entries, justConfirmedRoundId, onOpenRoun
             </Button>
           ) : null}
         </div>
+      ) : null}
+
+      {onKkb ? (
+        <button type="button" onClick={onKkb} className="inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-full px-3 font-semibold text-ink hover:bg-ink/6">
+          <ReceiptText className="size-4" aria-hidden />
+          KKB &amp; service charge
+        </button>
       ) : null}
 
       {rounds.map((round) => {

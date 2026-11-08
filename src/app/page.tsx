@@ -33,7 +33,7 @@ const STEPS = [
   },
   {
     title: "Settle up later",
-    body: "When the meal is done, “Who ordered what” lists each person’s, each group’s and the table’s dishes. Copy it into the group chat or save it as a picture.",
+    body: "“Who ordered what” lists each person’s, each group’s and the table’s dishes. Add prices from the receipt and KKB shows each person’s total, service charge included. Copy the list into the group chat or save it as a picture.",
     Scene: SummaryScene,
   },
 ] as const;

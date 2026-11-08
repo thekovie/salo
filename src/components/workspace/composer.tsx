@@ -5,6 +5,7 @@ import { useId, useMemo, useRef, useState } from "react";
 import type { AddInput } from "@/hooks/use-session";
 import { track } from "@/lib/analytics";
 import { normalizeText } from "@/lib/dish-name";
+import { formatPeso, parsePeso } from "@/lib/money";
 import { attributionOf, summary, type Recipient } from "@/lib/recipient";
 import { RecipientPicker } from "./recipient-picker";
 import { cn } from "@/lib/utils";
@@ -24,6 +25,8 @@ interface ComposerProps {
   /** Changes when the person switches tab: the "who's it for" panel closes so it doesn't cover the new view. */
   view?: string;
   onAdd: (input: AddInput) => void;
+  /** Bumped by the setup guide's "Try it": opens the For panel with size, notes and price showing. */
+  detailsSignal?: number;
 }
 
 function suggestionsFor(query: string, names: string[]): string[] {
@@ -39,7 +42,7 @@ function suggestionsFor(query: string, names: string[]): string[] {
  * the quantity, and Add. Size and instructions sit one step further in.
  * After adding: dish, quantity, size and instructions reset; the recipient stays for the next dish.
  */
-export function Composer({ dishNames, people, names, groups, disabled, view, onAdd }: ComposerProps) {
+export function Composer({ dishNames, people, names, groups, disabled, view, onAdd, detailsSignal = 0 }: ComposerProps) {
   const id = useId();
   const dishRef = useRef<HTMLInputElement>(null);
   const [dish, setDish] = useState("");
@@ -51,17 +54,26 @@ export function Composer({ dishNames, people, names, groups, disabled, view, onA
     setOpen(false);
   }
   const [notesOpen, setNotesOpen] = useState(false);
+  const [lastSignal, setLastSignal] = useState(detailsSignal);
+  if (detailsSignal !== lastSignal) {
+    setLastSignal(detailsSignal);
+    setOpen(true);
+    setNotesOpen(true);
+  }
   const [recipient, setRecipient] = useState<Recipient>({ kind: "ME" });
   const [typed, setTyped] = useState("");
   const [variant, setVariant] = useState("");
   const [instructions, setInstructions] = useState("");
+  const [priceText, setPriceText] = useState("");
   const [error, setError] = useState("");
+  const priceRef = useRef<HTMLInputElement>(null);
   const suggestions = useMemo(() => suggestionsFor(dish, dishNames), [dish, dishNames]);
 
   // A picked person who has since left the order falls back to Me instead of failing on Add.
   const current: Recipient = recipient.kind === "PERSON" && !people.some((p) => p.id === recipient.id) ? { kind: "ME" } : recipient;
   const isNew = current.kind === "NEW_PERSON" || current.kind === "NEW_GROUP";
-  const hasNotes = Boolean(variant || instructions);
+  const parsedPrice = parsePeso(priceText);
+  const hasNotes = Boolean(variant || instructions || priceText.trim());
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -76,7 +88,14 @@ export function Composer({ dishNames, people, names, groups, disabled, view, onA
       setError(current.kind === "NEW_GROUP" ? "Name the group, or pick someone." : "Type the person's name, or pick someone.");
       return;
     }
-    onAdd({ dishName: dish, quantity, variant: variant || null, instructions: instructions || null, attribution: who });
+    if (!parsedPrice.ok) {
+      setOpen(true);
+      setNotesOpen(true);
+      setError(`Price: ${parsedPrice.message}`);
+      requestAnimationFrame(() => priceRef.current?.focus());
+      return;
+    }
+    onAdd({ dishName: dish, quantity, variant: variant || null, instructions: instructions || null, attribution: who, unitPriceCentavos: parsedPrice.centavos });
     track({ name: "dish_added", props: { recipient: current.kind.toLowerCase(), quantity, has_notes: Boolean(variant || instructions) } });
     // A name typed once is a chip from now on: keep pointing at it instead of the empty "new" field.
     if (current.kind === "NEW_GROUP") setRecipient({ kind: "GROUP", label: typed.trim() });
@@ -86,6 +105,7 @@ export function Composer({ dishNames, people, names, groups, disabled, view, onA
     setQuantity(1);
     setVariant("");
     setInstructions("");
+    setPriceText("");
     setError("");
     // Close the panel after adding: an open panel plus the composer covered most of a small screen (density review).
     setOpen(false);
@@ -116,7 +136,7 @@ export function Composer({ dishNames, people, names, groups, disabled, view, onA
 
       {open ? (
         <fieldset id={`${id}-panel`} className="ease-in-panel relative mb-2 max-h-[45dvh] space-y-2 overflow-y-auto overscroll-contain rounded-2xl bg-paper p-3">
-          <legend className="sr-only">Who it&rsquo;s for, size and notes</legend>
+          <legend className="sr-only">Who it&rsquo;s for, size, notes and price</legend>
           <button
             type="button"
             onClick={() => {
@@ -151,11 +171,43 @@ export function Composer({ dishNames, people, names, groups, disabled, view, onA
               className="inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-full pr-2 text-sm font-semibold text-ink-soft hover:text-ink"
             >
               <ChevronDown className={cn("size-4 transition-transform duration-200", notesOpen && "rotate-180")} aria-hidden />
-              Size or notes
+              Size, notes or price
               {hasNotes && !notesOpen ? <span className="size-2 rounded-full bg-tomato" aria-hidden /> : null}
             </button>
             {notesOpen ? (
               <div className="ease-in-panel mt-1 grid gap-3 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label htmlFor={`${id}-price`} className="text-sm font-semibold">
+                    Price each (₱)
+                  </label>
+                  <input
+                    ref={priceRef}
+                    id={`${id}-price`}
+                    value={priceText}
+                    onChange={(e) => {
+                      setPriceText(e.target.value);
+                      if (error.startsWith("Price:")) setError("");
+                    }}
+                    inputMode="decimal"
+                    enterKeyHint="done"
+                    autoComplete="off"
+                    placeholder="Optional"
+                    aria-invalid={!parsedPrice.ok || undefined}
+                    aria-describedby={`${id}-price-line`}
+                    className="tally mt-1 min-h-11 w-full rounded-xl border-[1.5px] border-input bg-ticket px-3 text-base aria-invalid:border-bad"
+                  />
+                  <p id={`${id}-price-line`} aria-live="polite" className="mt-1 min-h-5 text-sm text-ink-soft">
+                    {parsedPrice.ok && parsedPrice.centavos != null && quantity > 1 ? (
+                      <span className="tally">
+                        {formatPeso(parsedPrice.centavos)} × {quantity} = {formatPeso(parsedPrice.centavos * quantity)}
+                      </span>
+                    ) : !parsedPrice.ok ? (
+                      <span className="text-bad">{parsedPrice.message}</span>
+                    ) : (
+                      "For KKB later. Leave blank if you don't know."
+                    )}
+                  </p>
+                </div>
                 <div>
                   <label htmlFor={`${id}-variant`} className="text-sm font-semibold">
                     Size or variant
@@ -214,7 +266,7 @@ export function Composer({ dishNames, people, names, groups, disabled, view, onA
           <span className="truncate font-semibold" data-ph-mask="">{summary(current, typed)}</span>
           <ChevronDown className={cn("size-4 shrink-0 text-ink-soft transition-transform duration-200", open && "rotate-180")} aria-hidden />
           {!open && hasNotes ? <span className="absolute top-2 right-2 size-2 rounded-full bg-tomato" aria-hidden /> : null}
-          <span className="sr-only">. Change who it&rsquo;s for, size or notes</span>
+          <span className="sr-only">. Change who it&rsquo;s for, size, notes or price</span>
         </button>
         <Stepper value={quantity} label="this dish" onChange={setQuantity} />
         <button

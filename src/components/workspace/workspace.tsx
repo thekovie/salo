@@ -29,11 +29,11 @@ import { OrderTicket, type TicketActions } from "./order-ticket";
 import { ArrivalPills, ARRIVAL_MS } from "./arrival-pills";
 import { ConnectionPill } from "./connection-pill";
 import { OrderOptionsSheet } from "./order-options-sheet";
-import { SummarySheet } from "./summary-sheet";
+import { SummarySheet, type SummaryTab } from "./summary-sheet";
 import { EditDishSheet } from "./edit-dish-sheet";
-import { Tour } from "@/components/onboarding/tour";
+import { Guide } from "@/components/onboarding/guide";
 import { TourOffer } from "@/components/onboarding/tour-offer";
-import { GUEST_TOUR, HOST_TOUR, markTourSeen, subscribeTourSeen, tourSeen } from "@/components/onboarding/tour-steps";
+import { guideFor, markTourSeen, subscribeTourSeen, tourSeen, type GuideAction } from "@/components/onboarding/guide-steps";
 import { SessionHeader } from "./session-header";
 import { Toasts, useToasts } from "./toasts";
 import { useDockHeight } from "@/hooks/use-dock-height";
@@ -51,7 +51,7 @@ function asAttribution(a: OverlayEntry["attribution"]): AddInput["attribution"] 
 const copyFor = (roundNumber: number): 1 | 2 | 3 => (roundNumber >= 3 ? 3 : roundNumber === 2 ? 2 : 1);
 
 export function Workspace({ initial, appUrl, justJoined = false }: { initial: SessionSnapshot; appUrl: string; justJoined?: boolean }) {
-  const { snapshot, entries, pending, failed, sync, mutate, dismiss, retry, entryById, online, stream } = useSession(initial);
+  const { snapshot, entries, pending, failed, sync, mutate, dismiss, retry, refresh, entryById, online, stream } = useSession(initial);
   const { toasts, show, dismiss: dismissToast } = useToasts();
   const round = snapshot.rounds.find((r) => r.id === snapshot.activeRoundId) ?? snapshot.rounds[0];
   const roundEntries = useMemo(() => entries.filter((e) => e.roundId === round.id), [entries, round.id]);
@@ -77,7 +77,12 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
     setOptionsOpen(true);
   };
   const [summaryOpen, setSummaryOpen] = useState(false);
+  const [summaryTab, setSummaryTab] = useState<SummaryTab>("items");
+  // KKB is useful as soon as there are dishes (prices can go in while ordering); the item list needs a confirmed round.
+  const hasSummary = anyConfirmed || snapshot.entries.length > 0;
   const [touring, setTouring] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [detailsSignal, setDetailsSignal] = useState(0);
   const role = snapshot.me.role;
   // Unknown on the server (no storage there): treat as seen, so the offer only ever appears after hydration.
   const seen = useSyncExternalStore(subscribeTourSeen, () => tourSeen(role), () => true);
@@ -102,7 +107,8 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
   useEffect(() => {
     if (sync === "failed" || sync === "unsynced" || sync === "conflict") track({ name: "sync_state", props: { state: sync } });
   }, [sync]);
-  const openSummary = (source: "auto" | "button") => {
+  const openSummary = (source: "auto" | "button", tab: SummaryTab = anyConfirmed ? "items" : "kkb") => {
+    setSummaryTab(tab);
     setSummaryOpen(true);
     track({ name: "summary_opened", props: { source } });
   };
@@ -310,9 +316,63 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
     // one has neither, so it stays on the (now read-only) order.
     if (accepted && anyConfirmed) {
       setView("rounds");
-      openSummary("auto");
+      const anyPrice = Object.values(snapshot.settlement.entries).some((p) => p.unitCentavos != null);
+      openSummary("auto", anyPrice ? "kkb" : "items");
     }
     return accepted;
+  }
+
+  /** The setup guide's "Try it": leave the guide and land on the feature, ready to use. */
+  function tryFeature(action: GuideAction) {
+    setTouring(false);
+    const focus = (selector: string) =>
+      requestAnimationFrame(() => {
+        const el = document.querySelector<HTMLElement>(selector);
+        el?.scrollIntoView({ block: "center" });
+        el?.focus();
+      });
+    switch (action) {
+      case "invite":
+        return setInviteOpen(true);
+      case "dish":
+        setView("order");
+        return focus('[data-tour="dish"] input');
+      case "details":
+        setView("order");
+        setDetailsSignal((n) => n + 1);
+        return focus('input[inputmode="decimal"]');
+      case "people":
+        return setView("people");
+      case "rounds":
+        return setView("rounds");
+      case "review":
+        return setMode("review");
+      case "ticket":
+        return setMode("waiter");
+      case "kkb":
+        return openSummary("button", "kkb");
+      case "ready":
+        return focus('[data-tour="ready"]');
+    }
+  }
+
+  function blockedReason(action: GuideAction): string | null {
+    if (!sessionOpen) return "This order has ended.";
+    const noDishes = total === 0 && correctionsThisRound === 0;
+    switch (action) {
+      case "dish":
+      case "details":
+      case "ready":
+        return isOpen ? null : isHost ? "This round is confirmed. Start the next round from Rounds to add more." : "The host confirmed this round.";
+      case "review":
+        return !isOpen ? "This round is already confirmed." : noDishes ? "Add a dish first, then come back to review it." : null;
+      case "ticket":
+        return !confirmedTicket && noDishes ? "Nothing on the ticket yet. Add a dish first." : null;
+      case "kkb":
+        return hasSummary ? null : "Add a dish first; KKB fills in from what’s ordered.";
+      default:
+        return null;
+    }
   }
 
   return (
@@ -327,13 +387,33 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
         onHelp={!isHost && sessionOpen ? () => startTour("replay") : undefined}
         actions={
           sessionOpen ? (
-            <InviteSheet appUrl={appUrl} joinCode={snapshot.session.joinCode} title={snapshot.session.title} peopleCount={snapshot.participants.length} />
+            <InviteSheet appUrl={appUrl} joinCode={snapshot.session.joinCode} title={snapshot.session.title} peopleCount={snapshot.participants.length} open={inviteOpen} onOpenChange={setInviteOpen} />
           ) : null
         }
       />
       <EditDishSheet entry={editing} onClose={() => setEditing(null)} meId={snapshot.me.participantId} {...recipients} onSave={saveEdit} />
-      {touring ? <Tour steps={isHost ? HOST_TOUR : GUEST_TOUR} onClose={endTour} /> : null}
-      {anyConfirmed ? <SummarySheet open={summaryOpen} onOpenChange={setSummaryOpen} snapshot={snapshot} /> : null}
+      {touring ? (
+        <Guide
+          steps={guideFor(role)}
+          snapshot={snapshot}
+          onClose={endTour}
+          onTry={tryFeature}
+          blockedReason={blockedReason}
+          onRename={(title) => void mutate({ kind: "rename", title })}
+          onRenameMe={(displayName) => void mutate({ kind: "renameMe", displayName })}
+        />
+      ) : null}
+      {hasSummary ? (
+        <SummarySheet
+          open={summaryOpen}
+          onOpenChange={setSummaryOpen}
+          snapshot={snapshot}
+          tab={summaryTab}
+          onTabChange={setSummaryTab}
+          refresh={refresh}
+          onRenameMe={(displayName) => void mutate({ kind: "renameMe", displayName })}
+        />
+      ) : null}
       {isHost && sessionOpen ? (
         <OrderOptionsSheet
           open={optionsOpen}
@@ -343,6 +423,8 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
           anyConfirmed={anyConfirmed}
           unsentRound={round.status === "DRAFT" && roundEntries.length > 0 ? round.number : null}
           onRename={(title) => void mutate({ kind: "rename", title })}
+          myName={snapshot.me.displayName}
+          onRenameMe={(displayName) => void mutate({ kind: "renameMe", displayName })}
           onEnd={closeOrder}
           onTour={() => startTour("replay")}
         />
@@ -450,6 +532,9 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
                         <CircleCheck className="size-5" aria-hidden /> End the order
                       </Button>
                     </div>
+                    <Button variant="ghost" className="mt-2 w-full" onClick={() => openSummary("button", "kkb")}>
+                      <ReceiptText className="size-5" aria-hidden /> Enter receipt prices (KKB)
+                    </Button>
                   </section>
                 ) : (
                   <p className="text-center text-ink-soft">The host confirmed round {round.number} with the waiter. The host can add another round or end the order when everyone’s done.</p>
@@ -465,6 +550,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
               justConfirmedRoundId={justConfirmed}
               onOpenRound={() => void openRound()}
               onEnd={isHost && sessionOpen ? openEnd : undefined}
+              onKkb={anyConfirmed ? () => openSummary("button", "kkb") : undefined}
               onCorrect={correct}
               onRemoveCorrection={(correctionId, dishName) => void mutate({ kind: "removeCorrection", correctionId, dishName })}
             />
@@ -477,7 +563,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
               onRemoveDuplicate={(entry) => actions.remove(entry)}
               roundNumber={round.number}
               onRemoveGuest={isHost && sessionOpen ? removeGuest : undefined}
-              onSummary={anyConfirmed ? () => openSummary("button") : undefined}
+              onSummary={hasSummary ? () => openSummary("button") : undefined}
             />
           ) : (
             <GroupsView snapshot={snapshot} entries={roundEntries} onSetMembers={(label, memberIds) => void mutate({ kind: "groupMembers", label, memberIds })} />
@@ -488,7 +574,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
       {sessionOpen ? (
       <div ref={dockRef} className="fixed inset-x-0 bottom-0 z-30 bg-gradient-to-t from-paper from-70% to-transparent pt-6 pb-[calc(env(safe-area-inset-bottom)+0.5rem)]">
         <div className="mx-auto max-w-2xl space-y-2 px-3">
-          {isOpen ? <Composer dishNames={snapshot.dishNames} {...recipients} view={view} onAdd={(input) => void add({ ...input, roundId: round.id })} /> : null}
+          {isOpen ? <Composer dishNames={snapshot.dishNames} {...recipients} view={view} detailsSignal={detailsSignal} onAdd={(input) => void add({ ...input, roundId: round.id })} /> : null}
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-2">
             <div className="min-w-0">
               <p className="whitespace-nowrap text-ink-soft" data-testid="round-total">

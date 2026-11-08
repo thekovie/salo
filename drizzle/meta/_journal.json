@@ -50,6 +50,13 @@
       "when": 1794016238925,
       "tag": "0006_integrity_v2",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794075188281,
+      "tag": "0007_settlement",
+      "breakpoints": true
     }
   ]
 }
