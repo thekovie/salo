@@ -98,3 +98,23 @@ test("the landing page shows the four steps with their pictures", async ({ page 
   await page.getByRole("link", { name: "How it works" }).click();
   await expect(page).toHaveURL(/#how-it-works$/);
 });
+
+test("a new host is asked for their name right away; Later puts it off; saving shows it to the table", async ({ page }) => {
+  await startOrder(page);
+  const prompt = page.getByRole("form", { name: "Your name" });
+  await expect(prompt.getByLabel("What should the table call you?")).toBeVisible();
+  await prompt.getByRole("button", { name: "Later" }).click();
+  await expect(prompt).toHaveCount(0);
+
+  // Still unnamed: it asks again next time the order is opened.
+  await page.reload();
+  await prompt.getByLabel("What should the table call you?").fill("Kovie");
+  await prompt.getByRole("button", { name: "Save" }).click();
+  await expect(prompt).toHaveCount(0);
+  await expect(page.getByText("Thanks, Kovie.")).toBeVisible();
+  // Saved on the server: gone after a reload, and Order options shows it.
+  await page.reload();
+  await expect(page.getByRole("form", { name: "Your name" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Order options" }).click();
+  await expect(page.getByLabel("Your name")).toHaveValue("Kovie");
+});
