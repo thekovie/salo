@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { overlay, type Pending } from "@/hooks/use-session";
 import { consolidate } from "@/lib/consolidate";
-import type { SessionSnapshot, SnapshotEntry } from "@/lib/snapshot";
+import { EMPTY_SETTLEMENT, type SessionSnapshot, type SnapshotEntry } from "@/lib/snapshot";
 
 const entry = (id: string, dishName: string, quantity: number, createdAt: string): SnapshotEntry => ({
   id,
@@ -33,6 +33,7 @@ const snapshot = {
   groups: [],
   corrections: [],
   tickets: {},
+  settlement: EMPTY_SETTLEMENT,
 } satisfies SessionSnapshot;
 
 const item = (fields: Partial<Pending> & Pick<Pending, "op">): Pending => ({ key: Math.random().toString(36), status: "queued", createdAt: "", attempts: 0, ...fields });

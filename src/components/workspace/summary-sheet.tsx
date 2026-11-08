@@ -7,15 +7,28 @@ import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerTitle } fr
 import type { SessionSnapshot } from "@/lib/snapshot";
 import { track } from "@/lib/analytics";
 import { buildSummary, itemsLabel, roundsLabel, summaryText } from "@/lib/summary";
+import { cn } from "@/lib/utils";
+import { KkbView } from "./kkb-view";
 
 const noSubscribe = () => () => {};
 const DATE: Intl.DateTimeFormatOptions = { weekday: "short", month: "short", day: "numeric" };
+
+export type SummaryTab = "items" | "kkb";
 
 interface SummarySheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   snapshot: SessionSnapshot;
+  tab: SummaryTab;
+  onTabChange: (tab: SummaryTab) => void;
+  refresh: () => Promise<unknown>;
+  onRenameMe: (displayName: string) => void;
 }
+
+const TABS: { id: SummaryTab; label: string }[] = [
+  { id: "items", label: "Items" },
+  { id: "kkb", label: "KKB" },
+];
 
 type Status = { kind: "idle" } | { kind: "copied" } | { kind: "saving" } | { kind: "saved" } | { kind: "error"; message: string };
 
@@ -26,7 +39,7 @@ const fileName = (title: string) => `salo-${title.toLowerCase().replace(/[^a-z0-
  * "Who ordered what" (owner request): what each person, group and the table had, from the confirmed rounds, to settle
  * up later. Copy it as text for the group chat, or save it as an image.
  */
-export function SummarySheet({ open, onOpenChange, snapshot }: SummarySheetProps) {
+export function SummarySheet({ open, onOpenChange, snapshot, tab, onTabChange, refresh, onRenameMe }: SummarySheetProps) {
   const summary = useMemo(() => buildSummary(snapshot), [snapshot]);
   // The date is the device's own (its time zone), on screen, in the text and in the image.
   const dateLabel = useSyncExternalStore(noSubscribe, () => new Intl.DateTimeFormat(undefined, DATE).format(new Date()), () => "");
@@ -98,7 +111,7 @@ export function SummarySheet({ open, onOpenChange, snapshot }: SummarySheetProps
           <div>
             <DrawerTitle className="font-display text-2xl font-medium">Who ordered what</DrawerTitle>
             <DrawerDescription className="mt-0.5 text-sm text-ink-soft">
-              {summary.title} · {roundsLabel(summary.rounds)}. Keep it for settling up later. No prices included.
+              {summary.title} · {roundsLabel(summary.rounds)}. {tab === "kkb" ? "Each person’s food and share of the service charge." : "Keep it for settling up later."}
             </DrawerDescription>
           </div>
           <DrawerClose aria-label="Close" className="inline-flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full hover:bg-ink/6">
@@ -106,6 +119,40 @@ export function SummarySheet({ open, onOpenChange, snapshot }: SummarySheetProps
           </DrawerClose>
         </div>
 
+        <div role="tablist" aria-label="Summary views" className="mt-3 grid grid-cols-2 border-b-[1.5px] border-rule">
+          {TABS.map((t, i) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              id={`summary-tab-${t.id}`}
+              aria-selected={tab === t.id}
+              aria-controls={`summary-panel-${t.id}`}
+              tabIndex={tab === t.id ? 0 : -1}
+              onClick={() => onTabChange(t.id)}
+              onKeyDown={(e) => {
+                if (e.key !== "ArrowRight" && e.key !== "ArrowLeft" && e.key !== "Home" && e.key !== "End") return;
+                e.preventDefault();
+                const next = TABS[e.key === "Home" ? 0 : e.key === "End" ? TABS.length - 1 : (i + (e.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length];
+                onTabChange(next.id);
+                document.getElementById(`summary-tab-${next.id}`)?.focus();
+              }}
+              className={cn(
+                "-mb-[1.5px] min-h-12 cursor-pointer border-b-[3px] px-1 font-semibold transition-colors",
+                tab === t.id ? "border-tomato text-ink" : "border-transparent text-ink-soft hover:text-ink",
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {tab === "kkb" ? (
+          <div role="tabpanel" id="summary-panel-kkb" aria-labelledby="summary-tab-kkb">
+            <KkbView snapshot={snapshot} refresh={refresh} onRenameMe={onRenameMe} />
+          </div>
+        ) : (
+        <div role="tabpanel" id="summary-panel-items" aria-labelledby="summary-tab-items">
         {empty ? (
           <p className="mt-6 rounded-2xl bg-paper px-4 py-6 text-center text-ink-soft">Nothing confirmed with the waiter yet. Confirm a round first; only confirmed dishes count.</p>
         ) : (
@@ -160,6 +207,8 @@ export function SummarySheet({ open, onOpenChange, snapshot }: SummarySheetProps
             {status.kind === "error" ? status.message : status.kind === "copied" ? "Copied. Paste it in your group chat." : status.kind === "saved" ? "Image ready." : ""}
           </p>
         </div>
+        </div>
+        )}
       </DrawerContent>
     </Drawer>
   );

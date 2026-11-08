@@ -14,6 +14,9 @@ interface InviteSheetProps {
   joinCode: string;
   title: string | null;
   peopleCount: number;
+  /** Controlled open state (the setup guide's "Try it" opens it); uncontrolled when omitted. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 /**
@@ -22,7 +25,7 @@ interface InviteSheetProps {
  */
 const noSubscribe = () => () => {};
 
-export function InviteSheet({ appUrl, joinCode, title, peopleCount }: InviteSheetProps) {
+export function InviteSheet({ appUrl, joinCode, title, peopleCount, open, onOpenChange }: InviteSheetProps) {
   const [qr, setQr] = useState<string | null>(null);
   const [copied, setCopied] = useState<"link" | "failed" | null>(null);
   const url = inviteUrl(appUrl, joinCode);
@@ -63,8 +66,10 @@ export function InviteSheet({ appUrl, joinCode, title, peopleCount }: InviteShee
 
   return (
     <Drawer
-      onOpenChange={(open) => {
-        if (!open) return;
+      open={open}
+      onOpenChange={(next) => {
+        onOpenChange?.(next);
+        if (!next) return;
         setOpened(true);
         track({ name: "invite_opened" });
       }}

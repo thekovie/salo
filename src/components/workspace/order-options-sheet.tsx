@@ -16,6 +16,9 @@ interface OrderOptionsSheetProps {
   /** An open round with dishes that never reached the waiter (only matters when ending). */
   unsentRound: number | null;
   onRename: (title: string | null) => void;
+  /** The host's own name ("Host" until they set it). */
+  myName: string;
+  onRenameMe: (displayName: string) => void;
   /** Resolves true when the server accepted it. */
   onEnd: () => Promise<boolean>;
   /** Replay the "how Salo works" tour. */
@@ -36,9 +39,11 @@ export function OrderOptionsSheet(props: OrderOptionsSheetProps) {
   );
 }
 
-function OptionsBody({ onOpenChange, title, anyConfirmed, unsentRound, onRename, onEnd, onTour, startAt = "options" }: OrderOptionsSheetProps) {
+function OptionsBody({ onOpenChange, title, anyConfirmed, unsentRound, onRename, myName, onRenameMe, onEnd, onTour, startAt = "options" }: OrderOptionsSheetProps) {
   const id = useId();
   const [draft, setDraft] = useState(title ?? "");
+  const unnamed = myName.trim().toLowerCase() === "host";
+  const [name, setName] = useState(unnamed ? "" : myName);
   const [step, setStep] = useState<"options" | "confirm">(startAt);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -48,6 +53,8 @@ function OptionsBody({ onOpenChange, title, anyConfirmed, unsentRound, onRename,
     event.preventDefault();
     const next = draft.trim() || null;
     if (next !== title) onRename(next);
+    const nextName = name.trim();
+    if (nextName && nextName !== myName) onRenameMe(nextName);
     onOpenChange(false);
   }
 
@@ -112,6 +119,19 @@ function OptionsBody({ onOpenChange, title, anyConfirmed, unsentRound, onRename,
       </div>
 
       <form onSubmit={save} className="mt-4">
+        <label htmlFor={`${id}-me`} className="text-sm font-semibold">
+          Your name
+        </label>
+        <input
+          id={`${id}-me`}
+          value={name}
+          maxLength={40}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="So the table knows which dishes are yours"
+          autoComplete="given-name"
+          enterKeyHint="next"
+          className="mt-1 mb-4 min-h-12 w-full rounded-xl border-[1.5px] border-input bg-ticket px-3 text-base"
+        />
         <label htmlFor={`${id}-name`} className="text-sm font-semibold">
           Order name
         </label>
@@ -129,7 +149,7 @@ function OptionsBody({ onOpenChange, title, anyConfirmed, unsentRound, onRename,
           Shown on the invite and in link previews.
         </p>
         <Button type="submit" className="mt-3 w-full">
-          Save name
+          Save
         </Button>
       </form>
 

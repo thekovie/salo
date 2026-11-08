@@ -25,11 +25,11 @@ export async function orderFor(page: Page, kind: "Me" | "Anyone" | "Whole table"
   if (name) await page.getByLabel(kind === "A group" ? "Group name" : "Person's name").fill(name);
 }
 
-/** Opens "Size or notes" inside the For panel. */
+/** Opens "Size, notes or price" inside the For panel. */
 export async function openNotes(page: Page) {
   const toggle = page.getByRole("button", { name: /^For / });
   if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
-  const notes = page.getByRole("button", { name: "Size or notes", exact: true });
+  const notes = page.getByRole("button", { name: "Size, notes or price", exact: true });
   if ((await notes.getAttribute("aria-expanded")) !== "true") await notes.click();
 }
 

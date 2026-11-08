@@ -1,7 +1,7 @@
 import { and, count, eq, isNull, sql } from "drizzle-orm";
 import { normalizeText, optionalText, tidyText } from "@/lib/dish-name";
 import type { Tx } from "@/server/db/client";
-import { dishes, orderBatches, orderEntries, participants, rounds } from "@/server/db/schema";
+import { dishes, entrySettlements, orderBatches, orderEntries, participants, rounds } from "@/server/db/schema";
 import { AppError, forbidden } from "@/server/errors";
 import type { Applied, SessionRow } from "@/server/mutations";
 import { can, canEditEntry, type Actor } from "@/lib/permissions";
@@ -90,6 +90,9 @@ export async function addEntry(tx: Tx, session: SessionRow, actor: Actor, input:
       specialInstructions: optionalText(input.instructions),
     })
     .returning({ id: orderEntries.id, revision: orderEntries.revision });
+  if (input.unitPriceCentavos != null) {
+    await tx.insert(entrySettlements).values({ entryId: entry.id, sessionId: session.id, unitPriceCentavos: input.unitPriceCentavos, updatedBy: actor.participantId });
+  }
   await resetReadiness(tx, round.id, [actor.participantId, batch.attributedParticipantId]);
   return { result: { entryId: entry.id, revision: entry.revision }, event: { type: "entry.added", payload: { entryId: entry.id } } };
 }

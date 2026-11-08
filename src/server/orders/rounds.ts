@@ -5,9 +5,10 @@ import { can, type Actor } from "@/lib/permissions";
 import { buildTicketSnapshot, type CorrectionView } from "@/lib/ticket";
 import { optionalText } from "@/lib/dish-name";
 import type { Tx } from "@/server/db/client";
-import { confirmedRoundSnapshots, dishes, entryClaims, orderBatches, orderCorrections, orderEntries, rounds, sessions } from "@/server/db/schema";
+import { confirmedRoundSnapshots, dishes, entryClaims, orderBatches, orderCorrections, orderEntries, rounds, sessionEvents, sessions } from "@/server/db/schema";
 import { AppError, forbidden } from "@/server/errors";
 import type { Applied, SessionRow } from "@/server/mutations";
+import { NON_TICKET_EVENTS } from "./settlement";
 import { LIMITS, type CorrectionInput } from "./validation";
 
 type Db = Pick<Tx, "select">;
@@ -65,6 +66,15 @@ async function activeEntries(tx: Tx, roundId: string) {
     .where(and(eq(orderEntries.roundId, roundId), isNull(orderEntries.deletedAt)));
 }
 
+/** Whether anything that could change the waiter's ticket committed after `revision` (prices and names can't). */
+async function ticketChangedSince(tx: Tx, sessionId: string, revision: number): Promise<boolean> {
+  const [row] = await tx
+    .select({ n: count() })
+    .from(sessionEvents)
+    .where(and(eq(sessionEvents.sessionId, sessionId), sql`${sessionEvents.revision} > ${revision}`, sql`${sessionEvents.eventType} NOT IN (${sql.join(NON_TICKET_EVENTS.map((t) => sql`${t}`), sql`, `)})`));
+  return row.n > 0;
+}
+
 /**
  * "Confirmed with waiter" (brief 5.14): host only; refused unless the host has seen the latest committed revision
  * (so no change made meanwhile is left out); stores an immutable snapshot and freezes the round's entries.
@@ -73,7 +83,8 @@ export async function confirmRound(tx: Tx, session: SessionRow, actor: Actor, ro
   if (!can(actor, "round.confirm")) throw forbidden("Only the host can confirm the order with the waiter.");
   const round = await draftRound(tx, session.id);
   if (!round || round.id !== roundId) throw new AppError(409, "ROUND_NOT_OPEN", "This round was already confirmed.");
-  if (session.revision !== expectedRevision) {
+  // A revision from the future was never seen; otherwise only ticket-affecting changes since then make it stale.
+  if (expectedRevision > session.revision || (session.revision !== expectedRevision && (await ticketChangedSince(tx, session.id, expectedRevision)))) {
     throw new AppError(409, "STALE_REVISION", "The order changed since you looked. Check the latest ticket, then confirm again.");
   }
   const rows = await activeEntries(tx, round.id);
@@ -95,7 +106,7 @@ export async function confirmRound(tx: Tx, session: SessionRow, actor: Actor, ro
     })),
   );
   const snapshot = buildTicketSnapshot({ roundNumber: round.roundNumber, title: session.title, ticket, corrections, confirmedAt: confirmedAt.toISOString() });
-  await tx.insert(confirmedRoundSnapshots).values({ roundId: round.id, snapshotRevision: expectedRevision, snapshotData: snapshot, confirmedBy: actor.participantId, confirmedAt });
+  await tx.insert(confirmedRoundSnapshots).values({ roundId: round.id, snapshotRevision: session.revision, snapshotData: snapshot, confirmedBy: actor.participantId, confirmedAt });
   // Corrections are marked as said before the round freezes (the database refuses changes to confirmed rounds' corrections).
   await tx.update(orderCorrections).set({ communicatedAt: confirmedAt }).where(eq(orderCorrections.targetRoundId, round.id));
   await tx.update(rounds).set({ status: "CONFIRMED", confirmedAt, confirmedBy: actor.participantId }).where(eq(rounds.id, round.id));

@@ -34,7 +34,31 @@ export interface SessionSnapshot {
   corrections: CorrectionView[];
   /** The immutable ticket of each confirmed round, by round id (brief 5.14). */
   tickets: Record<string, TicketSnapshot>;
+  /**
+   * Prices and the receipt's service charge (KKB). Kept apart from entries on purpose: nothing here may reach the
+   * waiter ticket, its snapshot or the invite preview, and entries flow into all of those.
+   */
+  settlement: SettlementView;
 }
+
+export interface EntrySettlement {
+  /** Price each in centavos; null = unknown. */
+  unitCentavos: number | null;
+  /** Host's settlement-only payer for a shared or unassigned dish. */
+  billTo: { participantId: string | null; label: string | null } | null;
+  /** 0 when nothing was ever set. */
+  revision: number;
+}
+
+export interface SettlementView {
+  entries: Record<string, EntrySettlement>;
+  /** Price each for a replacement ("Change it to …"), by correction id. */
+  corrections: Record<string, { unitCentavos: number | null; revision: number }>;
+  /** null = not entered; 0 = the receipt has none. */
+  serviceCharge: { centavos: number | null; revision: number };
+}
+
+export const EMPTY_SETTLEMENT: SettlementView = { entries: {}, corrections: {}, serviceCharge: { centavos: null, revision: 0 } };
 
 export interface SnapshotEntry extends SourceEntry {
   roundId: string;

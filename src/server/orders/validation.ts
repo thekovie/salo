@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_SERVICE_CHARGE_CENTAVOS, MAX_UNIT_PRICE_CENTAVOS } from "@/lib/money";
 
 export const LIMITS = {
   dishName: 60,
@@ -44,6 +45,8 @@ export const addEntrySchema = z.object({
   attribution: attributionSchema.default({ type: "UNASSIGNED" }),
   /** The round the client was adding to (optional for older clients and the host's manual entry). */
   roundId: z.uuid().optional(),
+  /** Optional price each in centavos (KKB). */
+  unitPriceCentavos: z.number().int().min(0).max(MAX_UNIT_PRICE_CENTAVOS).nullish(),
 });
 
 export const updateEntrySchema = z
@@ -78,3 +81,26 @@ export const correctionSchema = z.object({
 export type CorrectionInput = z.infer<typeof correctionSchema>;
 
 export const removeParticipantSchema = z.object({ reason: z.string().trim().max(LIMITS.removalReason, `Keep the reason under ${LIMITS.removalReason} characters.`).nullish() });
+
+/** Whole centavos; null clears (unknown price / service charge not entered). */
+const centavos = (max: number) => z.number().int("Use whole centavos.").min(0, "Can't be negative.").max(max, "That amount is too large.").nullable();
+
+export const entrySettlementSchema = z
+  .object({
+    /** The settlement row's revision the person saw; 0 when nothing was set yet. */
+    expectedRevision: z.number().int().min(0),
+    unitPriceCentavos: centavos(MAX_UNIT_PRICE_CENTAVOS).optional(),
+    /** Host only, shared or unassigned dishes only: who pays for the whole dish. null clears. */
+    billTo: z.union([z.object({ participantId: z.uuid() }), z.object({ label: text(LIMITS.label).min(1, "Type the person's name.") }), z.null()]).optional(),
+  })
+  .refine((v) => v.unitPriceCentavos !== undefined || v.billTo !== undefined, "Nothing to change.");
+export type EntrySettlementInput = z.infer<typeof entrySettlementSchema>;
+
+export const correctionPriceSchema = z.object({ expectedRevision: z.number().int().min(0), unitPriceCentavos: centavos(MAX_UNIT_PRICE_CENTAVOS) });
+export type CorrectionPriceInput = z.infer<typeof correctionPriceSchema>;
+
+export const serviceChargeSchema = z.object({ expectedRevision: z.number().int().min(0), centavos: centavos(MAX_SERVICE_CHARGE_CENTAVOS) });
+export type ServiceChargeInput = z.infer<typeof serviceChargeSchema>;
+
+export const renameMeSchema = z.object({ displayName: text(LIMITS.label).min(1, "Type your name so the table knows whose order is whose.") });
+export type RenameMeInput = z.infer<typeof renameMeSchema>;

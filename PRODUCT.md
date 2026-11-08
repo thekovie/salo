@@ -19,7 +19,7 @@ No restaurant integration, no menu setup, no accounts. A host can use it alone i
 Used at the table, often one-handed, in noisy and variably lit restaurants (bright food courts to dim bars), on mid-range Android phones and iPhones over patchy mobile data. The waiter view is both read aloud by the host and handed or shown to the waiter. Orders come in rounds: a first order, then add-ons.
 
 ## Capabilities and Constraints
-Next.js PWA, PostgreSQL, Server-Sent Events, self-hosted on Coolify. Host-only: confirm a round, open rounds, end the session. Closed sessions stay read-only for 7 days, then are deleted. Out of scope: payments, bill splitting, menus, AI/OCR, restaurant accounts.
+Next.js PWA, PostgreSQL, Server-Sent Events, self-hosted on Coolify. Host-only: confirm a round, open rounds, end the session. Closed sessions stay read-only for 7 days, then are deleted. Out of scope: payments, automatic bill splitting, menus, AI/OCR, restaurant accounts. KKB (optional prices per dish, each person's food subtotal and their share of one receipt service charge) is in scope since the KKB brief; taxes, discounts, tips, splitting shared dishes and tracking who paid are not.
 
 ## Brand Commitments
 - Name: **Salo** (from *salu-salo*, a shared meal). Tagline: "One table. Everyone's order."

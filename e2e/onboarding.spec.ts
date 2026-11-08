@@ -1,42 +1,67 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Browser } from "@playwright/test";
 import { addDish, inviteCode, startOrder } from "./support/helpers";
 
-/** A browser that has never seen Salo: no tour flags. */
+/** A browser that has never seen Salo: no guide flags. */
 async function freshPage(browser: Browser) {
   const context = await browser.newContext({ ...test.info().project.use, storageState: { cookies: [], origins: [] } });
   return { context, page: await context.newPage() };
 }
 
-test("a first-time host is offered the tour, walks it, and can replay it from order options", async ({ browser }) => {
+const HOST_TITLES = ["Set up your table", "Invite the table", "Type what people call out", "Who it’s for, sizes and prices", "See it by person and group", "Check it, then show the waiter", "Add-ons and fixes", "Settle up with KKB", "You’re all set"];
+
+test("a first-time host gets the setup guide: names the table inside it, tries features, sees the checklist", async ({ browser }) => {
   const { context, page } = await freshPage(browser);
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await startOrder(page);
   const offer = page.getByRole("region", { name: "Tour offer" });
   await expect(offer).toContainText("New to Salo?");
-  await offer.getByRole("button", { name: "Show me" }).click();
+  await offer.getByRole("button", { name: "Start guide" }).click();
 
-  const card = page.getByRole("dialog");
-  const titles = ["Type what people call out", "Who’s it for?", "Let the table add their own", "Check it, then show the waiter", "Name, cancel or end"];
-  for (const [i, title] of titles.entries()) {
-    await expect(card.getByRole("heading", { name: title })).toBeVisible();
-    await expect(card).toContainText(`${i + 1} of ${titles.length}`);
-    await card.getByRole("button", { name: i === titles.length - 1 ? "Done" : "Next" }).click();
+  const guide = page.getByRole("dialog", { name: "How Salo works" });
+  await expect(guide.getByRole("heading", { name: "Set up your table" })).toBeVisible();
+  await expect(guide).toContainText(`Step 1 of ${HOST_TITLES.length}`);
+  expect((await new AxeBuilder({ page }).include("dialog").withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
+
+  // Step 1 sets the table up right here.
+  await guide.getByLabel("Your name").fill("Kovie");
+  await guide.getByLabel("Order name").fill("Mang Inasal");
+  await guide.getByRole("button", { name: "Save" }).click();
+  await expect(guide.getByText("Saved.")).toBeVisible();
+  await expect(guide.getByText("Done", { exact: true })).toBeVisible();
+
+  // Every step in order, with KKB's "Try it" explaining why it can't run yet.
+  for (const [i, title] of HOST_TITLES.entries()) {
+    await expect(guide.getByRole("heading", { name: title })).toBeVisible();
+    await expect(guide).toContainText(`Step ${i + 1} of ${HOST_TITLES.length}`);
+    if (title === "Settle up with KKB") {
+      await expect(guide.getByRole("button", { name: "Try it" })).toBeDisabled();
+      await expect(guide).toContainText("Add a dish first");
+    }
+    if (i < HOST_TITLES.length - 1) await guide.getByRole("button", { name: "Next" }).click();
   }
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const checklist = guide.getByRole("list", { name: "Your checklist" });
+  await expect(checklist.getByRole("button", { name: /Name yourself and the order\s*Done/ })).toBeVisible();
+  // "Show me" jumps back to that step; its "Try it" takes you there.
+  await checklist.getByRole("button", { name: /Invite the table/ }).click();
+  await guide.getByRole("button", { name: "Try it" }).click();
+  await expect(page.getByRole("dialog", { name: "Invite the table" })).toBeVisible();
+  await page.keyboard.press("Escape");
 
-  // Seen: no offer after a reload. Replay from the host's order options; Escape closes it.
-  await page.reload();
-  await expect(page.getByRole("region", { name: "Tour offer" })).toHaveCount(0);
+  // Replay from Options; "Try it" on prices opens the composer's price field.
   await page.getByRole("button", { name: "Order options" }).click();
   await page.getByRole("button", { name: /How Salo works/ }).click();
-  await expect(page.getByRole("dialog").getByRole("heading", { name: "Type what people call out" })).toBeVisible();
-  await page.keyboard.press("ArrowRight");
-  await expect(page.getByRole("dialog").getByRole("heading", { name: "Who’s it for?" })).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await guide.getByRole("button", { name: "Step 4: Who it’s for, sizes and prices" }).click();
+  await guide.getByRole("button", { name: "Try it" }).click();
+  await expect(page.getByLabel("Price each (₱)")).toBeVisible();
+
+  // Seen: no offer after a reload.
+  await page.reload();
+  await expect(page.getByRole("region", { name: "Tour offer" })).toHaveCount(0);
   await context.close();
 });
 
-test("a first-time guest gets the guest tour; Not now hides the offer; the ? button replays it", async ({ page, browser }) => {
+test("a first-time guest gets the guest guide; Not now hides the offer; Help replays it", async ({ page, browser }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await startOrder(page);
   await addDish(page, "Gyoza");
@@ -53,13 +78,15 @@ test("a first-time guest gets the guest tour; Not now hides the offer; the ? but
   await expect(offer).toHaveCount(0);
 
   await guest.getByRole("button", { name: "How Salo works" }).click();
-  const card = guest.getByRole("dialog");
-  await expect(card.getByRole("heading", { name: "Add your dishes" })).toBeVisible();
-  await expect(card).toContainText("1 of 5");
-  for (let i = 0; i < 4; i++) await card.getByRole("button", { name: "Next" }).click();
-  await expect(card.getByRole("heading", { name: "Need this again?" })).toBeVisible();
-  await card.getByRole("button", { name: "Done" }).click();
-  await expect(guest.getByRole("dialog")).toHaveCount(0);
+  const guide = guest.getByRole("dialog", { name: "How Salo works" });
+  await expect(guide.getByRole("heading", { name: "Add your dishes" })).toBeVisible();
+  await expect(guide).toContainText("Step 1 of 6");
+  await guest.keyboard.press("ArrowRight");
+  await expect(guide.getByRole("heading", { name: "For someone? Know the price?" })).toBeVisible();
+  for (let i = 0; i < 4; i++) await guide.getByRole("button", { name: "Next" }).click();
+  await expect(guide.getByRole("heading", { name: "You’re all set" })).toBeVisible();
+  await guide.getByRole("button", { name: "Finish" }).click();
+  await expect(guest.getByRole("dialog", { name: "How Salo works" })).toHaveCount(0);
   await context.close();
 });
 

@@ -14,12 +14,12 @@ import { cn } from "@/lib/utils";
  */
 
 /** Fades and lifts in when `on` turns true; keeps its space so nothing jumps. */
-function Reveal({ on, className, children }: { on: boolean; className?: string; children: React.ReactNode }) {
+export function Reveal({ on, className, children }: { on: boolean; className?: string; children: React.ReactNode }) {
   return <div className={cn("transition-[opacity,translate] duration-300 ease-[var(--ease-out-expo)]", on ? "translate-y-0 opacity-100" : "translate-y-1.5 opacity-0", className)}>{children}</div>;
 }
 
 /** A dish line on a mini ticket; replays the highlighter wash when its count changes. */
-function Line({ name, qty, wash, children }: { name: string; qty: number; wash?: boolean; children?: React.ReactNode }) {
+export function Line({ name, qty, wash, children }: { name: string; qty: number; wash?: boolean; children?: React.ReactNode }) {
   return (
     <li className="relative py-1.5">
       {wash ? <span key={qty} aria-hidden className="wash pointer-events-none absolute -inset-x-2 inset-y-0 rounded-md" /> : null}
@@ -32,7 +32,7 @@ function Line({ name, qty, wash, children }: { name: string; qty: number; wash?:
   );
 }
 
-function Pill({ who, text }: { who: string; text: string }) {
+export function Pill({ who, text }: { who: string; text: string }) {
   return (
     <span className="arrival-pill inline-flex max-w-full items-center gap-1.5 rounded-full bg-saffron-wash py-0.5 pr-3 pl-0.5 text-xs text-saffron-ink shadow-ticket ring-1 ring-saffron/40">
       <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-saffron font-display text-[0.7rem] text-ink">{who[0]}</span>
@@ -44,7 +44,7 @@ function Pill({ who, text }: { who: string; text: string }) {
 }
 
 /** A phone-shaped card the scenes sit in. */
-function Phone({ children, className }: { children: React.ReactNode; className?: string }) {
+export function Phone({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <div className={cn("mx-auto w-full max-w-[19rem] rounded-[2rem] bg-paper p-3 shadow-ticket ring-[1.5px] ring-rule", className)}>
       <div aria-hidden className="mx-auto mb-3 h-1.5 w-14 rounded-full bg-rule" />
@@ -54,7 +54,7 @@ function Phone({ children, className }: { children: React.ReactNode; className?:
 }
 
 /** Opens a row's height and fades it in, so a list grows without holding empty gaps. */
-function Collapse({ on, children }: { on: boolean; children: React.ReactNode }) {
+export function Collapse({ on, children }: { on: boolean; children: React.ReactNode }) {
   return (
     <div className={cn("grid transition-[grid-template-rows,opacity] duration-300 ease-[var(--ease-out-expo)]", on ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0")}>
       <div className="min-h-0 overflow-hidden">{children}</div>
@@ -261,41 +261,55 @@ export function WaiterScene() {
 }
 
 const PEOPLE = [
-  { name: "Kovie", note: null, lines: [["Chicken Inasal", 1], ["Java Rice", 2]] },
-  { name: "Rafa", note: null, lines: [["Sisig", 1]] },
-  { name: "Barkada", note: "shared by JD, Ana", lines: [["Pancit Canton", 1]] },
+  { name: "Kovie", note: null, lines: [["Chicken Inasal", 1, 160], ["Java Rice", 2, 45]], food: 250, total: 275 },
+  { name: "Rafa", note: null, lines: [["Sisig", 1, 200]], food: 200, total: 220 },
+  { name: "Ana", note: "from Barkada", lines: [["Pancit Canton", 1, 350]], food: 350, total: 385 },
 ] as const;
 
-/** Step 4: who ordered what, ready to copy into the group chat or save as a picture. */
+/**
+ * Step 4: who ordered what with KKB: prices land on each dish, then the receipt's service charge is split by food and
+ * each person's total ticks up. Copy text and Save image follow.
+ */
 export function SummaryScene() {
-  const { ref, step } = useScene<HTMLDivElement>([500, 500, 500, 700, 900]);
+  const { ref, step } = useScene<HTMLDivElement>([500, 500, 500, 900, 900, 900]);
+  const charged = step >= 4;
   return (
     <div ref={ref} aria-hidden className="select-none">
       <Phone>
         <div className="flex items-center gap-2 px-1">
           <LogoMark className="size-6" />
           <p className="font-display text-lg">Who ordered what</p>
+          <span className="ml-auto rounded-full bg-ink px-2 py-0.5 text-[0.65rem] font-semibold text-paper">KKB</span>
         </div>
         <div className="mt-2 rounded-2xl bg-ticket px-4 py-2 shadow-ticket">
           {PEOPLE.map((p, i) => (
             <Reveal key={p.name} on={step >= i} className="border-b-[1.5px] border-dashed border-rule py-2 last:border-0">
-              <p className="text-base">
-                {p.name}
-                {p.note ? <span className="ml-1 text-xs text-ink-soft">· {p.note}</span> : null}
-              </p>
-              {p.lines.map(([dish, qty]) => (
+              <div className="flex items-baseline justify-between">
+                <p className="text-base">
+                  {p.name}
+                  {p.note ? <span className="ml-1 text-xs text-ink-soft">· {p.note}</span> : null}
+                </p>
+                <Ticker value={charged ? p.total : p.food} prefix="₱" className="tally text-base text-ink" />
+              </div>
+              {p.lines.map(([dish, qty, price]) => (
                 <div key={dish} className="flex justify-between pl-2 text-sm text-ink-soft">
-                  <span>{dish}</span>
-                  <span className="tally text-tomato-ink">×{qty}</span>
+                  <span>
+                    {dish} <span className="tally text-tomato-ink">×{qty}</span>
+                  </span>
+                  <span className="tally">₱{price * qty}</span>
                 </div>
               ))}
             </Reveal>
           ))}
         </div>
-        <Reveal on={step >= 3} className="mt-2 grid grid-cols-2 gap-1.5 text-sm font-semibold">
+        <Reveal on={step >= 3} className="mt-2 flex items-center gap-1.5 rounded-xl bg-ok-wash px-3 py-1.5 text-xs text-ink">
+          <Check className="size-3.5 shrink-0 text-ok" />
+          Service charge ₱80, split by how much each person ordered
+        </Reveal>
+        <Reveal on={step >= 5} className="mt-2 grid grid-cols-2 gap-1.5 text-sm font-semibold">
           <span className="inline-flex items-center justify-center gap-1 rounded-full bg-tomato py-2 text-on-tomato">
-            {step >= 4 ? <Check className="size-4" /> : <Copy className="size-4" />}
-            {step >= 4 ? "Copied" : "Copy text"}
+            <Copy className="size-4" />
+            Copy text
           </span>
           <span className="inline-flex items-center justify-center gap-1 rounded-full py-2 ring-[1.5px] ring-input">
             <ImageDown className="size-4" />

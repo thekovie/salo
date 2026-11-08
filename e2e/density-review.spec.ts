@@ -25,7 +25,7 @@ for (const [label, viewport] of sizes) {
     await page.locator('[data-tour="for"]').click();
     await page.getByRole("radio", { name: "+ Someone else", exact: true }).click();
     await page.getByLabel("Person's name").fill("Tita Marites");
-    await page.getByRole("button", { name: "Size or notes", exact: true }).click();
+    await page.getByRole("button", { name: "Size, notes or price", exact: true }).click();
     await shot(page, "03-composer-open");
     await page.getByRole("button", { name: /^Add/ }).first().click();
     await addDish(page, "Sinigang na baboy", 2);

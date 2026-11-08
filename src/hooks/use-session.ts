@@ -14,6 +14,8 @@ export type AddInput = {
   attribution: { type: "UNASSIGNED" | "TABLE" } | { type: "INDIVIDUAL"; label?: string | null; participantId?: string | null } | { type: "GROUP"; label: string };
   /** The round the person was adding to. The server refuses (ROUND_CLOSED) if it was confirmed meanwhile. */
   roundId?: string;
+  /** Optional price each in centavos (KKB). */
+  unitPriceCentavos?: number | null;
 };
 
 /** What "Edit dish" can change on a draft entry (the dish itself is a remove-and-add). */
@@ -30,6 +32,7 @@ export type Op =
   | { kind: "remove"; entry: SnapshotEntry }
   | { kind: "restore"; entry: SnapshotEntry }
   | { kind: "rename"; title: string | null }
+  | { kind: "renameMe"; displayName: string }
   | { kind: "ready"; ready: boolean }
   | { kind: "claim"; batchId: string; dishName: string }
   | { kind: "resolveClaim"; claimId: string; approve: boolean; dishName: string }
@@ -77,7 +80,7 @@ const POLL_WITHOUT_STREAM_MS = 10_000;
 /** The entry a change is about, if any (for coalescing and revision tracking). */
 export const entryOf = (op: Op): string | null => (op.kind === "update" || op.kind === "edit" || op.kind === "remove" || op.kind === "restore" ? op.entry.id : null);
 
-const OP_KINDS = new Set(["add", "update", "edit", "remove", "restore", "rename", "ready", "claim", "resolveClaim", "groupMembers", "confirm", "openRound", "correction", "removeCorrection", "close", "removeGuest", "restoreGuest"]);
+const OP_KINDS = new Set(["add", "update", "edit", "remove", "restore", "rename", "renameMe", "ready", "claim", "resolveClaim", "groupMembers", "confirm", "openRound", "correction", "removeCorrection", "close", "removeGuest", "restoreGuest"]);
 const isOp = (value: unknown): value is Op => typeof value === "object" && value !== null && OP_KINDS.has((value as { kind?: string }).kind ?? "");
 
 function request(sessionId: string, op: Op, latest: SessionSnapshot, ownRevisions: ReadonlyMap<string, ReadonlySet<number>>) {
@@ -103,6 +106,8 @@ function request(sessionId: string, op: Op, latest: SessionSnapshot, ownRevision
       return { path: `${base}/entries/${op.entry.id}/restore`, method: "POST", body: undefined };
     case "rename":
       return { path: base, method: "PATCH", body: { title: op.title } };
+    case "renameMe":
+      return { path: `${base}/me`, method: "PATCH", body: { displayName: op.displayName } };
     case "ready":
       return { path: `${base}/readiness`, method: "PUT", body: { ready: op.ready } };
     case "claim":
@@ -143,6 +148,8 @@ export function describeOp(op: Op): string {
       return `Bring back ${op.entry.dishName}`;
     case "rename":
       return "Rename the order";
+    case "renameMe":
+      return "Change your name";
     case "ready":
       return op.ready ? "Mark yourself ready" : "Mark yourself not ready";
     case "claim":

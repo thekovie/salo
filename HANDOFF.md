@@ -64,8 +64,11 @@ All 14 brief end-to-end scenarios are covered by Playwright (see `docs/testing.m
 - A large table behind one shared carrier address (some mobile networks) shares the 30 joins per hour.
 - Removing a guest also takes them out of their groups, so a shared group dish lists only the remaining members in "Who ordered what".
 - Performance numbers in `docs/testing.md` are local measurements, not production benchmarks.
+- KKB: prices appear only in the KKB tab; Items' Copy text and Save image stay price-free (an explicit "include prices" option is a later step built on `buildKkb`). Every member sees everyone's prices. Limits: ₱99,999.99 per dish, ₱999,999.99 service charge. A shared dish goes to one payer (Bill to) or stays unallocated; no splitting. Guests can't rename themselves yet (the endpoint is host-only).
 
 ## Next steps
+
+KKB pilot (owner): a real table of 7–12 doing KKB. Watch whether the host can price the receipt and enter the service charge quickly, whether diners find their own totals, whether "Not yet allocated" reasons make sense, and record any difference from the receipt against the table's usual Notes/calculator.
 
 Re-check the UI after visual changes with `UX_REVIEW=1 pnpm e2e e2e/ux-review.spec.ts` (screenshots and a report in `.impeccable/review/ux`). Consider a Traefik rate limit in front of the app as a backstop.
 
