@@ -57,6 +57,13 @@
       "when": 1794075188281,
       "tag": "0007_settlement",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795095575857,
+      "tag": "0008_shared_prices",
+      "breakpoints": true
     }
   ]
 }

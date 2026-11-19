@@ -54,11 +54,20 @@ export interface SettlementView {
   entries: Record<string, EntrySettlement>;
   /** Price each for a replacement ("Change it to …"), by correction id. */
   corrections: Record<string, { unitCentavos: number | null; revision: number }>;
+  /** Table prices (host-set) by `sharedPriceKey(dishId, variantKey)`. */
+  defaults: Record<string, { unitCentavos: number | null; revision: number }>;
   /** null = not entered; 0 = the receipt has none. */
   serviceCharge: { centavos: number | null; revision: number };
 }
 
-export const EMPTY_SETTLEMENT: SettlementView = { entries: {}, corrections: {}, serviceCharge: { centavos: null, revision: 0 } };
+export const EMPTY_SETTLEMENT: SettlementView = { entries: {}, corrections: {}, defaults: {}, serviceCharge: { centavos: null, revision: 0 } };
+
+/** Any price anywhere: a line's, a replacement's or a table price. */
+export const anyPrice = (s: Pick<SessionSnapshot, "settlement">) =>
+  [...Object.values(s.settlement.entries), ...Object.values(s.settlement.corrections), ...Object.values(s.settlement.defaults)].some((p) => p.unitCentavos != null);
+
+/** Stable key of a table price: the dish and its normalized size ('' for none). */
+export const sharedPriceKey = (dishId: string, variantKey: string) => `${dishId}|${variantKey}`;
 
 export interface SnapshotEntry extends SourceEntry {
   roundId: string;

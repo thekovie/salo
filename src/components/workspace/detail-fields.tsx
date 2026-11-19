@@ -12,6 +12,8 @@ interface PriceProps {
   onChange: (text: string) => void;
   parsed: PesoParse;
   quantity: number;
+  /** Shown while the field is empty: the table price this dish and size would get. */
+  tablePrice?: number | null;
 }
 
 interface DetailFieldsProps {
@@ -156,7 +158,13 @@ export function DetailFields({ id, open, onOpen, variant, onVariant, instruction
             ) : !price.parsed.ok ? (
               <span className="text-bad">{price.parsed.message}</span>
             ) : (
-              "For KKB later. Leave blank if you don't know."
+              (!price.text.trim() && price.tablePrice != null ? (
+                <>
+                  Table price <span className="tally">{formatPeso(price.tablePrice)}</span>. Leave blank to use it.
+                </>
+              ) : (
+                "For KKB later. Leave blank if you don't know."
+              ))
             )}
           </p>
         </div>

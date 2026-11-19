@@ -2,12 +2,14 @@
 
 import { CircleAlert, CircleCheck, Pencil } from "lucide-react";
 import { useMemo, useState } from "react";
+import { normalizeText } from "@/lib/dish-name";
+import { effectiveEntry } from "@/lib/effective-order";
 import { buildKkb, type Kkb, type KkbLine, type KkbSection } from "@/lib/kkb";
 import { formatPeso } from "@/lib/money";
 import type { SessionSnapshot } from "@/lib/snapshot";
 import { cn } from "@/lib/utils";
 import { HostNamePrompt } from "./host-name-prompt";
-import { PriceEditor, type Payer } from "./price-editor";
+import { PriceEditor, type Payer, type TablePrice } from "./price-editor";
 import { ServiceChargeBlock } from "./service-charge-block";
 
 interface KkbViewProps {
@@ -44,19 +46,36 @@ export function KkbView({ snapshot, refresh, onRenameMe }: KkbViewProps) {
     return <p className="mt-6 rounded-2xl bg-paper px-4 py-6 text-center text-ink-soft">Nothing ordered yet. Prices show up here once there are dishes.</p>;
   }
 
+  const confirmedRounds = new Set(snapshot.rounds.filter((r) => r.status === "CONFIRMED").map((r) => r.id));
+  /** The table price a line could set: its dish + size, and how many lines would follow it (replacements never do). */
+  const tableFor = (line: KkbLine): TablePrice | null => {
+    const entry = snapshot.entries.find((e) => e.id === line.entryId);
+    if (!entry || line.correctionId || !line.tableKey) return null;
+    const size = normalizeText(entry.variant ?? "");
+    const followers = snapshot.entries.filter((e) => {
+      if (e.dishId !== entry.dishId || normalizeText(e.variant ?? "") !== size) return false;
+      if (e.id !== entry.id && snapshot.settlement.entries[e.id]?.unitCentavos != null) return false;
+      const now = effectiveEntry(e, snapshot.corrections, confirmedRounds);
+      return now.quantity > 0 && !now.replacementId;
+    });
+    const live = snapshot.settlement.defaults[line.tableKey];
+    return { dishId: entry.dishId, variant: entry.variant, label: entry.variant ? `${entry.dishName} (${entry.variant})` : entry.dishName, lines: followers.length, live: { unitCentavos: live?.unitCentavos ?? null, revision: live?.revision ?? 0 } };
+  };
+
   const lineProps = (section: KkbSection, line: KkbLine, draft: boolean): LineProps => {
     const key = lineKey(section, line, draft);
     const live = line.correctionId
       ? { unitCentavos: snapshot.settlement.corrections[line.correctionId]?.unitCentavos ?? null, billTo: null, revision: snapshot.settlement.corrections[line.correctionId]?.revision ?? 0 }
       : (snapshot.settlement.entries[line.entryId] ?? { unitCentavos: null, billTo: null, revision: 0 });
     const canPrice = isOpen && (line.correctionId ? isHost : isHost || line.submittedBy === meId);
+    const table = isHost && canPrice ? tableFor(line) : null;
     const canBillTo = isOpen && isHost && line.billable && !line.correctionId && !draft;
     return {
       line,
       editing: editing === key,
       canEdit: canPrice || canBillTo,
       onEdit: () => setEditing(key),
-      editor: <PriceEditor key={key} line={line} sessionId={snapshot.session.id} refresh={refresh} canPrice={canPrice} canBillTo={canBillTo} payers={payers} live={live} onDone={() => setEditing((open) => (open === key ? null : open))} />,
+      editor: <PriceEditor key={key} line={line} sessionId={snapshot.session.id} refresh={refresh} canPrice={canPrice} canBillTo={canBillTo} payers={payers} table={table} live={live} onDone={() => setEditing((open) => (open === key ? null : open))} />,
     };
   };
 
@@ -260,6 +279,7 @@ function LineRow({ line, editing, canEdit, onEdit, editor }: LineProps) {
           </p>
           <p className="text-xs">
             {line.unitCentavos != null ? <span className="tally">{formatPeso(line.unitCentavos)} each</span> : "No price yet"}
+            {line.priceSource === "table" ? " · table price" : line.priceSource === "line" && line.hasTable ? " · this line only" : ""}
             {tags.length ? ` · ${tags.join(" · ")}` : ""}
           </p>
         </div>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { GUEST_GUIDE, HOST_GUIDE } from "@/components/onboarding/guide-steps";
-import { EMPTY_SETTLEMENT, type SessionSnapshot } from "@/lib/snapshot";
+import { anyPrice, EMPTY_SETTLEMENT, type SessionSnapshot } from "@/lib/snapshot";
 
 const base: SessionSnapshot = {
   session: { id: "s", title: null, status: "OPEN", revision: 1, joinCode: "ABCDEF", closedAt: null, expiresAt: "2026-12-01T00:00:00Z" },
@@ -33,7 +33,7 @@ describe("setup guide checklist", () => {
       participants: [...base.participants, { id: "g", displayName: "Ana", role: "GUEST" }],
       rounds: [{ id: "r1", number: 1, status: "CONFIRMED", confirmedAt: "x" }],
       entries: [{ id: "e1", batchId: "b1", roundId: "r1", dishId: "d", dishName: "Sisig", quantity: 1, variant: null, instructions: null, createdAt: "x", revision: 1, submittedBy: "h", attribution: { type: "INDIVIDUAL", label: null, participantId: "h" } }],
-      settlement: { entries: { e1: { unitCentavos: 100, billTo: null, revision: 1 } }, corrections: {}, serviceCharge: { centavos: 0, revision: 1 } },
+      settlement: { entries: { e1: { unitCentavos: 100, billTo: null, revision: 1 } }, corrections: {}, defaults: {}, serviceCharge: { centavos: 0, revision: 1 } },
     };
     expect(done(HOST_GUIDE, used)).toEqual(["setup", "invite", "add", "forPrice", "review", "kkb"]);
   });
@@ -43,5 +43,23 @@ describe("setup guide checklist", () => {
       expect(steps.at(-1)?.id).toBe("done");
       for (const step of steps) expect(step.title && step.body).toBeTruthy();
     }
+  });
+});
+
+describe("anyPrice", () => {
+  const withSettlement = (patch: Partial<SessionSnapshot["settlement"]>): SessionSnapshot => ({ ...base, settlement: { ...EMPTY_SETTLEMENT, ...patch } });
+  const price = (unitCentavos: number | null) => ({ unitCentavos, billTo: null, revision: 1 });
+
+  it("is false with no price, or only cleared ones", () => {
+    expect(anyPrice(base)).toBe(false);
+    expect(anyPrice(withSettlement({ defaults: { "d|": { unitCentavos: null, revision: 2 } }, entries: { e: price(null) } }))).toBe(false);
+  });
+
+  it("counts a line, a replacement or a table price, and ticks the guide's price step", () => {
+    expect(anyPrice(withSettlement({ entries: { e: price(100) } }))).toBe(true);
+    expect(anyPrice(withSettlement({ corrections: { c: { unitCentavos: 100, revision: 1 } } }))).toBe(true);
+    const tableOnly = withSettlement({ defaults: { "d|": { unitCentavos: 12000, revision: 1 } } });
+    expect(anyPrice(tableOnly)).toBe(true);
+    expect(done(HOST_GUIDE, tableOnly)).toContain("forPrice");
   });
 });

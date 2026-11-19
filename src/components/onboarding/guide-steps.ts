@@ -1,4 +1,4 @@
-import type { SessionSnapshot } from "@/lib/snapshot";
+import { anyPrice, type SessionSnapshot } from "@/lib/snapshot";
 
 /** Which picture a step shows (see guide-scenes.tsx and landing/scenes.tsx). */
 export type GuideScene = "setup" | "invite" | "add" | "forPrice" | "people" | "waiter" | "rounds" | "kkb" | "done";
@@ -19,7 +19,6 @@ export interface GuideStep {
 }
 
 const mine = (s: SessionSnapshot) => s.entries.filter((e) => e.submittedBy === s.me.participantId);
-const anyPrice = (s: SessionSnapshot) => Object.values(s.settlement.entries).some((p) => p.unitCentavos != null);
 const anyConfirmed = (s: SessionSnapshot) => s.rounds.some((r) => r.status === "CONFIRMED");
 
 export const HOST_GUIDE: readonly GuideStep[] = [
