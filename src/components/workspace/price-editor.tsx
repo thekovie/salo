@@ -16,6 +16,17 @@ export interface Payer {
   label: string | null;
 }
 
+/** The table price this line could set or follow (host only): one dish + size. */
+export interface TablePrice {
+  dishId: string;
+  variant: string | null;
+  /** "Chicken Katsu (Large)" */
+  label: string;
+  /** Lines that will follow it: no price of their own, across all rounds. */
+  lines: number;
+  live: { unitCentavos: number | null; revision: number };
+}
+
 interface PriceEditorProps {
   line: KkbLine;
   sessionId: string;
@@ -23,6 +34,8 @@ interface PriceEditorProps {
   canPrice: boolean;
   canBillTo: boolean;
   payers: Payer[];
+  /** Set for the host on a dish line; lets "Every … here" set the table price. */
+  table: TablePrice | null;
   /** What the server has now (updates live while the editor is open). */
   live: Pick<EntrySettlement, "unitCentavos" | "billTo" | "revision">;
   onDone: (saved: boolean) => void;
@@ -35,19 +48,28 @@ const billKeyOf = (billTo: EntrySettlement["billTo"]) => (billTo?.participantId 
  * Inline price (and, for the host on shared dishes, "Bill to") editor on one KKB line. Saves straight to the server so
  * a refusal or someone else's change shows right here, next to the amount the person typed, which is kept.
  */
-export function PriceEditor({ line, sessionId, refresh, canPrice, canBillTo, payers, live, onDone }: PriceEditorProps) {
+export function PriceEditor({ line, sessionId, refresh, canPrice, canBillTo, payers, table, live, onDone }: PriceEditorProps) {
   const id = useId();
   const { state, save } = useDirectSave(refresh);
   const [base, setBase] = useState(live);
-  const [text, setText] = useState(toPesoInput(live.unitCentavos));
+  const [baseTable, setBaseTable] = useState(table?.live ?? null);
+  const [every, setEvery] = useState(line.priceSource !== "line"); // a line with its own price opens on "Only this line"
+  const [text, setText] = useState(toPesoInput(line.unitCentavos));
   const [billKey, setBillKey] = useState(billKeyOf(live.billTo));
   const [error, setError] = useState("");
   const parsed = parsePeso(text);
-  const changedElsewhere = live.revision !== base.revision;
+  const everyMode = Boolean(table && baseTable) && every;
+  const theirs = everyMode ? table!.live : live;
+  const changedElsewhere = live.revision !== base.revision || (everyMode && table!.live.revision !== baseTable!.revision);
+
+  function keepMine() {
+    setBase(live);
+    setBaseTable(table?.live ?? null);
+  }
 
   function adoptLatest() {
-    setBase(live);
-    setText(toPesoInput(live.unitCentavos));
+    keepMine();
+    setText(toPesoInput(theirs.unitCentavos));
     setBillKey(billKeyOf(live.billTo));
   }
 
@@ -57,18 +79,36 @@ export function PriceEditor({ line, sessionId, refresh, canPrice, canBillTo, pay
     if (!next.ok) return setError(next.message);
     setError("");
     const payer = payers.find((p) => p.key === billKey);
-    const priceChanged = canPrice && next.centavos !== base.unitCentavos;
     const billChanged = canBillTo && billKey !== billKeyOf(base.billTo);
-    if (!priceChanged && !billChanged) return onDone(false);
-    const path = line.correctionId ? `/api/sessions/${sessionId}/corrections/${line.correctionId}/price` : `/api/sessions/${sessionId}/entries/${line.entryId}/settlement`;
-    const body = line.correctionId
-      ? { expectedRevision: base.revision, unitPriceCentavos: next.centavos }
-      : {
-          expectedRevision: base.revision,
-          ...(priceChanged ? { unitPriceCentavos: next.centavos } : {}),
-          ...(billChanged ? { billTo: payer ? (payer.participantId ? { participantId: payer.participantId } : { label: payer.label }) : null } : {}),
-        };
-    if (await save(path, "PUT", body)) onDone(true);
+    // "Every …": the table price, and the line's own price (if any) is cleared in the same request.
+    const tableChanged = everyMode && canPrice && next.centavos !== baseTable!.unitCentavos;
+    // "Only this line": its own price; typing the price it already shows (inherited) is not a change.
+    const priceChanged = !everyMode && canPrice && next.centavos !== base.unitCentavos && !(base.unitCentavos == null && next.centavos === line.unitCentavos);
+    if (!priceChanged && !billChanged && !tableChanged) return onDone(false);
+    if (priceChanged || billChanged) {
+      const path = line.correctionId ? `/api/sessions/${sessionId}/corrections/${line.correctionId}/price` : `/api/sessions/${sessionId}/entries/${line.entryId}/settlement`;
+      const body = line.correctionId
+        ? { expectedRevision: base.revision, unitPriceCentavos: next.centavos }
+        : {
+            expectedRevision: base.revision,
+            ...(priceChanged ? { unitPriceCentavos: next.centavos } : {}),
+            ...(billChanged ? { billTo: payer ? (payer.participantId ? { participantId: payer.participantId } : { label: payer.label }) : null } : {}),
+          };
+      if (!(await save(path, "PUT", body))) return;
+    }
+    if (tableChanged) {
+      // Removing the table price never wipes a line's own price; setting one does, if the line hasn't changed since it was seen.
+      const clear = next.centavos != null && line.priceSource === "line";
+      const body = {
+        dishId: table!.dishId,
+        variant: table!.variant,
+        unitCentavos: next.centavos,
+        expectedRevision: baseTable!.revision,
+        ...(clear ? { clearEntryId: line.entryId, expectedEntryRevision: base.revision + (billChanged ? 1 : 0) } : {}),
+      };
+      if (!(await save(`/api/sessions/${sessionId}/prices`, "PUT", body))) return;
+    }
+    onDone(true);
   }
 
   const saving = state.kind === "saving";
@@ -77,14 +117,14 @@ export function PriceEditor({ line, sessionId, refresh, canPrice, canBillTo, pay
       {changedElsewhere ? (
         <div role="alert" className="rounded-xl bg-saffron-wash px-3 py-2 text-sm text-ink">
           <p>
-            Someone changed this just now to <span className="tally font-semibold">{live.unitCentavos == null ? "no price" : formatPeso(live.unitCentavos)}</span>. Your
+            Someone changed this just now to <span className="tally font-semibold">{theirs.unitCentavos == null ? "no price" : formatPeso(theirs.unitCentavos)}</span>. Your
             amount is still here.
           </p>
           <div className="mt-1.5 flex flex-wrap gap-2">
             <Button size="md" variant="outline" onClick={adoptLatest}>
               Use theirs
             </Button>
-            <Button size="md" variant="ghost" onClick={() => setBase(live)}>
+            <Button size="md" variant="ghost" onClick={keepMine}>
               Keep mine
             </Button>
           </div>
@@ -120,10 +160,35 @@ export function PriceEditor({ line, sessionId, refresh, canPrice, canBillTo, pay
                 {formatPeso(parsed.centavos)} × {line.quantity} = {formatPeso(parsed.centavos * line.quantity)}
               </span>
             ) : parsed.centavos == null ? (
-              "Blank means not known yet."
+              everyMode ? (
+                "Blank removes the table price."
+              ) : line.hasTable && line.tableCentavos != null ? (
+                <>
+                  Blank uses the table price <span className="tally">{formatPeso(line.tableCentavos)}</span>.
+                </>
+              ) : (
+                "Blank means not known yet."
+              )
             ) : null}
           </p>
         </div>
+      ) : null}
+
+      {canPrice && table ? (
+        <fieldset>
+          <legend className="text-sm font-semibold">Apply this price to</legend>
+          <div className="mt-1.5 space-y-1.5">
+            {[
+              { value: true, label: `Every ${table.label} here (${table.lines} ${table.lines === 1 ? "line" : "lines"})` },
+              { value: false, label: "Only this line" },
+            ].map((o) => (
+              <label key={String(o.value)} className="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-xl border-[1.5px] border-input bg-ticket px-3 text-sm has-checked:border-ink has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-ink">
+                <input type="radio" name={`${id}-scope`} checked={every === o.value} onChange={() => setEvery(o.value)} className="size-4 shrink-0 accent-ink" />
+                {o.label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
       ) : null}
 
       {canBillTo ? (
@@ -146,15 +211,15 @@ export function PriceEditor({ line, sessionId, refresh, canPrice, canBillTo, pay
           {saving ? <LoaderCircle className="size-5 animate-spin" aria-hidden /> : null}
           {saving ? "Saving…" : "Save"}
         </Button>
-        {canPrice && base.unitCentavos != null ? (
-          <Button variant="ghost" disabled={saving} onClick={(e) => void submit(e, true)}>
-            Clear price
-          </Button>
-        ) : null}
         <Button variant="ghost" disabled={saving} onClick={() => onDone(false)}>
           Cancel
         </Button>
       </div>
+      {canPrice && (everyMode ? baseTable!.unitCentavos != null : base.unitCentavos != null) ? (
+        <Button variant="ghost" disabled={saving} onClick={(e) => void submit(e, true)}>
+          {everyMode ? "Remove table price" : "Clear price"}
+        </Button>
+      ) : null}
       {state.kind === "conflict" && !changedElsewhere ? (
         <p role="alert" className="rounded-xl bg-saffron-wash px-3 py-2 text-sm text-ink">
           Someone changed this just now. Loading the latest amount; your amount is still here.

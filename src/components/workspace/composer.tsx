@@ -7,6 +7,7 @@ import { track } from "@/lib/analytics";
 import { normalizeText } from "@/lib/dish-name";
 import { splitDishName, variantSuggestions } from "@/lib/dish-details";
 import { parsePeso } from "@/lib/money";
+import { sharedPriceKey, type SettlementView } from "@/lib/snapshot";
 import { attributionOf, summary, type Recipient } from "@/lib/recipient";
 import { DetailFields, type DetailField } from "./detail-fields";
 import { RecipientPicker } from "./recipient-picker";
@@ -24,7 +25,9 @@ interface ComposerProps {
   /** Group labels already used in this order. */
   groups: string[];
   /** Dishes already in this order, for size suggestions. */
-  entries: { dishName: string; variant: string | null }[];
+  entries: { dishId: string; dishName: string; variant: string | null }[];
+  /** Table prices, so the Price field can say what a blank price will use. */
+  defaults: SettlementView["defaults"];
   disabled?: boolean;
   /** Changes when the person switches tab: the "who's it for" panel closes so it doesn't cover the new view. */
   view?: string;
@@ -46,7 +49,7 @@ function suggestionsFor(query: string, names: string[]): string[] {
  * the quantity, and Add. Size, note and price are chips under the dish.
  * After adding: dish, quantity, size and instructions reset; the recipient stays for the next dish.
  */
-export function Composer({ dishNames, people, names, groups, entries, disabled, view, onAdd, detailsSignal = 0 }: ComposerProps) {
+export function Composer({ dishNames, people, names, groups, entries, defaults, disabled, view, onAdd, detailsSignal = 0 }: ComposerProps) {
   const id = useId();
   const dishRef = useRef<HTMLInputElement>(null);
   const [dish, setDish] = useState("");
@@ -79,6 +82,10 @@ export function Composer({ dishNames, people, names, groups, entries, disabled, 
   const parsedPrice = parsePeso(priceText);
   const split = useMemo(() => splitDishName(dish, entries, dishNames), [dish, entries, dishNames]);
   const offerSplit = split && keptAsTyped !== dish ? split : null;
+  const tablePrice = useMemo(() => {
+    const known = entries.find((e) => normalizeText(e.dishName) === normalizeText(dish));
+    return known ? defaults[sharedPriceKey(known.dishId, normalizeText(variant))]?.unitCentavos : undefined;
+  }, [dish, variant, entries, defaults]);
   const sizeSuggestions = useMemo(() => variantSuggestions(dish, entries), [dish, entries]);
 
   function submit(event: React.FormEvent) {
@@ -243,6 +250,7 @@ export function Composer({ dishNames, people, names, groups, entries, disabled, 
           },
           parsed: parsedPrice,
           quantity,
+          tablePrice,
         }}
       />
 

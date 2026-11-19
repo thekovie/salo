@@ -1,7 +1,7 @@
 import { isPlain, preparationLabel } from "./consolidate";
 import { normalizeText } from "./dish-name";
 import { effectiveEntry } from "./effective-order";
-import { everyone, type SessionSnapshot, type SnapshotEntry } from "./snapshot";
+import { everyone, sharedPriceKey, type SessionSnapshot, type SnapshotEntry } from "./snapshot";
 
 /**
  * KKB ("kanya-kanyang bayad"): each person's food subtotal from confirmed rounds, and their share of the receipt's
@@ -27,6 +27,13 @@ export interface KkbLine {
   /** Shared or unassigned by attribution, so the host may set Bill to. */
   billable: boolean;
   submittedBy: string;
+  /** Where the price comes from: the line itself, the table price, or nowhere. Replacements are "line" or null. */
+  priceSource: "line" | "table" | null;
+  /** The table price key (`sharedPriceKey`) this line would follow; null for replacements. */
+  tableKey: string | null;
+  /** The table price for this dish + size, when one is set (even if the line has its own). */
+  tableCentavos: number | null;
+  hasTable: boolean;
   /** Revision of the price being shown (entry's or replacement's), 0 when never set. */
   priceRevision: number;
 }
@@ -137,7 +144,18 @@ function dishLabel(entry: SnapshotEntry) {
   return isPlain(entry) ? entry.dishName : `${entry.dishName} (${preparationLabel(entry)})`;
 }
 
-function line(entry: SnapshotEntry, quantity: number, unit: number | null, priceRevision: number): KkbLine {
+/** A line's own price (override) first, then the table price for its dish + size, else unknown (never zero). */
+function resolvePrice(settlement: Pick<KkbInput["settlement"], "entries" | "defaults">, entry: Pick<SnapshotEntry, "id" | "dishId" | "variant">) {
+  const own = settlement.entries[entry.id];
+  const tableKey = sharedPriceKey(entry.dishId, normalizeText(entry.variant ?? ""));
+  const table = settlement.defaults[tableKey];
+  const unit = own?.unitCentavos ?? table?.unitCentavos ?? null;
+  const tableCentavos = table?.unitCentavos ?? null;
+  const priceSource = own?.unitCentavos != null ? ("line" as const) : tableCentavos != null ? ("table" as const) : null;
+  return { unit, priceSource, tableKey, revision: own?.revision ?? 0, tableCentavos };
+}
+
+function line(entry: SnapshotEntry, quantity: number, unit: number | null, priceRevision: number, priceSource: KkbLine["priceSource"] = unit == null ? null : "line", tableKey: string | null = null, tableCentavos: number | null = null): KkbLine {
   return {
     entryId: entry.id,
     correctionId: null,
@@ -151,12 +169,20 @@ function line(entry: SnapshotEntry, quantity: number, unit: number | null, price
     billable: false,
     submittedBy: entry.submittedBy,
     priceRevision,
+    priceSource,
+    tableKey,
+    tableCentavos,
+    hasTable: tableCentavos != null,
   };
 }
 
+function entryLine(input: KkbInput, entry: SnapshotEntry, quantity: number): KkbLine {
+  const p = resolvePrice(input.settlement, entry);
+  return line(entry, quantity, p.unit, p.revision, p.priceSource, p.tableKey, p.tableCentavos);
+}
+
 function draftLine(input: KkbInput, entry: SnapshotEntry): KkbLine {
-  const price = input.settlement.entries[entry.id];
-  return line(entry, entry.quantity, price?.unitCentavos ?? null, price?.revision ?? 0);
+  return entryLine(input, entry, entry.quantity);
 }
 
 /** Confirmed quantity cancellations lower the count; a confirmed swap becomes "A → B" priced on its own. */
@@ -164,8 +190,7 @@ function confirmedLine(input: KkbInput, entry: SnapshotEntry, confirmedRounds: S
   const { quantity, replacement, replacementId, pendingChange } = effectiveEntry(entry, input.corrections, confirmedRounds);
   if (quantity <= 0) return null;
   if (!replacementId) {
-    const price = input.settlement.entries[entry.id];
-    return { ...line(entry, quantity, price?.unitCentavos ?? null, price?.revision ?? 0), pendingChange };
+    return { ...entryLine(input, entry, quantity), pendingChange };
   }
   const price = input.settlement.corrections[replacementId];
   return { ...line(entry, quantity, price?.unitCentavos ?? null, price?.revision ?? 0), correctionId: replacementId, label: `${dishLabel(entry)} → ${replacement}`, pendingChange };

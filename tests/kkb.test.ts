@@ -39,7 +39,7 @@ function input(entries: SnapshotEntry[], over: Partial<KkbInput> = {}): KkbInput
 }
 const withPrices = (base: KkbInput, prices: Record<string, EntrySettlement>, charge: number | null = null): KkbInput => ({
   ...base,
-  settlement: { entries: prices, corrections: base.settlement.corrections, serviceCharge: { centavos: charge, revision: charge == null ? 0 : 1 } },
+  settlement: { entries: prices, corrections: base.settlement.corrections, defaults: base.settlement.defaults, serviceCharge: { centavos: charge, revision: charge == null ? 0 : 1 } },
 });
 const correction = (over: Partial<CorrectionView>): CorrectionView => ({ id: `c${++n}`, sourceEntryId: null, sourceRoundNumber: 1, targetRoundId: "r2", dishName: "x", preparation: null, type: "QUANTITY", quantityDelta: null, replacement: null, explanation: null, ...over });
 

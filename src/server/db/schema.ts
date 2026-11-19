@@ -382,3 +382,27 @@ export const correctionSettlements = pgTable(
     check("correction_settlements_revision_ck", sql`revision >= 1`),
   ],
 );
+
+/**
+ * A table price (KKB): price each for one dish + size within a session, set by the host. A line's own price
+ * (`entry_settlements`) overrides it. `variant_key` is the normalized size, '' for none. Clearing sets `unit_centavos` to null and keeps the row, so its revision keeps counting up.
+ */
+export const sharedPrices = pgTable(
+  "shared_prices",
+  {
+    sessionId: sessionRef(),
+    dishId: uuid("dish_id")
+      .notNull()
+      .references(() => dishes.id, { onDelete: "cascade" }),
+    variantKey: text("variant_key").notNull(),
+    unitCentavos: integer("unit_centavos"),
+    revision: integer("revision").notNull().default(1),
+    updatedBy: uuid("updated_by").references(() => participants.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.sessionId, t.dishId, t.variantKey] }),
+    check("shared_prices_price_ck", sql`unit_centavos BETWEEN 0 AND 9999999`),
+    check("shared_prices_revision_ck", sql`revision >= 1`),
+  ],
+);

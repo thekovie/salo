@@ -1,17 +1,17 @@
-import { and, eq, isNull } from "drizzle-orm";
-import { tidyText } from "@/lib/dish-name";
+import { and, eq, isNull, sql } from "drizzle-orm";
+import { normalizeText, tidyText } from "@/lib/dish-name";
 import { can, canEditPrice, type Actor } from "@/lib/permissions";
 import type { Tx } from "@/server/db/client";
-import { correctionSettlements, entrySettlements, orderBatches, orderCorrections, orderEntries, participants, sessions } from "@/server/db/schema";
+import { correctionSettlements, dishes, entrySettlements, orderBatches, orderCorrections, orderEntries, participants, sessions, sharedPrices } from "@/server/db/schema";
 import { AppError, forbidden } from "@/server/errors";
 import type { Applied, SessionRow } from "@/server/mutations";
-import type { CorrectionPriceInput, EntrySettlementInput, RenameMeInput, ServiceChargeInput } from "./validation";
+import type { CorrectionPriceInput, EntrySettlementInput, RenameMeInput, ServiceChargeInput, SharedPriceInput } from "./validation";
 
 /**
  * Changes that never touch what the waiter is told (prices, the receipt's service charge, a person's name). Confirming
  * a round still passes when only these happened since the host looked (owner decision, KKB brief §6).
  */
-export const NON_TICKET_EVENTS = ["entry.settled", "correction.priced", "session.serviceCharge", "participant.renamed"] as const;
+export const NON_TICKET_EVENTS = ["entry.settled", "correction.priced", "session.serviceCharge", "participant.renamed", "price.defaultSet"] as const;
 
 /** Length is checked again after tidying: NFKC can expand a few characters into many (DB CHECK is 1–40). */
 function tidyName(raw: string, message: string): string {
@@ -78,6 +78,43 @@ export async function setCorrectionPrice(tx: Tx, session: SessionRow, actor: Act
     await tx.insert(correctionSettlements).values({ correctionId, sessionId: session.id, unitPriceCentavos: input.unitPriceCentavos, revision, updatedBy: actor.participantId });
   }
   return { result: { correctionId, revision }, event: { type: "correction.priced", payload: { correctionId } } };
+}
+
+/**
+ * The table price for one dish + size (host only). Null removes it. `clearEntryId` drops that line's own price in the
+ * same change ("Every … here"), so the line follows the table price. Lines with their own price are never touched otherwise.
+ */
+export async function setSharedPrice(tx: Tx, session: SessionRow, actor: Actor, input: SharedPriceInput): Promise<Applied<{ revision: number }>> {
+  if (!can(actor, "price.default")) throw forbidden("Only the host can set a table price.");
+  const [dish] = await tx.select({ id: dishes.id }).from(dishes).where(and(eq(dishes.id, input.dishId), eq(dishes.sessionId, session.id)));
+  if (!dish) throw new AppError(404, "DISH_NOT_FOUND", "That dish isn’t in this order any more.");
+  const variantKey = normalizeText(input.variant ?? "");
+  const key = and(eq(sharedPrices.sessionId, session.id), eq(sharedPrices.dishId, input.dishId), eq(sharedPrices.variantKey, variantKey));
+  const [current] = await tx.select().from(sharedPrices).where(key).for("update");
+  if ((current?.revision ?? 0) !== input.expectedRevision) throw conflict("this table price");
+
+  if (input.clearEntryId) {
+    const [entry] = await tx
+      .select({ dishId: orderEntries.dishId, variant: orderEntries.variant })
+      .from(orderEntries)
+      .innerJoin(orderBatches, eq(orderBatches.id, orderEntries.batchId))
+      .where(and(eq(orderEntries.id, input.clearEntryId), eq(orderBatches.sessionId, session.id)));
+    if (!entry || entry.dishId !== input.dishId || normalizeText(entry.variant ?? "") !== variantKey) throw new AppError(404, "ENTRY_NOT_FOUND", "That dish isn’t in this order any more.");
+    const [own] = await tx.select({ revision: entrySettlements.revision }).from(entrySettlements).where(eq(entrySettlements.entryId, input.clearEntryId)).for("update");
+    if ((own?.revision ?? 0) !== input.expectedEntryRevision) throw conflict("this line's price");
+    if (own) {
+      await tx
+        .update(entrySettlements)
+        .set({ unitPriceCentavos: null, revision: sql`${entrySettlements.revision} + 1`, updatedBy: actor.participantId, updatedAt: new Date() })
+        .where(eq(entrySettlements.entryId, input.clearEntryId));
+    }
+  }
+
+  const revision = (current?.revision ?? 0) + 1;
+  // A cleared table price keeps its row (price null) so the revision never restarts and a stale editor can't win.
+  if (current) await tx.update(sharedPrices).set({ unitCentavos: input.unitCentavos, revision, updatedBy: actor.participantId, updatedAt: new Date() }).where(key);
+  else await tx.insert(sharedPrices).values({ sessionId: session.id, dishId: input.dishId, variantKey, unitCentavos: input.unitCentavos, revision, updatedBy: actor.participantId });
+  return { result: { revision }, event: { type: "price.defaultSet", payload: { dishId: input.dishId } } };
 }
 
 /** The receipt's service charge: null = not entered, 0 = none on the receipt. Host only. */

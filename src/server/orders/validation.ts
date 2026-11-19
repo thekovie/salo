@@ -99,6 +99,22 @@ export type EntrySettlementInput = z.infer<typeof entrySettlementSchema>;
 export const correctionPriceSchema = z.object({ expectedRevision: z.number().int().min(0), unitPriceCentavos: centavos(MAX_UNIT_PRICE_CENTAVOS) });
 export type CorrectionPriceInput = z.infer<typeof correctionPriceSchema>;
 
+export const sharedPriceSchema = z
+  .object({
+    dishId: z.uuid(),
+    /** Size as typed; null or blank = no size. */
+    variant: text(LIMITS.variant).nullable(),
+    /** null removes the table price. */
+    unitCentavos: centavos(MAX_UNIT_PRICE_CENTAVOS),
+    expectedRevision: z.number().int().min(0),
+    /** "Every … here": this line's own price is cleared in the same change. */
+    clearEntryId: z.uuid().optional(),
+    /** The line's settlement revision the host saw; required with clearEntryId so a price set meanwhile is not wiped unseen. */
+    expectedEntryRevision: z.number().int().min(0).optional(),
+  })
+  .refine((v) => !v.clearEntryId || v.expectedEntryRevision !== undefined, { message: "expectedEntryRevision is required with clearEntryId", path: ["expectedEntryRevision"] });
+export type SharedPriceInput = z.infer<typeof sharedPriceSchema>;
+
 export const serviceChargeSchema = z.object({ expectedRevision: z.number().int().min(0), centavos: centavos(MAX_SERVICE_CHARGE_CENTAVOS) });
 export type ServiceChargeInput = z.infer<typeof serviceChargeSchema>;
 
