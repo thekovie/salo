@@ -5,8 +5,10 @@ import { useId, useMemo, useRef, useState } from "react";
 import type { AddInput } from "@/hooks/use-session";
 import { track } from "@/lib/analytics";
 import { normalizeText } from "@/lib/dish-name";
-import { formatPeso, parsePeso } from "@/lib/money";
+import { splitDishName, variantSuggestions } from "@/lib/dish-details";
+import { parsePeso } from "@/lib/money";
 import { attributionOf, summary, type Recipient } from "@/lib/recipient";
+import { DetailFields, type DetailField } from "./detail-fields";
 import { RecipientPicker } from "./recipient-picker";
 import { cn } from "@/lib/utils";
 import { Stepper } from "./stepper";
@@ -21,11 +23,13 @@ interface ComposerProps {
   names: string[];
   /** Group labels already used in this order. */
   groups: string[];
+  /** Dishes already in this order, for size suggestions. */
+  entries: { dishName: string; variant: string | null }[];
   disabled?: boolean;
   /** Changes when the person switches tab: the "who's it for" panel closes so it doesn't cover the new view. */
   view?: string;
   onAdd: (input: AddInput) => void;
-  /** Bumped by the setup guide's "Try it": opens the For panel with size, notes and price showing. */
+  /** Bumped by the setup guide's "Try it": opens the Price field. */
   detailsSignal?: number;
 }
 
@@ -39,10 +43,10 @@ function suggestionsFor(query: string, names: string[]): string[] {
 
 /**
  * Quick entry (brief 5.4). Row one is the dish, full width. Row two says who it's for (one tap opens the choices),
- * the quantity, and Add. Size and instructions sit one step further in.
+ * the quantity, and Add. Size, note and price are chips under the dish.
  * After adding: dish, quantity, size and instructions reset; the recipient stays for the next dish.
  */
-export function Composer({ dishNames, people, names, groups, disabled, view, onAdd, detailsSignal = 0 }: ComposerProps) {
+export function Composer({ dishNames, people, names, groups, entries, disabled, view, onAdd, detailsSignal = 0 }: ComposerProps) {
   const id = useId();
   const dishRef = useRef<HTMLInputElement>(null);
   const [dish, setDish] = useState("");
@@ -53,12 +57,11 @@ export function Composer({ dishNames, people, names, groups, disabled, view, onA
     setLastView(view);
     setOpen(false);
   }
-  const [notesOpen, setNotesOpen] = useState(false);
+  const [field, setField] = useState<DetailField | null>(null);
   const [lastSignal, setLastSignal] = useState(detailsSignal);
   if (detailsSignal !== lastSignal) {
     setLastSignal(detailsSignal);
-    setOpen(true);
-    setNotesOpen(true);
+    setField("price");
   }
   const [recipient, setRecipient] = useState<Recipient>({ kind: "ME" });
   const [typed, setTyped] = useState("");
@@ -66,14 +69,17 @@ export function Composer({ dishNames, people, names, groups, disabled, view, onA
   const [instructions, setInstructions] = useState("");
   const [priceText, setPriceText] = useState("");
   const [error, setError] = useState("");
-  const priceRef = useRef<HTMLInputElement>(null);
+  // "Keep as typed" is remembered for that exact text only.
+  const [keptAsTyped, setKeptAsTyped] = useState("");
   const suggestions = useMemo(() => suggestionsFor(dish, dishNames), [dish, dishNames]);
 
   // A picked person who has since left the order falls back to Me instead of failing on Add.
   const current: Recipient = recipient.kind === "PERSON" && !people.some((p) => p.id === recipient.id) ? { kind: "ME" } : recipient;
   const isNew = current.kind === "NEW_PERSON" || current.kind === "NEW_GROUP";
   const parsedPrice = parsePeso(priceText);
-  const hasNotes = Boolean(variant || instructions || priceText.trim());
+  const split = useMemo(() => splitDishName(dish, entries, dishNames), [dish, entries, dishNames]);
+  const offerSplit = split && keptAsTyped !== dish ? split : null;
+  const sizeSuggestions = useMemo(() => variantSuggestions(dish, entries), [dish, entries]);
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -89,10 +95,9 @@ export function Composer({ dishNames, people, names, groups, disabled, view, onA
       return;
     }
     if (!parsedPrice.ok) {
-      setOpen(true);
-      setNotesOpen(true);
+      setField("price");
       setError(`Price: ${parsedPrice.message}`);
-      requestAnimationFrame(() => priceRef.current?.focus());
+      requestAnimationFrame(() => document.getElementById(`${id}-price`)?.focus());
       return;
     }
     onAdd({ dishName: dish, quantity, variant: variant || null, instructions: instructions || null, attribution: who, unitPriceCentavos: parsedPrice.centavos });
@@ -106,6 +111,7 @@ export function Composer({ dishNames, people, names, groups, disabled, view, onA
     setVariant("");
     setInstructions("");
     setPriceText("");
+    setField(null);
     setError("");
     // Close the panel after adding: an open panel plus the composer covered most of a small screen (density review).
     setOpen(false);
@@ -136,7 +142,7 @@ export function Composer({ dishNames, people, names, groups, disabled, view, onA
 
       {open ? (
         <fieldset id={`${id}-panel`} className="ease-in-panel relative mb-2 max-h-[45dvh] space-y-2 overflow-y-auto overscroll-contain rounded-2xl bg-paper p-3">
-          <legend className="sr-only">Who it&rsquo;s for, size, notes and price</legend>
+          <legend className="sr-only">Who it&rsquo;s for</legend>
           <button
             type="button"
             onClick={() => {
@@ -162,67 +168,6 @@ export function Composer({ dishNames, people, names, groups, disabled, view, onA
             names={names}
             groups={groups}
           />
-
-          <div>
-            <button
-              type="button"
-              aria-expanded={notesOpen}
-              onClick={() => setNotesOpen((v) => !v)}
-              className="inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-full pr-2 text-sm font-semibold text-ink-soft hover:text-ink"
-            >
-              <ChevronDown className={cn("size-4 transition-transform duration-200", notesOpen && "rotate-180")} aria-hidden />
-              Size, notes or price
-              {hasNotes && !notesOpen ? <span className="size-2 rounded-full bg-tomato" aria-hidden /> : null}
-            </button>
-            {notesOpen ? (
-              <div className="ease-in-panel mt-1 grid gap-3 sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                  <label htmlFor={`${id}-price`} className="text-sm font-semibold">
-                    Price each (₱)
-                  </label>
-                  <input
-                    ref={priceRef}
-                    id={`${id}-price`}
-                    value={priceText}
-                    onChange={(e) => {
-                      setPriceText(e.target.value);
-                      if (error.startsWith("Price:")) setError("");
-                    }}
-                    inputMode="decimal"
-                    enterKeyHint="done"
-                    autoComplete="off"
-                    placeholder="Optional"
-                    aria-invalid={!parsedPrice.ok || undefined}
-                    aria-describedby={`${id}-price-line`}
-                    className="tally mt-1 min-h-11 w-full rounded-xl border-[1.5px] border-input bg-ticket px-3 text-base aria-invalid:border-bad"
-                  />
-                  <p id={`${id}-price-line`} aria-live="polite" className="mt-1 min-h-5 text-sm text-ink-soft">
-                    {parsedPrice.ok && parsedPrice.centavos != null && quantity > 1 ? (
-                      <span className="tally">
-                        {formatPeso(parsedPrice.centavos)} × {quantity} = {formatPeso(parsedPrice.centavos * quantity)}
-                      </span>
-                    ) : !parsedPrice.ok ? (
-                      <span className="text-bad">{parsedPrice.message}</span>
-                    ) : (
-                      "For KKB later. Leave blank if you don't know."
-                    )}
-                  </p>
-                </div>
-                <div>
-                  <label htmlFor={`${id}-variant`} className="text-sm font-semibold">
-                    Size or variant
-                  </label>
-                  <input id={`${id}-variant`} value={variant} onChange={(e) => setVariant(e.target.value)} maxLength={40} placeholder="Large, spicy…" className="mt-1 min-h-11 w-full rounded-xl border-[1.5px] border-input bg-ticket px-3 text-base" />
-                </div>
-                <div>
-                  <label htmlFor={`${id}-notes`} className="text-sm font-semibold">
-                    Instructions
-                  </label>
-                  <input id={`${id}-notes`} value={instructions} onChange={(e) => setInstructions(e.target.value)} maxLength={140} placeholder="No sauce, less ice…" className="mt-1 min-h-11 w-full rounded-xl border-[1.5px] border-input bg-ticket px-3 text-base" />
-                </div>
-              </div>
-            ) : null}
-          </div>
         </fieldset>
       ) : null}
 
@@ -248,6 +193,59 @@ export function Composer({ dishNames, people, names, groups, disabled, view, onA
         />
       </div>
 
+      <p role="status" className="sr-only">
+        {offerSplit ? `Split into ${offerSplit.dish}${offerSplit.variant ? `, size ${offerSplit.variant}` : ""}${offerSplit.note ? `, note ${offerSplit.note}` : ""}? Split or keep as typed.` : ""}
+      </p>
+      {offerSplit ? (
+        <div className="mt-1.5 rounded-xl bg-saffron-wash px-3 py-2 text-saffron-ink" data-ph-mask="">
+          <p className="text-sm">
+            Split into {offerSplit.dish}
+            {offerSplit.variant ? ` · size “${offerSplit.variant}”` : ""}
+            {offerSplit.note ? ` · note “${offerSplit.note}”` : ""}?
+          </p>
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                setDish(offerSplit.dish);
+                if (offerSplit.variant) setVariant(offerSplit.variant);
+                if (offerSplit.note) setInstructions(offerSplit.note);
+                dishRef.current?.focus();
+              }}
+              className="min-h-11 cursor-pointer rounded-full bg-ink px-4 text-sm font-semibold text-paper"
+            >
+              Split
+            </button>
+            <button type="button" onClick={() => {
+                setKeptAsTyped(dish);
+                dishRef.current?.focus();
+              }} className="min-h-11 cursor-pointer rounded-full px-3 text-sm font-semibold hover:bg-ink/8">
+              Keep as typed
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      <DetailFields
+        id={id}
+        open={field}
+        onOpen={setField}
+        variant={variant}
+        onVariant={setVariant}
+        instructions={instructions}
+        onInstructions={setInstructions}
+        suggestions={sizeSuggestions}
+        price={{
+          text: priceText,
+          onChange: (text) => {
+            setPriceText(text);
+            if (error.startsWith("Price:")) setError("");
+          },
+          parsed: parsedPrice,
+          quantity,
+        }}
+      />
+
       {/* Under 360 px "For …" takes its own row so every label stays visible (no icon-only Add). */}
       <div className="mt-1.5 flex flex-wrap items-center gap-1">
         <button
@@ -259,14 +257,13 @@ export function Composer({ dishNames, people, names, groups, disabled, view, onA
           aria-expanded={open}
           aria-controls={open ? `${id}-panel` : undefined}
           data-tour="for"
-          className={cn("relative inline-flex min-h-11 min-w-0 flex-1 cursor-pointer max-[359px]:basis-full items-center gap-1.5 rounded-full px-3 text-left hover:bg-ink/6", open && "bg-ink/8")}
+          className={cn("inline-flex min-h-11 min-w-0 flex-1 cursor-pointer max-[359px]:basis-full items-center gap-1.5 rounded-full px-3 text-left hover:bg-ink/6", open && "bg-ink/8")}
         >
           <ForIcon className="size-4 shrink-0 text-ink-soft" aria-hidden />
           <span className="shrink-0 text-sm text-ink-soft">For</span>
           <span className="truncate font-semibold" data-ph-mask="">{summary(current, typed)}</span>
           <ChevronDown className={cn("size-4 shrink-0 text-ink-soft transition-transform duration-200", open && "rotate-180")} aria-hidden />
-          {!open && hasNotes ? <span className="absolute top-2 right-2 size-2 rounded-full bg-tomato" aria-hidden /> : null}
-          <span className="sr-only">. Change who it&rsquo;s for, size, notes or price</span>
+          <span className="sr-only">. Change who it&rsquo;s for</span>
         </button>
         <Stepper value={quantity} label="this dish" onChange={setQuantity} />
         <button

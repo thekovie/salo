@@ -31,7 +31,14 @@ export function ForPriceScene() {
               </span>
             ))}
           </div>
-          <p className="mt-3 text-xs font-semibold text-ink-soft">Price each (₱) · optional</p>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {["+ Size", "+ Note", "+ ₱ Price"].map((name) => (
+              <span key={name} className={cn(chip, name === "+ ₱ Price" ? "bg-ink/8 text-ink ring-input" : "text-ink-soft ring-input")}>
+                {name}
+              </span>
+            ))}
+          </div>
+          <p className="mt-2 text-xs font-semibold text-ink-soft">Price each (₱) · optional</p>
           <p className="tally mt-1 h-8 rounded-lg bg-paper px-2.5 py-1 text-base ring-[1.5px] ring-input">{price || <span className="text-ink-soft">Optional</span>}</p>
           <Reveal on={step >= 4} className="tally mt-1.5 text-sm text-ink-soft">
             ₱120.00 × 2 = ₱240.00

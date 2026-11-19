@@ -170,7 +170,10 @@ export function SummarySheet({ open, onOpenChange, snapshot, tab, onTabChange, r
                   <ul className="mt-1 space-y-0.5">
                     {s.lines.map((line) => (
                       <li key={line.label} className="flex items-baseline justify-between gap-3 pl-3 text-ink-soft">
-                        <span className="min-w-0 break-words">{line.label}</span>
+                        <span className="min-w-0 break-words">
+                          {line.label}
+                          {line.pendingChange ? <span className="ml-1.5 text-sm text-ink-soft">· waiting for the waiter</span> : null}
+                        </span>
                         <span className="tally shrink-0 text-tomato-ink">×{line.quantity}</span>
                       </li>
                     ))}

@@ -1,6 +1,6 @@
 import { writeFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
-import { addDish, inviteCode, joinAsGuest, openNotes, orderFor, startOrder } from "./support/helpers";
+import { addDish, inviteCode, joinAsGuest, openDetail, orderFor, startOrder } from "./support/helpers";
 
 // Design-review captures of every screen from the current build. Skipped unless CAPTURE=1:
 //   CAPTURE=1 pnpm e2e e2e/capture.spec.ts
@@ -51,7 +51,7 @@ test("capture every screen", async ({ page, browser, request }) => {
   await orderFor(page, "A person", "Rafa");
   await addDish(page, "Halo-halo");
   await page.getByRole("button", { name: "Close details" }).click();
-  await openNotes(guest.page);
+  await openDetail(guest.page, "Note");
   await guest.page.getByLabel("Instructions").fill("No sauce");
   await addDish(guest.page, "Chicken Katsu");
   await guest.page.getByRole("button", { name: "Close details" }).click();
