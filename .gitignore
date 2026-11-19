@@ -21,3 +21,7 @@ backups/
 playwright-report/
 test-results/
 
+
+# workflow scratch (screenshots, handoffs)
+.shots/
+.handoffs/

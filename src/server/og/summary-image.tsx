@@ -15,7 +15,7 @@ export const MAX_SUMMARY_HEIGHT = 8000;
 
 export function summaryHeight(summary: OrderSummary): number {
   const body = summary.sections.reduce((h, s) => h + SECTION_HEAD + s.lines.length * LINE + SECTION_GAP, 0);
-  return HEADER + body + (summary.unconfirmedRound ? 70 : 0) + FOOTER;
+  return HEADER + body + (summary.unconfirmedRound ? 70 : 0) + (summary.pendingDishes.length > 0 ? 70 : 0) + FOOTER;
 }
 
 /** "Who ordered what" as a tall ticket on Salo paper, for saving to the gallery and settling up later. */
@@ -54,6 +54,9 @@ export async function renderSummary(summary: OrderSummary, dateLabel: string): P
           </div>
           {summary.unconfirmedRound ? (
             <span style={{ fontSize: 24, color: C.inkSoft, marginTop: 24 }}>{`Round ${summary.unconfirmedRound} was never confirmed with the waiter (not included).`}</span>
+          ) : null}
+          {summary.pendingDishes.length > 0 ? (
+            <span style={{ fontSize: 24, color: C.inkSoft, marginTop: 24 }}>{`Changes waiting for the waiter: ${summary.pendingDishes.join(", ")}`}</span>
           ) : null}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: "auto", paddingTop: 24, borderTop: `3px dashed ${C.inkSoft}` }}>
             <span style={{ fontSize: 26, color: C.inkSoft }}>No prices included · Made with Salo</span>

@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import type { Actor } from "@/lib/permissions";
+import { buildKkb } from "@/lib/kkb";
 import { buildSummary, summaryText } from "@/lib/summary";
 import { runMutation } from "@/server/mutations";
 import { removeParticipant, setGroupMembers } from "@/server/orders/people";
@@ -45,7 +46,7 @@ describe("who ordered what (summary for settling up)", () => {
     const summary = buildSummary(await getSnapshot(db, host));
     expect(summary.rounds).toEqual([1]);
     expect(summary.unconfirmedRound).toBe(2);
-    expect(summary.total).toBe(6);
+    expect(summary.total).toBe(7); // the round 2 cancellation and swap are still pending, so not applied
     expect(summaryText(summary, "Sat, Nov 7")).toBe(
       [
         "Mang Inasal · Sat, Nov 7",
@@ -54,11 +55,11 @@ describe("who ordered what (summary for settling up)", () => {
         "Host: 2 items", // a host who never set a name is just "Host", not "Host (host)"
         "  Chicken Inasal Paa ×2",
         "",
-        "JD: 1 item",
-        "  Halo-halo (Less ice) ×1",
+        "JD: 2 items",
+        "  Halo-halo (Less ice) ×2",
         "",
         "Rafa (left): 1 item",
-        "  Sisig → Bangus Sisig ×1",
+        "  Sisig ×1",
         "",
         "Barkada (shared by JD): 1 item", // removing Rafa also took them out of the group
         "  Pancit ×1",
@@ -68,9 +69,41 @@ describe("who ordered what (summary for settling up)", () => {
         "",
         "Round 2 was never confirmed with the waiter (not included).",
         "",
-        "Total: 6 items · no prices included",
+        "Changes waiting for the waiter: Halo-halo, Sisig",
+        "",
+        "Total: 7 items · no prices included",
         "Made with Salo",
       ].join("\n"),
     );
+  });
+});
+
+describe("Items follows KKB on pending corrections", () => {
+  it("keeps a dish with a pending cancellation, marked, and counts it like KKB; applies it once confirmed", async () => {
+    const { host } = await newSession(db);
+    const sisig = await add(db, host, { dishName: "Sisig", quantity: 3, attribution: { type: "INDIVIDUAL" } });
+    await confirm(host);
+    await run(host, (tx, s) => openRound(tx, s, host));
+    await run(host, (tx, s) => recordCorrection(tx, s, host, { sourceEntryId: sisig.result.entryId, type: "QUANTITY", quantity: 2 }));
+
+    const quantities = async () => {
+      const snap = await getSnapshot(db, host);
+      const kkb = buildKkb(snap, host.participantId);
+      const summary = buildSummary(snap);
+      return { items: summary.total, kkb: kkb.sections.flatMap((s) => s.lines).reduce((n, l) => n + l.quantity, 0), summary };
+    };
+
+    const pending = await quantities();
+    expect(pending.items).toBe(3);
+    expect(pending.kkb).toBe(3);
+    expect(pending.summary.sections[0].lines[0]).toMatchObject({ label: "Sisig", quantity: 3, pendingChange: true });
+    expect(summaryText(pending.summary, "Sat, Nov 7")).toContain("Changes waiting for the waiter: Sisig");
+
+    await confirm(host);
+    const done = await quantities();
+    expect(done.items).toBe(1);
+    expect(done.kkb).toBe(1);
+    expect(done.summary.pendingDishes).toEqual([]);
+    expect(summaryText(done.summary, "Sat, Nov 7")).not.toContain("Changes waiting");
   });
 });

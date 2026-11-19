@@ -1,4 +1,4 @@
-import { expect, test, type Browser, type Page } from "@playwright/test";
+import { expect, test, type Browser, type Locator, type Page } from "@playwright/test";
 
 export async function startOrder(page: Page) {
   await page.goto("/");
@@ -25,12 +25,13 @@ export async function orderFor(page: Page, kind: "Me" | "Anyone" | "Whole table"
   if (name) await page.getByLabel(kind === "A group" ? "Group name" : "Person's name").fill(name);
 }
 
-/** Opens "Size, notes or price" inside the For panel. */
-export async function openNotes(page: Page) {
-  const toggle = page.getByRole("button", { name: /^For / });
-  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
-  const notes = page.getByRole("button", { name: "Size, notes or price", exact: true });
-  if ((await notes.getAttribute("aria-expanded")) !== "true") await notes.click();
+const DETAIL_CHIP = { Size: "Size", Note: "Note", Price: "₱ Price" } as const;
+
+/** Opens one detail field (Size, Note or Price) with its chip under the dish; one field is open at a time. */
+export async function openDetail(page: Page | Locator, which: keyof typeof DETAIL_CHIP) {
+  // Closed chips read "+ Size"; the open one reads "Size" with a close icon.
+  const open = page.getByRole("button", { name: DETAIL_CHIP[which], exact: true, expanded: true });
+  if ((await open.count()) === 0) await page.getByRole("button", { name: `+ ${DETAIL_CHIP[which]}`, exact: true }).click();
 }
 
 export async function inviteCode(page: Page): Promise<string> {

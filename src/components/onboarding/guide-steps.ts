@@ -53,7 +53,7 @@ export const HOST_GUIDE: readonly GuideStep[] = [
   {
     id: "forPrice",
     title: "Who it’s for, sizes and prices",
-    body: "Tap For to put a dish down for a friend, a group, the whole table or anyone. Size, notes or price sits in the same panel; the price is optional and helps with KKB later.",
+    body: "Tap For to put a dish down for a friend, a group, the whole table or anyone. Under the dish, + Size, + Note and + ₱ Price add the details; the price is optional and helps with KKB later.",
     scene: "forPrice",
     action: "details",
     label: "Add a price",
@@ -119,7 +119,7 @@ export const GUEST_GUIDE: readonly GuideStep[] = [
   {
     id: "forPrice",
     title: "For someone? Know the price?",
-    body: "Tap For to put a dish down for a friend, a group or the whole table. Size, notes or price sits in the same panel; the price is optional and helps with KKB.",
+    body: "Tap For to put a dish down for a friend, a group or the whole table. Under the dish, + Size, + Note and + ₱ Price add the details; the price is optional and helps with KKB.",
     scene: "forPrice",
     action: "details",
     label: "Add a price",

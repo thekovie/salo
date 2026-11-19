@@ -1,5 +1,6 @@
 import { isPlain, preparationLabel } from "./consolidate";
 import { normalizeText } from "./dish-name";
+import { effectiveEntry } from "./effective-order";
 import { everyone, type SessionSnapshot, type SnapshotEntry } from "./snapshot";
 
 /**
@@ -160,19 +161,14 @@ function draftLine(input: KkbInput, entry: SnapshotEntry): KkbLine {
 
 /** Confirmed quantity cancellations lower the count; a confirmed swap becomes "A → B" priced on its own. */
 function confirmedLine(input: KkbInput, entry: SnapshotEntry, confirmedRounds: Set<string>): KkbLine | null {
-  const fixes = input.corrections.filter((c) => c.sourceEntryId === entry.id);
-  const done = fixes.filter((c) => confirmedRounds.has(c.targetRoundId));
-  const pendingChange = fixes.some((c) => !confirmedRounds.has(c.targetRoundId));
-  const cancelled = done.filter((c) => c.type === "QUANTITY").reduce((sum, c) => sum + Math.abs(c.quantityDelta ?? 0), 0);
-  const quantity = entry.quantity - cancelled;
+  const { quantity, replacement, replacementId, pendingChange } = effectiveEntry(entry, input.corrections, confirmedRounds);
   if (quantity <= 0) return null;
-  const swap = [...done].reverse().find((c) => c.type === "REPLACE" && c.replacement);
-  if (!swap) {
+  if (!replacementId) {
     const price = input.settlement.entries[entry.id];
     return { ...line(entry, quantity, price?.unitCentavos ?? null, price?.revision ?? 0), pendingChange };
   }
-  const price = input.settlement.corrections[swap.id];
-  return { ...line(entry, quantity, price?.unitCentavos ?? null, price?.revision ?? 0), correctionId: swap.id, label: `${dishLabel(entry)} → ${swap.replacement}`, pendingChange };
+  const price = input.settlement.corrections[replacementId];
+  return { ...line(entry, quantity, price?.unitCentavos ?? null, price?.revision ?? 0), correctionId: replacementId, label: `${dishLabel(entry)} → ${replacement}`, pendingChange };
 }
 
 function toSection(b: Bucket & { lines: KkbLine[]; drafts: KkbLine[] }, meId: string, groupMembers: Map<string, string[]>): KkbSection {

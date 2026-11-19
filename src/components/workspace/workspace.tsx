@@ -590,7 +590,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
       {sessionOpen ? (
       <div ref={dockRef} className="fixed inset-x-0 bottom-0 z-30 bg-gradient-to-t from-paper from-70% to-transparent pt-6 pb-[calc(env(safe-area-inset-bottom)+0.5rem)]">
         <div className="mx-auto max-w-2xl space-y-2 px-3">
-          {isOpen ? <Composer dishNames={snapshot.dishNames} {...recipients} view={view} detailsSignal={detailsSignal} onAdd={(input) => void add({ ...input, roundId: round.id })} /> : null}
+          {isOpen ? <Composer dishNames={snapshot.dishNames} entries={snapshot.entries} {...recipients} view={view} detailsSignal={detailsSignal} onAdd={(input) => void add({ ...input, roundId: round.id })} /> : null}
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-2">
             <div className="min-w-0">
               <p className="whitespace-nowrap text-ink-soft" data-testid="round-total">
