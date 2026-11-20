@@ -416,3 +416,27 @@ export const sharedPrices = pgTable(
     check("shared_prices_revision_ck", sql`revision >= 1`),
   ],
 );
+
+/**
+ * Food tracker: how many of one line (a preparation or a told replacement) of a confirmed round the host has seen
+ * served. Raw count; the display clamps it to what is still ordered. Independent from KKB.
+ */
+export const servedCounts = pgTable(
+  "served_counts",
+  {
+    sessionId: sessionRef(),
+    roundId: uuid("round_id")
+      .notNull()
+      .references(() => rounds.id, { onDelete: "cascade" }),
+    lineKey: text("line_key").notNull(),
+    served: integer("served").notNull(),
+    revision: integer("revision").notNull().default(1),
+    updatedBy: uuid("updated_by").references(() => participants.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.sessionId, t.roundId, t.lineKey] }),
+    check("served_counts_served_ck", sql`served >= 0`),
+    check("served_counts_revision_ck", sql`revision >= 1`),
+  ],
+);

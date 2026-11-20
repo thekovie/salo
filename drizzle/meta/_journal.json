@@ -71,6 +71,13 @@
       "when": 1795129681582,
       "tag": "0009_unavailable_corrections",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795153717081,
+      "tag": "0010_food_tracker",
+      "breakpoints": true
     }
   ]
 }

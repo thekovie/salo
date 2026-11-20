@@ -136,3 +136,10 @@ export type ServiceChargeInput = z.infer<typeof serviceChargeSchema>;
 
 export const renameMeSchema = z.object({ displayName: text(LIMITS.label).min(1, "Type your name so the table knows whose order is whose.") });
 export type RenameMeInput = z.infer<typeof renameMeSchema>;
+
+export const servingSchema = z.object({
+  roundId: z.uuid(),
+  lineKey: z.string().min(1).max(600),
+  delta: z.number().int().min(-999).max(999).refine((n) => n !== 0, "Nothing to change."),
+});
+export type ServingInput = z.infer<typeof servingSchema>;

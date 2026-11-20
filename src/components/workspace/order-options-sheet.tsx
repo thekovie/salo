@@ -15,6 +15,8 @@ interface OrderOptionsSheetProps {
   anyConfirmed: boolean;
   /** An open round with dishes that never reached the waiter (only matters when ending). */
   unsentRound: number | null;
+  /** Confirmed food not yet marked as served (informative only, never blocks). */
+  waitingItems?: number;
   onRename: (title: string | null) => void;
   /** The host's own name ("Host" until they set it). */
   myName: string;
@@ -39,7 +41,7 @@ export function OrderOptionsSheet(props: OrderOptionsSheetProps) {
   );
 }
 
-function OptionsBody({ onOpenChange, title, anyConfirmed, unsentRound, onRename, myName, onRenameMe, onEnd, onTour, startAt = "options" }: OrderOptionsSheetProps) {
+function OptionsBody({ onOpenChange, title, anyConfirmed, unsentRound, waitingItems = 0, onRename, myName, onRenameMe, onEnd, onTour, startAt = "options" }: OrderOptionsSheetProps) {
   const id = useId();
   const [draft, setDraft] = useState(title ?? "");
   const unnamed = myName.trim().toLowerCase() === "host";
@@ -88,6 +90,11 @@ function OptionsBody({ onOpenChange, title, anyConfirmed, unsentRound, onRename,
             ) : (
               <p>Nothing was sent to the waiter. Everyone sees it was cancelled, and it’s deleted tomorrow.</p>
             )}
+            {anyConfirmed && waitingItems > 0 ? (
+              <p className="font-semibold text-ink">
+                {waitingItems} {waitingItems === 1 ? "item" : "items"} still waiting to be served. You can still end the order.
+              </p>
+            ) : null}
             {anyConfirmed && unsentRound ? <p className="font-semibold text-ink">Round {unsentRound} was never confirmed with the waiter.</p> : null}
           </div>
         </DrawerDescription>

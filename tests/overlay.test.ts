@@ -34,6 +34,7 @@ const snapshot = {
   corrections: [],
   tickets: {},
   settlement: EMPTY_SETTLEMENT,
+  servedCounts: [],
 } satisfies SessionSnapshot;
 
 const item = (fields: Partial<Pending> & Pick<Pending, "op">): Pending => ({ key: Math.random().toString(36), status: "queued", createdAt: "", attempts: 0, ...fields });

@@ -37,6 +37,9 @@ import { EditDishSheet } from "./edit-dish-sheet";
 import { Guide } from "@/components/onboarding/guide";
 import { TourOffer } from "@/components/onboarding/tour-offer";
 import { guideFor, markTourSeen, subscribeTourSeen, tourSeen, type GuideAction } from "@/components/onboarding/guide-steps";
+import { ServedSection } from "./served-section";
+import { useServedEdits } from "@/hooks/use-served-edits";
+import { trackerLines } from "@/lib/serving";
 import { SessionHeader } from "./session-header";
 import { Toasts, useToasts } from "./toasts";
 import { useDockHeight } from "@/hooks/use-dock-height";
@@ -180,6 +183,22 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
     return () => clearTimeout(timer);
   }, [justConfirmed]);
   const ticket = liveTicket({ roundNumber: round.number, title: snapshot.session.title, ticket: consolidate(roundEntries), corrections: snapshot.corrections, roundId: round.id, confirmed: confirmedIds(snapshot.rounds) });
+  const tracker = useMemo(() => trackerLines(snapshot), [snapshot]);
+  const served = useServedEdits(snapshot.session.id, refresh, snapshot.session.revision);
+  const [changeRequest, setChangeRequest] = useState<{ roundId: string; lineKey: string } | null>(null);
+  const servedSection = anyConfirmed ? (
+    <ServedSection
+      tracker={tracker}
+      canEdit={isHost && sessionOpen}
+      edits={served.edits}
+      bump={served.bump}
+      retry={served.retry}
+      onChange={(roundId, lineKey) => {
+        setChangeRequest({ roundId, lineKey });
+        setView("rounds");
+      }}
+    />
+  ) : null;
   const confirmedTicket = round.status === "CONFIRMED" ? snapshot.tickets[round.id] : undefined;
   const correctionsThisRound = ticket.corrections.length;
   const ready = readinessSummary(snapshot);
@@ -448,6 +467,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
           title={snapshot.session.title}
           anyConfirmed={anyConfirmed}
           unsentRound={round.status === "DRAFT" && roundEntries.length > 0 ? round.number : null}
+          waitingItems={tracker.expected - tracker.served}
           onRename={(title) => void mutate({ kind: "rename", title })}
           myName={snapshot.me.displayName}
           onRenameMe={(displayName) => void mutate({ kind: "renameMe", displayName })}
@@ -549,6 +569,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
           {view === "order" && confirmedTicket ? (
             <div className="space-y-4">
               <WaiterTicket ticket={confirmedTicket} size="compact" confirmed justConfirmed={justConfirmed === round.id} />
+              {servedSection}
               {sessionOpen ? (
                 isHost ? (
                   // The moment people are done: both next steps, side by side (usability check, 2026-11-07).
@@ -580,11 +601,16 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
               ) : null}
             </div>
           ) : view === "order" ? (
-            <OrderTicket entries={roundEntries} people={people} recent={recent} roundNumber={round.number} copy={copyFor(round.number)} actions={actions} readOnly={!isOpen} />
+            <div className="space-y-4">
+              {servedSection}
+              <OrderTicket entries={roundEntries} people={people} recent={recent} roundNumber={round.number} copy={copyFor(round.number)} actions={actions} readOnly={!isOpen} />
+            </div>
           ) : view === "rounds" ? (
             <RoundsView
               snapshot={snapshot}
               entries={entries}
+              changeRequest={changeRequest}
+              onChangeRequestHandled={() => setChangeRequest(null)}
               justConfirmedRoundId={justConfirmed}
               onOpenRound={(options) => void openRound(options)}
               onEnd={isHost && sessionOpen ? openEnd : undefined}
