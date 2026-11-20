@@ -39,6 +39,8 @@ export interface SessionSnapshot {
    * waiter ticket, its snapshot or the invite preview, and entries flow into all of those.
    */
   settlement: SettlementView;
+  /** Food tracker: raw served counts per round line (see `trackerLines`). Independent from KKB. */
+  servedCounts: { roundId: string; lineKey: string; served: number }[];
 }
 
 export interface EntrySettlement {

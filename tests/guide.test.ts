@@ -17,6 +17,7 @@ const base: SessionSnapshot = {
   corrections: [],
   tickets: {},
   settlement: EMPTY_SETTLEMENT,
+  servedCounts: [],
 };
 const done = (steps: typeof HOST_GUIDE, s: SessionSnapshot) => steps.filter((step) => step.done?.(s)).map((step) => step.id);
 

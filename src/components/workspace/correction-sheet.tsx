@@ -23,7 +23,7 @@ export interface CorrectionRequest {
 
 interface CorrectionSheetProps {
   /** The confirmed round whose dishes can be changed (null = closed). */
-  round: { roundNumber: number; preps: Prep[] } | null;
+  round: { roundNumber: number; preps: Prep[]; /** Open straight on this line (from Served). */ pickKey?: string } | null;
   onClose: () => void;
   /** Where focus goes when the sheet closes (the drawer would leave it on the page body). */
   onReturnFocus: () => void;
@@ -59,7 +59,7 @@ export function CorrectionSheet(props: CorrectionSheetProps) {
 /** One drawer, two steps: pick the dish line, then change it. */
 function Flow(props: CorrectionSheetProps & { round: NonNullable<CorrectionSheetProps["round"]> }) {
   const { round, onClose } = props;
-  const [pickedKey, setPicked] = useState<string | null>(null);
+  const [pickedKey, setPicked] = useState<string | null>(round.pickKey ?? null);
   const root = useRef<HTMLDivElement>(null);
   const settled = useRef(false);
   const prep = round.preps.find((p) => p.key === pickedKey && p.left > 0);

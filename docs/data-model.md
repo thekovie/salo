@@ -21,6 +21,7 @@ PostgreSQL, defined in `src/server/db/schema.ts`; migrations in `drizzle/` (appl
 | `mutation_records` | Idempotency: (session, actor, key) unique; retries return the stored result. |
 | `session_events` | Durable, ordered event log (unique per session + revision) used for real-time replay. |
 | `entry_settlements` | KKB, per source entry: `unit_price_centavos` (null = unknown, 0–9,999,999), optional host-chosen payer for a shared or unassigned dish (`bill_to_participant_id` or `bill_to_label`, at most one), own `revision`. Separate from `order_entries` so prices can change after a round is confirmed without touching frozen order data. |
+| `served_counts` | Food tracker (F06), keyed by session + round + `line_key`: `served` (raw count, ≥ 0), own `revision`, `updated_by`. A line is a preparation (`preparationKey`: dish, normalized size, notes) or, after a told swap, the replacement (`to:<normalized text>`), per round. Expected quantity is never stored: it is the sum of `effectiveEntry` quantities of the line's confirmed entries, so served can exceed it after a told cancellation (shown as `min(served, expected)`). Cascades from session and round. Independent from KKB. |
 | `shared_prices` | KKB table price, keyed by session + dish + `variant_key` (normalized size, `''` for none; notes ignored): `unit_centavos` (0–9,999,999), own `revision`, `updated_by`. Host sets it; clearing sets `unit_centavos` to null and keeps the row, so its revision keeps counting up. A line's own price overrides it; replacements never inherit it. |
 | `correction_settlements` | KKB: price each for a replacement correction ("Change it to …"), host only, own `revision`. |
 
@@ -39,6 +40,7 @@ PostgreSQL, defined in `src/server/db/schema.ts`; migrations in `drizzle/` (appl
 - An order past `expires_at` is treated as gone at once (credentials, invite, join, changes), and the hourly cleanup deletes it.
 - More triggers (`drizzle/0004_freeze_guards.sql`): a confirmed round cannot be reopened; snapshots, entries of confirmed rounds and corrections already given to the waiter cannot be deleted or changed, except when a whole session is deleted (cascade).
 - `drizzle/0007_settlement.sql`: settlement rows stay in their session (entry via its batch, correction, bill-to person); CHECKs on amounts and revisions.
+- `drizzle/0010_food_tracker.sql`: `served_counts` (PK session + round + line, CHECKs, cascade from session and round) and a trigger that keeps the round inside the row's session.
 - `drizzle/0008_shared_prices.sql`: `shared_prices` (PK session + dish + size, price and revision CHECKs, cascade from session and dish) and a trigger that keeps the dish inside the row's session.
 - Covered by `tests/db-integrity.test.ts`, `tests/rounds.test.ts` and `tests/settlement.test.ts`.
 

@@ -70,7 +70,7 @@ export const HOST_GUIDE: readonly GuideStep[] = [
   {
     id: "review",
     title: "Check it, then show the waiter",
-    body: "Review spots double orders and unsaved changes, opens a big ticket for the waiter, and marks the round confirmed. Only you can confirm.",
+    body: "Review spots double orders and unsaved changes, opens a big ticket for the waiter, and marks the round confirmed. Only you can confirm. After that, a Served section on the Order tab lets you tick off food as it arrives.",
     scene: "waiter",
     action: "review",
     label: "Confirm a round",

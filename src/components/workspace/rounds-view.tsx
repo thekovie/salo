@@ -18,6 +18,9 @@ interface RoundsViewProps {
   snapshot: SessionSnapshot;
   entries: SnapshotEntry[];
   justConfirmedRoundId: string | null;
+  /** The host asked (from Served) to change this tracker line: open that round's sheet on it. */
+  changeRequest?: { roundId: string; lineKey: string } | null;
+  onChangeRequestHandled?: () => void;
   /** `stay`: start the round without leaving the Rounds tab (the correction sheet stays open). */
   onOpenRound: (options?: { stay?: boolean }) => void;
   onCorrect: (request: CorrectionRequest) => void;
@@ -30,8 +33,9 @@ interface RoundsViewProps {
 }
 
 /** Round history (brief 5.3, 5.15): each confirmed round on its own carbon copy, stamped; corrections. Ending the order lives in the header's order options. */
-export function RoundsView({ snapshot, entries, justConfirmedRoundId, onOpenRound, onCorrect, onUnavailable, onRemoveCorrection, onEnd, onKkb }: RoundsViewProps) {
-  const [changing, setChanging] = useState<string | null>(null);
+export function RoundsView({ snapshot, entries, changeRequest, onChangeRequestHandled, justConfirmedRoundId, onOpenRound, onCorrect, onUnavailable, onRemoveCorrection, onEnd, onKkb }: RoundsViewProps) {
+  const [changing, setChanging] = useState<string | null>(changeRequest?.roundId ?? null);
+  const [pickLine, setPickLine] = useState<string | null>(changeRequest?.lineKey ?? null);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const changeButton = useRef<HTMLElement | null>(null);
   const changedRound = useRef<string | null>(null);
@@ -44,7 +48,14 @@ export function RoundsView({ snapshot, entries, justConfirmedRoundId, onOpenRoun
   const changed = snapshot.rounds.find((r) => r.id === changing);
   const confirmed = confirmedIds(snapshot.rounds);
   const prepsOf = (roundId: string) => visiblePreps(preparationsOfRound(entries.filter((e) => e.roundId === roundId), snapshot.corrections, people, confirmed));
-  const changingRound = changed ? { roundNumber: changed.number, preps: prepsOf(changed.id) } : null;
+  const changingPreps = changed ? prepsOf(changed.id) : [];
+  const pickKey = pickLine ? changingPreps.find((p) => p.kind !== "replaced" && (p.key === pickLine || p.key.startsWith(`${pickLine}|`)))?.key : undefined;
+  const changingRound = changed ? { roundNumber: changed.number, preps: changingPreps, pickKey } : null;
+  useEffect(() => {
+    if (!changeRequest) return;
+    changedRound.current = changeRequest.roundId;
+    onChangeRequestHandled?.();
+  }, [changeRequest, onChangeRequestHandled]);
   // Nothing left to change (a save or a live update emptied the round): close the sheet.
   if (changing && changingRound && !changingRound.preps.some((p) => p.kind !== "replaced")) setChanging(null);
   const returnFocus = () => focusWhenFree(() => [changeButton.current, document.getElementById(`summary-${changedRound.current}`)]);
@@ -122,7 +133,8 @@ export function RoundsView({ snapshot, entries, justConfirmedRoundId, onOpenRoun
                 variant="outline"
                 onClick={(event) => {
                   changeButton.current = event.currentTarget;
-                changedRound.current = round.id;
+                  changedRound.current = round.id;
+                  setPickLine(null);
                   setChanging(round.id);
                 }}
               >
@@ -137,7 +149,10 @@ export function RoundsView({ snapshot, entries, justConfirmedRoundId, onOpenRoun
       <CorrectionSheet
         round={changingRound}
         onReturnFocus={returnFocus}
-        onClose={() => setChanging(null)}
+        onClose={() => {
+          setChanging(null);
+          setPickLine(null);
+        }}
         snapshot={snapshot}
         entries={entries}
         draftNumber={draft?.number ?? null}
