@@ -647,6 +647,7 @@ describe("served state never reaches the waiter ticket, KKB or Items; never make
     await run(t.ana.actor, (tx, s) => setReady(tx, s, t.ana.actor, true));
     const view = async () => {
       const snap = await getSnapshot(db, t.host);
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars -- dropped on purpose: they change with every serve
       const { servedCounts: _s, session: _sess, ...rest } = snap;
       return JSON.stringify({ rest, kkb: buildKkb(snap, t.host.participantId), items: buildSummary(snap), stored: (await db.select().from(confirmedRoundSnapshots)).map((r) => r.snapshotData) });
     };

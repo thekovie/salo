@@ -31,14 +31,17 @@ export function placeOnLines<E extends Pick<Source, "id" | "roundId" | "dishId" 
     });
   const left = new Map<string, number>();
   const remaining = (roundId: string, from: string) => placed.filter((p) => p.entry.roundId === roundId && p.key === from).reduce((sum, p) => sum + p.expected, 0);
-  return placed.map((p) => {
-    if (!p.eff.replacement) return p;
+  const cuts = new Map<string, number>();
+  // Spread in id order so client and server (whose queries order entries differently) cut the same replacement lines.
+  for (const p of [...placed].sort((a, b) => a.entry.id.localeCompare(b.entry.id))) {
+    if (!p.eff.replacement) continue;
     const id = `${p.entry.roundId}|${p.from}`;
     const absorb = left.get(id) ?? Math.max(0, (served.get(id) ?? 0) - remaining(p.entry.roundId, p.from));
     const cut = Math.min(p.expected, absorb);
     left.set(id, absorb - cut);
-    return { ...p, expected: p.expected - cut };
-  });
+    cuts.set(p.entry.id, cut);
+  }
+  return placed.map((p) => (cuts.get(p.entry.id) ? { ...p, expected: p.expected - (cuts.get(p.entry.id) ?? 0) } : p));
 }
 
 export interface TrackerLine {
