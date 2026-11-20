@@ -7,7 +7,7 @@ import { WaiterTicket } from "@/components/ticket/waiter-ticket";
 import { consolidate } from "@/lib/consolidate";
 import { preparationsOfRound, visiblePreps } from "@/lib/corrections";
 import { confirmedIds } from "@/lib/effective-order";
-import { focusFirst } from "@/lib/focus";
+import { focusWhenFree } from "@/lib/focus";
 import { everyone, type SessionSnapshot, type SnapshotEntry } from "@/lib/snapshot";
 import { liveTicket } from "@/lib/ticket";
 import { LocalTime } from "@/components/ui/local-time";
@@ -129,7 +129,7 @@ export function RoundsView({ snapshot, entries, justConfirmedRoundId, onOpenRoun
       <CorrectionsList snapshot={snapshot} onRemove={isHost && isOpen ? onRemoveCorrection : undefined} />
       <CorrectionSheet
         round={changingRound}
-        onReturnFocus={() => requestAnimationFrame(() => focusFirst([changeButton.current, document.getElementById(`summary-${changedRound.current}`)]))}
+        onReturnFocus={() => focusWhenFree(() => [changeButton.current, document.getElementById(`summary-${changedRound.current}`)])}
         onClose={() => setChanging(null)}
         snapshot={snapshot}
         entries={entries}
