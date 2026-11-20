@@ -185,6 +185,7 @@ export function Composer({ dishNames, people, names, groups, entries, defaults, 
         <input
           ref={dishRef}
           id={`${id}-dish`}
+          data-focus-fallback=""
           value={dish}
           onChange={(e) => {
             setDish(e.target.value);

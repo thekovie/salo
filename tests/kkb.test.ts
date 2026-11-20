@@ -41,7 +41,7 @@ const withPrices = (base: KkbInput, prices: Record<string, EntrySettlement>, cha
   ...base,
   settlement: { entries: prices, corrections: base.settlement.corrections, defaults: base.settlement.defaults, serviceCharge: { centavos: charge, revision: charge == null ? 0 : 1 } },
 });
-const correction = (over: Partial<CorrectionView>): CorrectionView => ({ id: `c${++n}`, sourceEntryId: null, sourceRoundNumber: 1, targetRoundId: "r2", dishName: "x", preparation: null, type: "QUANTITY", quantityDelta: null, replacement: null, explanation: null, ...over });
+const correction = (over: Partial<CorrectionView>): CorrectionView => ({ id: `c${++n}`, sourceEntryId: null, sourceRoundNumber: 1, targetRoundId: "r2", dishName: "x", preparation: null, type: "QUANTITY", quantityDelta: null, replacement: null, explanation: null, reason: null, groupId: null, createdAt: "2026-11-06T12:00:00Z", ...over });
 
 describe("buildKkb food subtotals", () => {
   it("the brief's example: Ana has a priced subtotal with one unpriced item; the platter stays shared", () => {

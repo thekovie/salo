@@ -11,7 +11,7 @@ import type { CorrectionPriceInput, EntrySettlementInput, RenameMeInput, Service
  * Changes that never touch what the waiter is told (prices, the receipt's service charge, a person's name). Confirming
  * a round still passes when only these happened since the host looked (owner decision, KKB brief §6).
  */
-export const NON_TICKET_EVENTS = ["entry.settled", "correction.priced", "session.serviceCharge", "participant.renamed", "price.defaultSet"] as const;
+export const NON_TICKET_EVENTS = ["entry.settled", "correction.priced", "session.serviceCharge", "participant.renamed", "price.defaultSet", "dish.unavailableTold"] as const;
 
 /** Length is checked again after tidying: NFKC can expand a few characters into many (DB CHECK is 1–40). */
 function tidyName(raw: string, message: string): string {

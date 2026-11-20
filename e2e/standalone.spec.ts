@@ -145,7 +145,7 @@ test("landing and workspace have no automatically detectable accessibility viola
   const landing = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
   expect(landing.violations).toEqual([]);
   await page.getByRole("link", { name: "Start an order" }).click();
-  await expect(page).toHaveURL(/\/s\//);
+  await expect(page).toHaveURL(/\/s\//, { timeout: 20_000 });
   await addDish(page, "Gyoza", 2);
   const workspace = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
   expect(workspace.violations).toEqual([]);

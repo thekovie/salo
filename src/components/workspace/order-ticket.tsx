@@ -7,6 +7,7 @@ import { consolidate, hasSubLines, preparationLabel, type ConsolidatedDish } fro
 import { normalizeText } from "@/lib/dish-name";
 import { attributionLabel, type SessionSnapshot } from "@/lib/snapshot";
 import { Ticker } from "@/components/motion/ticker";
+import { useRowFocusFallback } from "@/hooks/use-row-focus-fallback";
 import { cn } from "@/lib/utils";
 import { transitionName } from "@/lib/view-transition";
 import { Stepper } from "./stepper";
@@ -167,8 +168,9 @@ export function OrderTicket({ entries, people, roundNumber, copy, actions, readO
   // Only dishes that land while you watch get the highlighter swipe; the ones already there on load do not flash.
   const washKeyOf = (dish: ConsolidatedDish) => `${dish.dishId}:${dish.preparations.reduce((n, p) => n + p.entries.length, 0)}`;
   const [initialKeys] = useState(() => new Set(consolidated.dishes.map(washKeyOf)));
+  const focus = useRowFocusFallback<HTMLElement>('[data-testid="dish-row"]', "[data-focus-fallback]");
   return (
-    <section aria-labelledby="ticket-title" data-ph-mask="" className={cn("ticket", copy === 2 && "ticket-copy-2", copy === 3 && "ticket-copy-3")}>
+    <section {...focus} aria-labelledby="ticket-title" data-ph-mask="" className={cn("ticket", copy === 2 && "ticket-copy-2", copy === 3 && "ticket-copy-3")}>
       <div className="flex items-baseline justify-between px-5 pb-2">
         <h2 id="ticket-title" className="font-mono text-sm font-medium tracking-[0.14em] text-tomato-ink uppercase">
           Round {roundNumber}

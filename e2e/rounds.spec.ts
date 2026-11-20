@@ -43,10 +43,12 @@ test("review, waiter view, host-only confirmation, round 2 with a correction, en
   await page.getByRole("button", { name: "Add more (round 2)" }).click();
   await addDish(guest.page, "Extra Rice", 3);
   await page.getByRole("tab", { name: /Rounds/ }).click();
-  await page.getByRole("button", { name: "Correct a dish" }).click();
-  const fix = page.getByRole("dialog", { name: "Correct round 1" });
-  await fix.getByLabel("Dish").selectOption({ label: "Chicken Katsu ×3" });
-  await fix.getByRole("button", { name: "Add correction" }).click();
+  await page.getByRole("button", { name: /Change a dish/ }).click();
+  await page.getByRole("dialog", { name: "Change a dish" }).getByRole("button", { name: "Chicken Katsu ×3" }).click();
+  const fix = page.getByRole("dialog", { name: /Change Chicken Katsu/ });
+  await expect(fix.getByRole("button", { name: "Save change" })).toBeDisabled();
+  await fix.getByRole("button", { name: /One more Chicken Katsu to cancel/ }).click();
+  await fix.getByRole("button", { name: "Save change" }).click();
   await expect(page.getByText("Cancel 1 × Chicken Katsu from round 1").first()).toBeVisible();
 
   await page.getByRole("tab", { name: /Order/ }).click();
@@ -62,6 +64,9 @@ test("review, waiter view, host-only confirmation, round 2 with a correction, en
 
   // Both rounds kept, each stamped; round 1 untouched.
   await page.getByRole("tab", { name: /Rounds/ }).click();
+  await expect(page.getByRole("region", { name: "Round 1, confirmed with the waiter" })).toHaveCount(0);
+  await page.getByRole("button", { name: /^Round 1 · Confirmed .* · 2 dishes · 5 items$/ }).click();
+  await page.getByRole("button", { name: /^Round 2 · Confirmed .* · 1 dish · 3 items$/ }).click();
   await expect(page.getByRole("region", { name: "Round 1, confirmed with the waiter" })).toContainText("5 items");
   await expect(page.getByRole("region", { name: "Round 2, confirmed with the waiter" })).toContainText("3 items");
 

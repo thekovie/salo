@@ -10,6 +10,7 @@ import { arrivalsBetween, type Arrival } from "@/lib/arrivals";
 import { setAnalyticsContext, track } from "@/lib/analytics";
 import { anyPrice, everyone, type SessionSnapshot } from "@/lib/snapshot";
 import { normalizeText } from "@/lib/dish-name";
+import { confirmedIds } from "@/lib/effective-order";
 import { liveTicket } from "@/lib/ticket";
 import { withViewTransition } from "@/lib/view-transition";
 import { Ticker } from "@/components/motion/ticker";
@@ -21,7 +22,8 @@ import { Composer } from "./composer";
 import { GroupsView } from "./groups-view";
 import { PeopleView } from "./people-view";
 import { ReviewPanel } from "./review-panel";
-import { RoundsView, type CorrectionRequest } from "./rounds-view";
+import { RoundsView } from "./rounds-view";
+import type { CorrectionRequest } from "./correction-sheet";
 import { WaiterPanel } from "./waiter-panel";
 import { ViewTabs, type View } from "./view-tabs";
 import { InviteSheet } from "./invite-sheet";
@@ -177,7 +179,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
     const timer = setTimeout(() => setJustConfirmed(null), 1500); // the stamp plays once
     return () => clearTimeout(timer);
   }, [justConfirmed]);
-  const ticket = liveTicket({ roundNumber: round.number, title: snapshot.session.title, ticket: consolidate(roundEntries), corrections: snapshot.corrections, roundId: round.id });
+  const ticket = liveTicket({ roundNumber: round.number, title: snapshot.session.title, ticket: consolidate(roundEntries), corrections: snapshot.corrections, roundId: round.id, confirmed: confirmedIds(snapshot.rounds) });
   const confirmedTicket = round.status === "CONFIRMED" ? snapshot.tickets[round.id] : undefined;
   const correctionsThisRound = ticket.corrections.length;
   const ready = readinessSummary(snapshot);
@@ -285,15 +287,32 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
     return failure || "Not confirmed. Check your connection and try again.";
   }
 
-  async function openRound() {
+  async function openRound({ stay = false } = {}) {
     const next = round.number + 1;
-    if (await mutate({ kind: "openRound", roundNumber: next })) {
+    if (await mutate({ kind: "openRound", roundNumber: next }) && !stay) {
       setView("order");
       show({ message: `Round ${next} started. Add-ons go here.` });
     }
   }
 
-  const correct = (request: CorrectionRequest) => void mutate({ kind: "correction", ...request });
+  const correct = (request: CorrectionRequest) => void mutate({ kind: "corrections", ...request });
+
+  /** Mark a dish unavailable; waits for the server because part of it can't be undone. Resolves to an error message or null. */
+  async function markUnavailable(dishId: string, dishName: string, replacement = ""): Promise<string | null> {
+    const draftEntries = entries.filter((e) => e.dishId === dishId && e.roundId === snapshot.activeRoundId && round.status === "DRAFT");
+    let failure = "";
+    const result = await mutate({ kind: "unavailable", dishId, dishName, replacement: replacement.trim() || undefined }, { onError: (message) => (failure = message) });
+    if (!result) return failure || "Not saved. Check your connection and try again.";
+    const { removed = 0, cancelled = 0, replaced = 0, removedEntryIds = [] } = result;
+    const parts = [removed && `${removed} removed`, cancelled && `${cancelled} cancelled`, replaced && `${replaced} replaced`].filter(Boolean);
+    // Undo brings back only the removed open-round entries; whatever the waiter was told stays.
+    const undo = removedEntryIds.length > 0;
+    show({
+      message: `${dishName} marked unavailable${parts.length ? ` · ${parts.join(", ")}` : ""}.`,
+      action: undo ? { label: cancelled + replaced > 0 ? "Undo removal" : "Undo", run: () => draftEntries.filter((e) => removedEntryIds.includes(e.id)).forEach((entry) => void mutate({ kind: "restore", entry })) } : undefined,
+    });
+    return null;
+  }
 
   async function removeGuest(participantId: string, name: string, reason: string | null): Promise<boolean> {
     const accepted = Boolean(await mutate({ kind: "removeGuest", participantId, name, reason }));
@@ -394,7 +413,11 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
           ) : null
         }
       />
-      <EditDishSheet entry={editing} onClose={() => setEditing(null)} meId={snapshot.me.participantId} {...recipients} onSave={saveEdit} />
+      <EditDishSheet entry={editing} onClose={() => setEditing(null)} meId={snapshot.me.participantId} {...recipients}
+        onSave={saveEdit}
+        onUnavailable={isHost && editing ? (entry) => markUnavailable(entry.dishId, entry.dishName) : undefined}
+        unavailableIsFinal={editing ? entries.some((e) => e.dishId === editing.dishId && snapshot.rounds.find((r) => r.id === e.roundId)?.status === "CONFIRMED") : false}
+      />
       {touring ? (
         <Guide
           steps={guideFor(role)}
@@ -563,10 +586,11 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
               snapshot={snapshot}
               entries={entries}
               justConfirmedRoundId={justConfirmed}
-              onOpenRound={() => void openRound()}
+              onOpenRound={(options) => void openRound(options)}
               onEnd={isHost && sessionOpen ? openEnd : undefined}
               onKkb={anyConfirmed ? () => openSummary("button", "kkb") : undefined}
               onCorrect={correct}
+              onUnavailable={markUnavailable}
               onRemoveCorrection={(correctionId, dishName) => void mutate({ kind: "removeCorrection", correctionId, dishName })}
             />
           ) : view === "people" ? (

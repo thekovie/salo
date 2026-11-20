@@ -1,6 +1,6 @@
 import { isPlain, preparationLabel } from "./consolidate";
 import { normalizeText } from "./dish-name";
-import { effectiveEntry } from "./effective-order";
+import { confirmedIds, effectiveEntry } from "./effective-order";
 import { everyone, sharedPriceKey, type SessionSnapshot, type SnapshotEntry } from "./snapshot";
 
 /**
@@ -88,7 +88,7 @@ interface Bucket {
 export function buildKkb(input: KkbInput, meId: string): Kkb {
   const people = everyone(input);
   const nameOf = (id: string) => people.find((p) => p.id === id)?.displayName ?? "Someone";
-  const confirmedRounds = new Set(input.rounds.filter((r) => r.status === "CONFIRMED").map((r) => r.id));
+  const confirmedRounds = confirmedIds(input.rounds);
   const groupMembers = new Map(input.groups.map((g) => [normalizeText(g.label), g.memberIds.map(nameOf)]));
   const buckets = new Map<string, Bucket & { lines: KkbLine[]; drafts: KkbLine[] }>();
   const bucket = (b: Bucket) => {

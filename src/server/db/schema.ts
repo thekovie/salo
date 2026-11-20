@@ -27,6 +27,7 @@ export const ROLES = ["HOST", "GUEST"] as const;
 export const ATTRIBUTION_TYPES = ["INDIVIDUAL", "GROUP", "TABLE", "UNASSIGNED"] as const;
 export const CLAIM_STATUSES = ["PENDING", "APPROVED", "REJECTED"] as const;
 export const CORRECTION_TYPES = ["QUANTITY", "REPLACE", "CANCEL"] as const;
+export const CORRECTION_REASONS = ["UNAVAILABLE"] as const;
 
 const inList = (column: string, values: readonly string[]) =>
   sql.raw(`${column} IN (${values.map((v) => `'${v}'`).join(", ")})`);
@@ -275,11 +276,20 @@ export const orderCorrections = pgTable(
     quantityDelta: integer("quantity_delta"),
     replacementData: jsonb("replacement_data"),
     explanation: text("explanation"),
+    /** Why, when it is more than a plain correction: "UNAVAILABLE" = the waiter said it's out (told at once). */
+    reason: text("reason", { enum: CORRECTION_REASONS }),
+    /** Rows written by one change (several people's entries, or a whole dish) share it and are shown as one. */
+    groupId: uuid("group_id"),
     createdBy: uuid("created_by").references(() => participants.id, { onDelete: "set null" }),
     createdAt: createdAt(),
     communicatedAt: timestamp("communicated_at", { withTimezone: true }),
   },
-  (t) => [index("corrections_target_round_idx").on(t.targetRoundId), check("corrections_type_ck", inList("correction_type", CORRECTION_TYPES))],
+  (t) => [
+    index("corrections_target_round_idx").on(t.targetRoundId),
+    index("corrections_group_idx").on(t.groupId),
+    check("corrections_type_ck", inList("correction_type", CORRECTION_TYPES)),
+    check("corrections_reason_ck", sql`reason IS NULL OR ${inList("reason", CORRECTION_REASONS)}`),
+  ],
 );
 
 /** A guest asking the host to hand over an entry the host recorded for them (brief 5.10). Not in brief section 8. */

@@ -3,7 +3,7 @@
 import { CircleAlert, CircleCheck, Pencil } from "lucide-react";
 import { useMemo, useState } from "react";
 import { normalizeText } from "@/lib/dish-name";
-import { effectiveEntry } from "@/lib/effective-order";
+import { confirmedIds, effectiveEntry } from "@/lib/effective-order";
 import { buildKkb, type Kkb, type KkbLine, type KkbSection } from "@/lib/kkb";
 import { formatPeso } from "@/lib/money";
 import type { SessionSnapshot } from "@/lib/snapshot";
@@ -46,7 +46,7 @@ export function KkbView({ snapshot, refresh, onRenameMe }: KkbViewProps) {
     return <p className="mt-6 rounded-2xl bg-paper px-4 py-6 text-center text-ink-soft">Nothing ordered yet. Prices show up here once there are dishes.</p>;
   }
 
-  const confirmedRounds = new Set(snapshot.rounds.filter((r) => r.status === "CONFIRMED").map((r) => r.id));
+  const confirmedRounds = confirmedIds(snapshot.rounds);
   /** The table price a line could set: its dish + size, and how many lines would follow it (replacements never do). */
   const tableFor = (line: KkbLine): TablePrice | null => {
     const entry = snapshot.entries.find((e) => e.id === line.entryId);

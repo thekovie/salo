@@ -32,12 +32,21 @@ export function useToasts() {
 }
 
 function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: (id: number) => void }) {
+  // Hover or focus inside pauses the countdown; it restarts in full when they leave.
+  const [held, setHeld] = useState(false);
   useEffect(() => {
+    if (held) return;
     const timer = setTimeout(() => onDismiss(toast.id), TOAST_MS);
     return () => clearTimeout(timer);
-  }, [toast.id, onDismiss]);
+  }, [toast.id, onDismiss, held]);
   return (
-    <div className={cn("pointer-events-auto flex items-center gap-2 rounded-2xl bg-toast py-1.5 pr-1.5 pl-4 text-toast-fg shadow-ticket motion-safe:animate-[toast-in_220ms_var(--ease-out-expo)]", toast.leaving && "toast-leaving")}>
+    <div
+      onPointerEnter={() => setHeld(true)}
+      onPointerLeave={() => setHeld(false)}
+      onFocus={() => setHeld(true)}
+      onBlur={() => setHeld(false)}
+      className={cn("pointer-events-auto flex items-center gap-2 rounded-2xl bg-toast py-1.5 pr-1.5 pl-4 text-toast-fg shadow-ticket motion-safe:animate-[toast-in_220ms_var(--ease-out-expo)]", toast.leaving && "toast-leaving")}
+    >
       <span className="flex-1 text-sm">{toast.message}</span>
       {toast.action ? (
         <button
