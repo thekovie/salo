@@ -1,13 +1,13 @@
 "use client";
 
 import { ChevronDown, Plus, ReceiptText } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { WaiterTicket } from "@/components/ticket/waiter-ticket";
 import { consolidate } from "@/lib/consolidate";
 import { preparationsOfRound, visiblePreps } from "@/lib/corrections";
 import { confirmedIds } from "@/lib/effective-order";
-import { focusFirst } from "@/lib/focus";
+import { focusWhenFree } from "@/lib/focus";
 import { everyone, type SessionSnapshot, type SnapshotEntry } from "@/lib/snapshot";
 import { liveTicket } from "@/lib/ticket";
 import { LocalTime } from "@/components/ui/local-time";
@@ -47,6 +47,13 @@ export function RoundsView({ snapshot, entries, justConfirmedRoundId, onOpenRoun
   const changingRound = changed ? { roundNumber: changed.number, preps: prepsOf(changed.id) } : null;
   // Nothing left to change (a save or a live update emptied the round): close the sheet.
   if (changing && changingRound && !changingRound.preps.some((p) => p.kind !== "replaced")) setChanging(null);
+  const returnFocus = () => focusWhenFree(() => [changeButton.current, document.getElementById(`summary-${changedRound.current}`)]);
+  const wasChanging = useRef(false);
+  // The drawer's own close callback can be skipped when it unmounts mid-animation, so also return focus on close.
+  useEffect(() => {
+    if (wasChanging.current && !changing) returnFocus();
+    wasChanging.current = changing !== null;
+  });
 
   return (
     <div className="space-y-5" data-ph-mask="">
@@ -129,7 +136,7 @@ export function RoundsView({ snapshot, entries, justConfirmedRoundId, onOpenRoun
       <CorrectionsList snapshot={snapshot} onRemove={isHost && isOpen ? onRemoveCorrection : undefined} />
       <CorrectionSheet
         round={changingRound}
-        onReturnFocus={() => requestAnimationFrame(() => focusFirst([changeButton.current, document.getElementById(`summary-${changedRound.current}`)]))}
+        onReturnFocus={returnFocus}
         onClose={() => setChanging(null)}
         snapshot={snapshot}
         entries={entries}
