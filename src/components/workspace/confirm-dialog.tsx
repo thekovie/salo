@@ -13,10 +13,23 @@ interface ConfirmDialogProps {
   /** Return an error message to keep the dialog open and show it; null or nothing closes it. */
   onConfirm: () => void | Promise<string | null | void>;
   busyLabel?: string;
+  dismissLabel?: string;
+}
+
+/** Keep Tab inside the dialog; inside a drawer the drawer's own trap would otherwise send focus to an inert control. */
+function trapTab(event: React.KeyboardEvent<HTMLDialogElement>) {
+  if (event.key !== "Tab") return;
+  event.stopPropagation();
+  const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
+  const edge = buttons[event.shiftKey ? 0 : buttons.length - 1];
+  if (buttons.length && document.activeElement === edge) {
+    event.preventDefault();
+    buttons[event.shiftKey ? buttons.length - 1 : 0].focus();
+  }
 }
 
 /** One clear question for actions that cannot be undone (brief 6.8). Native dialog: focus and Escape for free. */
-export function ConfirmDialog({ trigger, title, body, confirmLabel, danger, onConfirm, busyLabel = "Working…" }: ConfirmDialogProps) {
+export function ConfirmDialog({ trigger, title, body, confirmLabel, danger, onConfirm, busyLabel = "Working…", dismissLabel = "Cancel" }: ConfirmDialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const [open, setOpen] = useState(false);
@@ -36,7 +49,9 @@ export function ConfirmDialog({ trigger, title, body, confirmLabel, danger, onCo
           setOpen(false);
           setError("");
         }}
-        onCancel={(e) => busy && e.preventDefault()} className="m-auto w-[min(26rem,calc(100vw-2rem))] ticket px-5 text-ink backdrop:bg-ink/55">
+        onCancel={(e) => busy && e.preventDefault()}
+        onKeyDown={trapTab}
+        className="m-auto w-[min(26rem,calc(100vw-2rem))] ticket px-5 text-ink backdrop:bg-ink/55">
         <h2 id={titleId} className="text-xl">
           {title}
         </h2>
@@ -46,7 +61,7 @@ export function ConfirmDialog({ trigger, title, body, confirmLabel, danger, onCo
         </p>
         <div className="mt-5 flex flex-wrap justify-end gap-2">
           <Button variant="ghost" disabled={busy} onClick={() => ref.current?.close()}>
-            Cancel
+            {dismissLabel}
           </Button>
           <Button
             variant={danger ? "danger" : "primary"}

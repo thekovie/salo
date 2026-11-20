@@ -79,7 +79,7 @@ export const HOST_GUIDE: readonly GuideStep[] = [
   {
     id: "rounds",
     title: "Add-ons and fixes",
-    body: "Ordering more later? Start another round; only the new dishes go to the waiter. Something wrong in a confirmed round? Correct a dish from Rounds and it’s listed apart.",
+    body: "Ordering more later? Start another round; only the new dishes go to the waiter. Something wrong in a confirmed round? Tap Change a dish… on its round in Rounds, pick the line, then cancel some, swap it, or mark it unavailable when the waiter says it’s out.",
     scene: "rounds",
     action: "rounds",
     label: "Know about rounds",

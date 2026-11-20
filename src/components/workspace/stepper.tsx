@@ -10,13 +10,15 @@ interface StepperProps {
   /** Called instead of going below 1. Without it, the minus button stops at 1. */
   onRemove?: () => void;
   max?: number;
+  /** Lowest value (default 1); 0 for "how many to take off". */
+  min?: number;
   disabled?: boolean;
   size?: "md" | "lg";
 }
 
 /** − n + with 44px targets. At 1 the minus becomes a remove button when removal is allowed (brief 6.3). */
-export function Stepper({ value, label, onChange, onRemove, max = 99, disabled, size = "md" }: StepperProps) {
-  const atMin = value <= 1;
+export function Stepper({ value, label, onChange, onRemove, max = 99, min = 1, disabled, size = "md" }: StepperProps) {
+  const atMin = value <= min;
   const btn = "inline-flex size-11 cursor-pointer items-center justify-center rounded-full transition-[background-color,transform] duration-100 ease-out hover:bg-ink/8 active:scale-95 disabled:cursor-not-allowed disabled:opacity-35";
   return (
     <div className="inline-flex items-center" role="group" aria-label={`Quantity of ${label}`}>

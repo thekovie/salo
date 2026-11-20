@@ -48,6 +48,7 @@ PostgreSQL, defined in `src/server/db/schema.ts`; migrations in `drizzle/` (appl
 - `order_entries.variant_data` is a plain `variant` text column (size or variant as typed).
 - `entry_claims` is added: section 10 lists claim endpoints but section 8 has no table for them.
 - `order_corrections.target_round_id` is added: the draft round whose waiter ticket carries the correction.
+- `order_corrections.reason` (`drizzle/0009_unavailable_corrections.sql`, NULL or `UNAVAILABLE`, CHECK) and `group_id` (uuid, indexed): rows written by one change share a group and are shown as one. "Mark unavailable" on a confirmed dish writes rows whose `target_round_id` is the source entry's own confirmed round, so billing applies them at once; the frozen trigger then keeps them forever. Pending = target round DRAFT, told = target round CONFIRMED (derived, no column). Billing still reads only `QUANTITY` and `REPLACE`.
 - `order_batches.group_id` links a batch to an optional `order_groups` row; `collective_label` still works without one.
 
 ## KKB calculation

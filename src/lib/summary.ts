@@ -1,4 +1,4 @@
-import { effectiveEntry } from "./effective-order";
+import { confirmedIds, effectiveEntry } from "./effective-order";
 import { consolidate, isPlain, preparationLabel } from "./consolidate";
 import { everyone, type SessionSnapshot, type SnapshotEntry } from "./snapshot";
 import { byGroup, byPerson } from "./views";
@@ -30,7 +30,7 @@ export interface OrderSummary {
  * "Chicken Katsu → Pork Katsu". Corrections still waiting for a round are not applied; their entry ids are returned in `pending`.
  */
 function settledEntries(snapshot: SessionSnapshot): { entries: SnapshotEntry[]; pending: Set<string> } {
-  const confirmed = new Set(snapshot.rounds.filter((r) => r.status === "CONFIRMED").map((r) => r.id));
+  const confirmed = confirmedIds(snapshot.rounds);
   const pending = new Set<string>();
   const entries = snapshot.entries
     .filter((e) => confirmed.has(e.roundId))

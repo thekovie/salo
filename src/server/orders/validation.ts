@@ -80,6 +80,22 @@ export const correctionSchema = z.object({
 });
 export type CorrectionInput = z.infer<typeof correctionSchema>;
 
+/** One change across several source entries (one per person of a preparation); all-or-nothing. */
+export const correctionBatchSchema = z.object({
+  entries: z
+    .array(z.object({ sourceEntryId: z.uuid(), quantity: z.number().int().min(1).max(LIMITS.quantity).optional() }))
+    .min(1)
+    .max(LIMITS.correctionsPerSession)
+    .refine((list) => new Set(list.map((e) => e.sourceEntryId)).size === list.length, "Each dish can be listed once."),
+  type: z.enum(["QUANTITY", "REPLACE"]),
+  replacement: optional(LIMITS.dishName),
+  explanation: optional(LIMITS.instructions),
+});
+export type CorrectionBatchInput = z.infer<typeof correctionBatchSchema>;
+
+export const unavailableSchema = z.object({ replacement: optional(LIMITS.dishName), note: optional(LIMITS.instructions) });
+export type UnavailableInput = z.infer<typeof unavailableSchema>;
+
 export const removeParticipantSchema = z.object({ reason: z.string().trim().max(LIMITS.removalReason, `Keep the reason under ${LIMITS.removalReason} characters.`).nullish() });
 
 /** Whole centavos; null clears (unknown price / service charge not entered). */

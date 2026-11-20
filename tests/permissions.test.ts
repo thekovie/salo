@@ -27,3 +27,10 @@ describe("table prices", () => {
     expect(can(guest, "price.default")).toBe(false);
   });
 });
+
+describe("unavailable", () => {
+  it("only the host marks a dish unavailable", () => {
+    expect(can(host, "dish.unavailable")).toBe(true);
+    expect(can(guest, "dish.unavailable")).toBe(false);
+  });
+});
