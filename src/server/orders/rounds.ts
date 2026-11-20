@@ -9,6 +9,7 @@ import { optionalText } from "@/lib/dish-name";
 import type { Tx } from "@/server/db/client";
 import { confirmedRoundSnapshots, dishes, entryClaims, orderBatches, orderCorrections, orderEntries, rounds, sessionEvents, sessions } from "@/server/db/schema";
 import { AppError, forbidden } from "@/server/errors";
+import { notify, notifyCorrection } from "@/server/notifications";
 import type { Applied, SessionRow } from "@/server/mutations";
 import { NON_TICKET_EVENTS } from "./settlement";
 import { LIMITS, type CorrectionBatchInput, type CorrectionInput } from "./validation";
@@ -124,6 +125,9 @@ export async function confirmRound(tx: Tx, session: SessionRow, actor: Actor, ro
     .update(entryClaims)
     .set({ status: "REJECTED", resolvedAt: confirmedAt })
     .where(and(eq(entryClaims.sessionId, session.id), eq(entryClaims.status, "PENDING"), sql`${entryClaims.batchId} IN (SELECT id FROM order_batches WHERE round_id = ${round.id})`));
+  await notify(tx, session.id, { type: "round.confirmed", subject: { roundId: round.id, roundNumber: round.roundNumber }, recipients: "all", dedupKey: `round.confirmed:${round.id}`, actorId: actor.participantId });
+  const told = Map.groupBy(corrections.filter((c) => c.reason !== "UNAVAILABLE"), (c) => c.groupId ?? c.id);
+  for (const [key, group] of told) await notifyCorrection(tx, session.id, actor.participantId, key, group);
   return { result: { roundId: round.id }, event: { type: "round.confirmed", payload: { roundId: round.id } } };
 }
 
@@ -138,6 +142,7 @@ export async function openRound(tx: Tx, session: SessionRow, actor: Actor): Prom
     .insert(rounds)
     .values({ sessionId: session.id, roundNumber: (last?.number ?? 0) + 1 })
     .returning({ id: rounds.id });
+  await notify(tx, session.id, { type: "round.opened", subject: { roundId: round.id, roundNumber: (last?.number ?? 0) + 1 }, recipients: "all", dedupKey: `round.opened:${round.id}`, actorId: actor.participantId });
   return { result: { roundId: round.id }, event: { type: "round.opened", payload: { roundId: round.id } } };
 }
 
@@ -241,5 +246,6 @@ export async function closeSession(tx: Tx, session: SessionRow, actor: Actor): P
   const expiresAt = new Date(closedAt.getTime() + days * 86_400_000);
   await tx.update(sessions).set({ status: "CLOSED", closedAt, expiresAt }).where(eq(sessions.id, session.id));
   await tx.update(entryClaims).set({ status: "REJECTED", resolvedAt: closedAt }).where(and(eq(entryClaims.sessionId, session.id), eq(entryClaims.status, "PENDING")));
+  await notify(tx, session.id, { type: "order.ended", subject: { cancelled: !confirmed }, recipients: "all", dedupKey: "order.ended", actorId: actor.participantId });
   return { result: { closedAt: closedAt.toISOString(), expiresAt: expiresAt.toISOString() }, event: { type: "session.closed", payload: {} } };
 }

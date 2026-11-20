@@ -37,6 +37,11 @@
 | Text | dish 60, size 40, instructions 140, names 40, order name 60; no NUL |
 Rate limits live in process memory (one instance) and key on the last `X-Forwarded-For` hop (one trusted proxy; see deployment.md). Each per-address table holds 2,000 addresses (IPv6 grouped by /64); the all-addresses ceilings exist because rotating through more addresses than that would otherwise evict every counter before it filled. Preview cards and app icons are drawn once per process and served from memory. A Traefik rate limit in front is a sensible extra backstop.
 
+## Notifications (privacy)
+- A snapshot carries only the caller's own notifications; the recipient is resolved from the credential, never from the request. The read route only touches rows whose `recipient_id` is the caller, so ids of other people's updates are ignored. Covered by `tests/notifications.test.ts`.
+- The route sits behind the proxy Origin check (403 `FORBIDDEN_ORIGIN`), `requireActor` (404 for strangers) and the read limiter.
+- The drawer is masked from session replay (`data-ph-mask`).
+
 ## Analytics (PostHog)
 - Only when `POSTHOG_KEY` is set. Requests go to `/ingest` on Salo's own domain (Next rewrites to PostHog US), so the CSP stays same-origin; `worker-src 'self' blob:` is added for the replay recorder.
 - On by default, with an opt-out switch on `/cookies` (PostHog's own opt-out flag). Do Not Track is honoured. Everyone is anonymous (`person_profiles: identified_only`).

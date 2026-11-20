@@ -44,6 +44,13 @@ What is built, screen by screen. Design world and tokens: `PRODUCT.md`, the dire
 - In People, dishes the host typed under the guest's own name appear inside the guest's card ("The host added these for 'Rafa'. Yours?" with That's mine), not as a second card.
 - Same screen; the composer's *For* defaults to **Me** (the host's too). Steppers appear only on the guest's own entries; the order name is not editable. Changes from everyone appear live; "Reconnecting…" shows while the live connection is down.
 
+## Updates (bell and drawer)
+- A bell at the right of header row 1 (44px target, accessible name "Updates, N unread", badge "9+" above 9) opens the **Updates** drawer; it never resizes row 2. Unread increases are announced politely and focus is not moved.
+- Drawer: "Mark all read" in the header, newest first; unread rows show a dot and the word "New"; each row has a local time. Empty: "No updates yet. You'll see confirmations, changes and served food here." Readable on closed orders.
+- Tapping a row marks it read, closes the drawer and goes to the Served section, the Rounds tab, the KKB or the Order tab, with focus on the target.
+- Updates: round confirmed or opened, dish unavailable, order corrected (only when told to the waiter, D22), table price changed, food served, everyone ready (host), order ended. Never the person who did it; never routine dish additions.
+- Unavailable tab: "Kovie and Miguel get an update." names who is told (nothing if only the host; "Everyone else" above three).
+
 ## Review, waiter ticket and confirmation
 - Bottom bar: the host has **Review order** (primary); guests have **Ticket**.
 - **Review round n** (full screen): checks with icons and words (everything saved / changes still saving / changes not saved; n of m guests ready and who is still choosing; possibly ordered twice with "Remove your copy"), then the round's ticket. **Show the waiter** opens the waiter ticket; **Mark confirmed with waiter** (host, enabled only when everything is saved) asks once; the dialog stays open showing "Confirming…" until the server answers and shows any refusal inside it: "Confirm round n with the waiter? This saves round n exactly as shown… Its dishes can't be changed afterwards." → **Yes, the waiter has it**.

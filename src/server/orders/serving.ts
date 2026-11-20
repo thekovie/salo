@@ -1,9 +1,11 @@
 import { and, eq, isNull } from "drizzle-orm";
+import { isPlain, preparationLabel } from "@/lib/consolidate";
 import { can, type Actor } from "@/lib/permissions";
 import { placeOnLines } from "@/lib/serving";
 import type { Tx } from "@/server/db/client";
-import { orderBatches, orderEntries, rounds, servedCounts } from "@/server/db/schema";
+import { dishes, orderBatches, orderEntries, rounds, servedCounts } from "@/server/db/schema";
 import { AppError, forbidden } from "@/server/errors";
+import { audienceOfEntries, notify, withMembers } from "@/server/notifications";
 import type { Applied, SessionRow } from "@/server/mutations";
 import { loadCorrections } from "./rounds";
 import type { ServingInput } from "./validation";
@@ -17,9 +19,10 @@ export async function updateServed(tx: Tx, session: SessionRow, actor: Actor, in
   if (round.status !== "CONFIRMED") throw new AppError(409, "ROUND_NOT_CONFIRMED", "Food can be tracked once the round is confirmed.");
 
   const entries = await tx
-    .select({ id: orderEntries.id, roundId: orderEntries.roundId, dishId: orderEntries.dishId, quantity: orderEntries.quantity, variant: orderEntries.variant, instructions: orderEntries.specialInstructions })
+    .select({ id: orderEntries.id, roundId: orderEntries.roundId, dishId: orderEntries.dishId, quantity: orderEntries.quantity, variant: orderEntries.variant, instructions: orderEntries.specialInstructions, dishName: dishes.canonicalName, attrType: orderBatches.attributionType, forId: orderBatches.attributedParticipantId, label: orderBatches.collectiveLabel })
     .from(orderEntries)
     .innerJoin(orderBatches, eq(orderBatches.id, orderEntries.batchId))
+    .innerJoin(dishes, eq(dishes.id, orderEntries.dishId))
     .where(and(eq(orderBatches.sessionId, session.id), eq(orderEntries.roundId, input.roundId), isNull(orderEntries.deletedAt)));
   const stored = await tx.select().from(servedCounts).where(and(eq(servedCounts.sessionId, session.id), eq(servedCounts.roundId, input.roundId)));
   const servedMap = new Map(stored.map((c) => [`${c.roundId}|${c.lineKey}`, c.served]));
@@ -29,9 +32,21 @@ export async function updateServed(tx: Tx, session: SessionRow, actor: Actor, in
 
   const where = and(eq(servedCounts.sessionId, session.id), eq(servedCounts.roundId, input.roundId), eq(servedCounts.lineKey, input.lineKey));
   const [current] = await tx.select().from(servedCounts).where(where).for("update");
-  const served = Math.max(0, Math.min(expected, Math.min(current?.served ?? 0, expected) + input.delta));
+  const before = Math.min(current?.served ?? 0, expected);
+  const served = Math.max(0, Math.min(expected, before + input.delta));
   const revision = (current?.revision ?? 0) + 1;
   if (current) await tx.update(servedCounts).set({ served, revision, updatedBy: actor.participantId, updatedAt: new Date() }).where(where);
   else await tx.insert(servedCounts).values({ sessionId: session.id, roundId: input.roundId, lineKey: input.lineKey, served, revision, updatedBy: actor.participantId });
+  // Once per line: coming back to "all served" after a dip is not news (dedup holds).
+  if (expected > 0 && before < expected && served === expected) {
+    const first = onLine[0];
+    await notify(tx, session.id, {
+      type: "food.served",
+      recipients: audienceOfEntries(await withMembers(tx, session.id, onLine.filter((p) => p.expected > 0).map((p) => ({ id: p.entry.id, quantity: p.expected, attrType: p.entry.attrType, forId: p.entry.forId, label: p.entry.label })))),
+      subject: { roundId: input.roundId, lineKey: input.lineKey, label: first.eff.replacement ?? (isPlain(first.entry) ? first.entry.dishName : `${first.entry.dishName} (${preparationLabel(first.entry)})`) },
+      dedupKey: `served:${input.roundId}|${input.lineKey}`,
+      actorId: actor.participantId,
+    });
+  }
   return { result: { served, revision }, event: { type: "serving.updated", payload: { roundId: input.roundId } } };
 }

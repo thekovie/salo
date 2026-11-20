@@ -4,6 +4,7 @@ import { can, canEditPrice, type Actor } from "@/lib/permissions";
 import type { Tx } from "@/server/db/client";
 import { correctionSettlements, dishes, entrySettlements, orderBatches, orderCorrections, orderEntries, participants, sessions, sharedPrices } from "@/server/db/schema";
 import { AppError, forbidden } from "@/server/errors";
+import { audienceOfEntries, notify, withMembers } from "@/server/notifications";
 import type { Applied, SessionRow } from "@/server/mutations";
 import type { CorrectionPriceInput, EntrySettlementInput, RenameMeInput, ServiceChargeInput, SharedPriceInput } from "./validation";
 
@@ -86,7 +87,7 @@ export async function setCorrectionPrice(tx: Tx, session: SessionRow, actor: Act
  */
 export async function setSharedPrice(tx: Tx, session: SessionRow, actor: Actor, input: SharedPriceInput): Promise<Applied<{ revision: number }>> {
   if (!can(actor, "price.default")) throw forbidden("Only the host can set a table price.");
-  const [dish] = await tx.select({ id: dishes.id }).from(dishes).where(and(eq(dishes.id, input.dishId), eq(dishes.sessionId, session.id)));
+  const [dish] = await tx.select({ id: dishes.id, name: dishes.canonicalName }).from(dishes).where(and(eq(dishes.id, input.dishId), eq(dishes.sessionId, session.id)));
   if (!dish) throw new AppError(404, "DISH_NOT_FOUND", "That dish isn’t in this order any more.");
   const variantKey = normalizeText(input.variant ?? "");
   const key = and(eq(sharedPrices.sessionId, session.id), eq(sharedPrices.dishId, input.dishId), eq(sharedPrices.variantKey, variantKey));
@@ -114,6 +115,22 @@ export async function setSharedPrice(tx: Tx, session: SessionRow, actor: Actor, 
   // A cleared table price keeps its row (price null) so the revision never restarts and a stale editor can't win.
   if (current) await tx.update(sharedPrices).set({ unitCentavos: input.unitCentavos, revision, updatedBy: actor.participantId, updatedAt: new Date() }).where(key);
   else await tx.insert(sharedPrices).values({ sessionId: session.id, dishId: input.dishId, variantKey, unitCentavos: input.unitCentavos, revision, updatedBy: actor.participantId });
+  if ((current?.unitCentavos ?? null) !== input.unitCentavos) {
+    const lines = await tx
+      .select({ id: orderEntries.id, quantity: orderEntries.quantity, variant: orderEntries.variant, attrType: orderBatches.attributionType, forId: orderBatches.attributedParticipantId, label: orderBatches.collectiveLabel })
+      .from(orderEntries)
+      .innerJoin(orderBatches, eq(orderBatches.id, orderEntries.batchId))
+      .leftJoin(entrySettlements, eq(entrySettlements.entryId, orderEntries.id))
+      .where(and(eq(orderEntries.dishId, input.dishId), eq(orderBatches.sessionId, session.id), isNull(orderEntries.deletedAt), isNull(entrySettlements.unitPriceCentavos)));
+    const size = tidyText(input.variant ?? "");
+    await notify(tx, session.id, {
+      type: "price.defaultSet",
+      recipients: audienceOfEntries(await withMembers(tx, session.id, lines.filter((l) => normalizeText(l.variant ?? "") === variantKey))),
+      subject: { dishId: input.dishId, label: size ? `${dish.name} (${size})` : dish.name, centavos: input.unitCentavos },
+      dedupKey: `price.defaultSet:${input.dishId}|${variantKey}|${revision}`,
+      actorId: actor.participantId,
+    });
+  }
   return { result: { revision }, event: { type: "price.defaultSet", payload: { dishId: input.dishId } } };
 }
 
