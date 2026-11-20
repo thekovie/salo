@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { api, ApiError, newKey } from "@/lib/api-client";
 import { coalesceTarget, fromStored, nextToSend, revisionToSend, toStored } from "@/lib/queue";
 import { normalizeText, optionalText, tidyText } from "@/lib/dish-name";
+import { markReadLocal } from "@/lib/notifications";
 import type { SessionSnapshot, SnapshotEntry } from "@/lib/snapshot";
 
 export type AddInput = {
@@ -466,7 +467,20 @@ export function useSession(initial: SessionSnapshot) {
   /** The latest committed version of an entry (for Undo after an add). */
   const entryById = useCallback((id: string) => snapshotRef.current.entries.find((e) => e.id === id), []);
 
-  return { snapshot, entries, pending, failed, sync, mutate, dismiss, retry, refresh, entryById, online, stream };
+  /** Private state: the badge drops at once; the server is told without a revision bump, and the snapshot corrects us if that failed. */
+  const markRead = useCallback(
+    async (input: { ids: string[] } | { all: true }) => {
+      const current = snapshotRef.current;
+      const next = { ...current, notifications: markReadLocal(current.notifications, input, new Date().toISOString()) };
+      snapshotRef.current = next;
+      setSnapshotState(next);
+      await api(`/api/sessions/${sessionId}/notifications/read`, { method: "POST", body: input }).catch(() => undefined);
+      await refresh().catch(() => undefined);
+    },
+    [sessionId, refresh],
+  );
+
+  return { snapshot, entries, pending, failed, sync, mutate, dismiss, retry, refresh, entryById, online, stream, markRead };
 }
 
 function subscribeOnline(onChange: () => void) {

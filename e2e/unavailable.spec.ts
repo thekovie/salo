@@ -1,16 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { addDish, inviteCode, joinAsGuest, startOrder } from "./support/helpers";
-
-async function confirmRound1(page: Page) {
-  await expect(page.locator('[data-sync="saved"]')).toBeVisible();
-  await page.getByRole("button", { name: "Review order" }).click();
-  await page.getByRole("dialog", { name: "Review round 1" }).getByRole("button", { name: "Show the waiter" }).click();
-  const waiter = page.getByRole("dialog", { name: "Waiter ticket" });
-  await waiter.getByRole("button", { name: "Mark confirmed with waiter" }).click();
-  await page.getByRole("dialog", { name: /Confirm round 1/ }).getByRole("button", { name: "Yes, the waiter has it" }).click();
-  await expect(waiter.getByRole("region", { name: "Round 1, confirmed with the waiter" })).toBeVisible();
-  await page.getByRole("button", { name: "Back" }).click();
-}
+import { addDish, confirmRound1, inviteCode, joinAsGuest, startOrder } from "./support/helpers";
 
 async function pickLine(page: Page, line: RegExp | string) {
   const change = page.getByRole("button", { name: /Change a dish/ });

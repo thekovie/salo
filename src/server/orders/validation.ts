@@ -143,3 +143,6 @@ export const servingSchema = z.object({
   delta: z.number().int().min(-999).max(999).refine((n) => n !== 0, "Nothing to change."),
 });
 export type ServingInput = z.infer<typeof servingSchema>;
+
+/** Mark some (or all) of your own updates read. */
+export const markReadSchema = z.union([z.strictObject({ ids: z.array(z.uuid()).min(1).max(50) }), z.strictObject({ all: z.literal(true) })]);

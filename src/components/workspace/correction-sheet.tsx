@@ -5,7 +5,7 @@ import { useId, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
 import { useRovingRadio } from "@/hooks/use-roving-radio";
-import { allocateCancel, dishRemaining, prepPeople, type Prep } from "@/lib/corrections";
+import { allocateCancel, correctionAudience, dishRemaining, prepPeople, type Prep } from "@/lib/corrections";
 import type { SessionSnapshot, SnapshotEntry } from "@/lib/snapshot";
 import { focusFirst, focusIsLost } from "@/lib/focus";
 import { cn } from "@/lib/utils";
@@ -93,6 +93,7 @@ function Body({ target, onBack, onClose, snapshot, entries, nextRound, draftNumb
   const chosen = people.filter((p) => (counts[p.key] ?? 0) > 0);
   const total = chosen.reduce((sum, p) => sum + counts[p.key], 0);
   const remaining = dishRemaining(prep.dishId, entries, snapshot);
+  const told = whoGetsUpdate(prep.dishId, entries, snapshot);
 
   function save(event: React.FormEvent) {
     event.preventDefault();
@@ -145,6 +146,7 @@ function Body({ target, onBack, onClose, snapshot, entries, nextRound, draftNumb
           <p>
             The waiter said it&rsquo;s out. All {remaining} {prep.dishName}, every size, come off now.
           </p>
+          {told ? <p className="mt-1 text-sm text-ink-soft">{told}</p> : null}
           <label htmlFor={`${id}-out`} className="mt-3 block text-sm font-semibold">
             Replace with… <span className="font-normal text-ink-soft">(optional)</span>
           </label>
@@ -218,4 +220,14 @@ function Body({ target, onBack, onClose, snapshot, entries, nextRound, draftNumb
       )}
     </div>
   );
+}
+
+/** "Kovie and Miguel get an update." for the people other than the host who hear about it; null when nobody does (same rule as the server). */
+function whoGetsUpdate(dishId: string, entries: SnapshotEntry[], snapshot: SessionSnapshot): string | null {
+  const audience = correctionAudience(dishId, entries, snapshot);
+  const others = snapshot.participants.filter((p) => p.id !== snapshot.me.participantId && (audience === "all" || audience.includes(p.id)));
+  if (others.length === 0) return null;
+  const names = others.map((p) => p.displayName);
+  if (names.length > 3) return "Everyone else gets an update.";
+  return names.length === 1 ? `${names[0]} gets an update.` : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]} get an update.`;
 }

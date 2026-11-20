@@ -11,6 +11,8 @@ import { setAnalyticsContext, track } from "@/lib/analytics";
 import { anyPrice, everyone, type SessionSnapshot } from "@/lib/snapshot";
 import { normalizeText } from "@/lib/dish-name";
 import { confirmedIds } from "@/lib/effective-order";
+import { notificationTarget, type NotificationTarget, type NotificationView } from "@/lib/notifications";
+import { focusWhenFree } from "@/lib/focus";
 import { liveTicket } from "@/lib/ticket";
 import { withViewTransition } from "@/lib/view-transition";
 import { Ticker } from "@/components/motion/ticker";
@@ -29,6 +31,7 @@ import { ViewTabs, type View } from "./view-tabs";
 import { InviteSheet } from "./invite-sheet";
 import { OrderTicket, type TicketActions } from "./order-ticket";
 import { ArrivalPills, ARRIVAL_MS } from "./arrival-pills";
+import { NotificationBell, NotificationsDrawer } from "./notifications-drawer";
 import { ConnectionPill } from "./connection-pill";
 import { OrderOptionsSheet } from "./order-options-sheet";
 import { SummarySheet, type SummaryTab } from "./summary-sheet";
@@ -57,7 +60,7 @@ function asAttribution(a: OverlayEntry["attribution"]): AddInput["attribution"] 
 const copyFor = (roundNumber: number): 1 | 2 | 3 => (roundNumber >= 3 ? 3 : roundNumber === 2 ? 2 : 1);
 
 export function Workspace({ initial, appUrl, justJoined = false }: { initial: SessionSnapshot; appUrl: string; justJoined?: boolean }) {
-  const { snapshot, entries, pending, failed, sync, mutate, dismiss, retry, refresh, entryById, online, stream } = useSession(initial);
+  const { snapshot, entries, pending, failed, sync, mutate, dismiss, retry, refresh, entryById, online, stream, markRead } = useSession(initial);
   const { toasts, show, dismiss: dismissToast } = useToasts();
   const round = snapshot.rounds.find((r) => r.id === snapshot.activeRoundId) ?? snapshot.rounds[0];
   const roundEntries = useMemo(() => entries.filter((e) => e.roundId === round.id), [entries, round.id]);
@@ -121,6 +124,24 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
     setSummaryOpen(true);
     track({ name: "summary_opened", props: { source } });
   };
+  const [updatesOpen, setUpdatesOpen] = useState(false);
+  const updatesTarget = useRef<NotificationTarget | null>(null);
+  function openUpdate(item: NotificationView) {
+    if (!item.readAt) void markRead({ ids: [item.id] });
+    const target = notificationTarget(item.type);
+    updatesTarget.current = target;
+    if (target === "rounds") setView("rounds");
+    else if (target !== "kkb") setView("order");
+    setUpdatesOpen(false);
+  }
+  // After the drawer has closed: land on the place the update is about (the bell when it was just dismissed).
+  function returnFromUpdates() {
+    const target = updatesTarget.current;
+    updatesTarget.current = null;
+    if (target === "kkb" && hasSummary) return openSummary("button", "kkb");
+    const panel = `panel-${target === "rounds" ? "rounds" : "order"}`;
+    focusWhenFree(() => (target ? [target === "served" ? document.getElementById("served-h") : null, document.getElementById(panel)] : [document.querySelector("[data-bell]")]));
+  }
   const endTour = useCallback(() => setTouring(false), []);
 
   // Someone else's new dishes, noticed when a newer snapshot arrives (compared during render, React's "previous
@@ -426,6 +447,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
         sync={sync}
         onOptions={isHost && sessionOpen ? openOptions : undefined}
         onHelp={!isHost && sessionOpen ? () => startTour("replay") : undefined}
+        bell={<NotificationBell unread={snapshot.notifications.unread} onClick={() => setUpdatesOpen(true)} />}
         actions={
           sessionOpen ? (
             <InviteSheet appUrl={appUrl} joinCode={snapshot.session.joinCode} title={snapshot.session.title} peopleCount={snapshot.participants.length} open={inviteOpen} onOpenChange={setInviteOpen} />
@@ -436,6 +458,14 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
         onSave={saveEdit}
         onUnavailable={isHost && editing ? (entry) => markUnavailable(entry.dishId, entry.dishName) : undefined}
         unavailableIsFinal={editing ? entries.some((e) => e.dishId === editing.dishId && snapshot.rounds.find((r) => r.id === e.roundId)?.status === "CONFIRMED") : false}
+      />
+      <NotificationsDrawer
+        open={updatesOpen}
+        onOpenChange={setUpdatesOpen}
+        notifications={snapshot.notifications}
+        onMarkAll={() => void markRead({ all: true })}
+        onOpenItem={openUpdate}
+        onReturnFocus={returnFromUpdates}
       />
       {touring ? (
         <Guide
@@ -565,7 +595,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
           />
         ) : null}
         <ViewTabs view={view} onChange={setView} counts={{ people: snapshot.participants.length, groups: groupCount, rounds: snapshot.rounds.length > 1 ? snapshot.rounds.length : 0 }} />
-        <div role="tabpanel" id={`panel-${view}`} aria-labelledby={`tab-${view}`}>
+        <div role="tabpanel" id={`panel-${view}`} aria-labelledby={`tab-${view}`} tabIndex={-1} className="outline-none">
           {view === "order" && confirmedTicket ? (
             <div className="space-y-4">
               <WaiterTicket ticket={confirmedTicket} size="compact" confirmed justConfirmed={justConfirmed === round.id} />

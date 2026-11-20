@@ -4,6 +4,7 @@ import { can, type Actor } from "@/lib/permissions";
 import type { Tx } from "@/server/db/client";
 import { entryClaims, orderBatches, orderEntries, orderGroupMembers, orderGroups, participantRoundReadiness, participants, rounds } from "@/server/db/schema";
 import { AppError, forbidden } from "@/server/errors";
+import { notify } from "@/server/notifications";
 import type { Applied, SessionRow } from "@/server/mutations";
 import { LIMITS } from "./validation";
 
@@ -27,6 +28,13 @@ export async function setReady(tx: Tx, session: SessionRow, actor: Actor, ready:
       target: [participantRoundReadiness.participantId, participantRoundReadiness.roundId],
       set: { ready, acknowledgedRevision: session.revision + 1, updatedAt: new Date() },
     });
+  if (ready) {
+    const guests = await tx.select({ id: participants.id }).from(participants).where(and(eq(participants.sessionId, session.id), eq(participants.role, "GUEST"), isNull(participants.removedAt)));
+    const [{ n }] = await tx.select({ n: count() }).from(participantRoundReadiness).where(and(eq(participantRoundReadiness.roundId, roundId), eq(participantRoundReadiness.ready, true), inArray(participantRoundReadiness.participantId, guests.map((g) => g.id))));
+    const [host] = await tx.select({ id: participants.id }).from(participants).where(and(eq(participants.sessionId, session.id), eq(participants.role, "HOST")));
+    const [round] = await tx.select({ number: rounds.roundNumber }).from(rounds).where(eq(rounds.id, roundId));
+    if (n === guests.length) await notify(tx, session.id, { type: "guests.ready", subject: { roundId, roundNumber: round.number }, recipients: [host.id], dedupKey: `guests.ready:${roundId}`, actorId: actor.participantId });
+  }
   return { result: { ready }, event: { type: "readiness.changed", payload: { participantId: actor.participantId } } };
 }
 

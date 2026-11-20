@@ -17,13 +17,15 @@ interface SessionHeaderProps {
   /** Guests: replay the tour (the host finds it in order options). */
   onHelp?: () => void;
   actions?: React.ReactNode;
+  /** The updates bell, at the right edge of row 1. */
+  bell?: React.ReactNode;
 }
 
 /**
  * The tomato band: which table, which round, whether everything is saved. One row on a phone: the name gets the
  * width, sync status sits on the line under it, and settings live behind one button instead of an inline field.
  */
-export function SessionHeader({ title, roundNumber, roundStatus, ended = null, sync, onOptions, onHelp, actions }: SessionHeaderProps) {
+export function SessionHeader({ title, roundNumber, roundStatus, ended = null, sync, onOptions, onHelp, actions, bell }: SessionHeaderProps) {
   const status = ended === "cancelled" ? "Cancelled" : ended ? "Order ended" : `Round ${roundNumber} · ${roundStatus === "DRAFT" ? "Open" : "Confirmed"}`;
   return (
     <header className="sticky top-0 z-30 bg-band text-on-band pt-[env(safe-area-inset-top)] shadow-[0_6px_16px_-10px_oklch(0.3_0.1_30/0.6)]">
@@ -50,6 +52,7 @@ export function SessionHeader({ title, roundNumber, roundStatus, ended = null, s
               {ended ? null : <SyncPill state={sync} compact className="shrink-0 px-1.5 py-0.5" />}
             </div>
           </div>
+          {bell}
         </div>
         {/* Actions get their own row: equal halves on small phones, right-aligned on wider ones. */}
         <div className="mt-1.5 flex items-center justify-end gap-2 max-[399px]:*:flex-1 empty:hidden">

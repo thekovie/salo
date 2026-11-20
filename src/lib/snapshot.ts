@@ -1,4 +1,5 @@
 import type { AttributionType, SourceEntry } from "./consolidate";
+import type { NotificationsView } from "./notifications";
 import type { CorrectionView, TicketSnapshot } from "./ticket";
 
 /** Everything a client needs to draw a session, at one revision. Sent by GET /sync and the initial page render. */
@@ -41,6 +42,8 @@ export interface SessionSnapshot {
   settlement: SettlementView;
   /** Food tracker: raw served counts per round line (see `trackerLines`). Independent from KKB. */
   servedCounts: { roundId: string; lineKey: string; served: number }[];
+  /** The viewer's own updates only: private, never another participant's. */
+  notifications: NotificationsView;
 }
 
 export interface EntrySettlement {

@@ -1,6 +1,7 @@
 import { consolidate, preparationLabel } from "./consolidate";
 import { normalizeText } from "./dish-name";
 import { confirmedIds, effectiveEntry } from "./effective-order";
+import { audienceOf } from "./notifications";
 import { attributionLabel, type SessionSnapshot, type SnapshotEntry } from "./snapshot";
 import { groupCorrections, mergeGroup, swappedTo, type CorrectionView } from "./ticket";
 
@@ -141,6 +142,23 @@ export function dishRemaining(dishId: string, entries: SnapshotEntry[], snapshot
       const left = effectiveEntry(e, snapshot.corrections, told);
       return sum + (left.replacement ? 0 : Math.max(0, left.quantity));
     }, 0);
+}
+
+/** Who hears that this dish is unavailable: open-round lines (removed) and confirmed lines with some left (the server skips cancelled and swapped ones). */
+export function correctionAudience(dishId: string, entries: SnapshotEntry[], snapshot: Pick<SessionSnapshot, "rounds" | "corrections" | "groups">): string[] | "all" {
+  const told = confirmedIds(snapshot.rounds);
+  const live = entries.filter((e) => {
+    if (e.dishId !== dishId) return false;
+    if (!told.has(e.roundId)) return e.quantity > 0;
+    const left = effectiveEntry(e, snapshot.corrections, told);
+    return !left.replacement && left.quantity > 0;
+  });
+  return audienceOf(
+    live.map((e) => {
+      const group = e.attribution.label ? snapshot.groups.find((g) => normalizeText(g.label) === normalizeText(e.attribution.label!)) : undefined;
+      return { type: e.attribution.type, participantId: e.attribution.participantId, memberIds: group?.memberIds };
+    }),
+  );
 }
 
 export interface CorrectionRow {

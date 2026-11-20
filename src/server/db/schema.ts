@@ -440,3 +440,29 @@ export const servedCounts = pgTable(
     check("served_counts_revision_ck", sql`revision >= 1`),
   ],
 );
+
+/**
+ * In-app notifications, one row per recipient, written in the same transaction as the change that caused them (so Undo
+ * or removal can delete them via `source`, and dedup never swallows a later, legitimate one). Private to the recipient.
+ */
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: id(),
+    sessionId: sessionRef(),
+    recipientId: uuid("recipient_id")
+      .notNull()
+      .references(() => participants.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    subject: jsonb("subject").notNull().default({}),
+    /** What created it (`entry:<id>` of removed draft entries), so undoing that change deletes or trims it. */
+    source: text("source").array().notNull().default(sql`'{}'::text[]`),
+    dedupKey: text("dedup_key").notNull(),
+    createdAt: createdAt(),
+    readAt: timestamp("read_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("notifications_dedup_uq").on(t.sessionId, t.recipientId, t.dedupKey),
+    index("notifications_recipient_idx").on(t.recipientId, t.createdAt),
+  ],
+);

@@ -3,6 +3,7 @@ import { normalizeText, optionalText, tidyText } from "@/lib/dish-name";
 import type { Tx } from "@/server/db/client";
 import { dishes, entrySettlements, orderBatches, orderEntries, participants, rounds } from "@/server/db/schema";
 import { AppError, forbidden } from "@/server/errors";
+import { undoRemovalNotices } from "@/server/notifications";
 import type { Applied, SessionRow } from "@/server/mutations";
 import { can, canEditEntry, type Actor } from "@/lib/permissions";
 import { resetReadiness } from "./people";
@@ -158,6 +159,8 @@ export async function setEntryRemoved(tx: Tx, session: SessionRow, actor: Actor,
     .update(orderEntries)
     .set({ revision, updatedAt: new Date(), deletedAt: removed ? new Date() : null })
     .where(eq(orderEntries.id, entryId));
+  // Undo of "Mark unavailable" takes back the update that removal sent.
+  if (!removed) await undoRemovalNotices(tx, session.id, [`entry:${entryId}`]);
   await resetReadiness(tx, entry.roundId, [actor.participantId, entry.submittedBy, entry.attributedParticipantId]);
   return { result: { entryId, revision }, event: { type: removed ? "entry.removed" : "entry.restored", payload: { entryId } } };
 }

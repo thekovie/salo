@@ -19,6 +19,9 @@ Every change runs in `runMutation` (`src/server/mutations.ts`), joining runs in 
 - After a dropped connection reopens, the snapshot is fetched once more. If the server refused the stream outright, a fresh stream is opened with backoff (5 s doubling to 60 s). A failed snapshot fetch retries every 3 s until it succeeds, because the event that triggered it will not be replayed.
 - Sync pill: Saving… / Saved / Reconnecting… / Offline · not saved yet / Changed elsewhere / Not saved.
 
+## Notifications
+Updates ride in each person's own snapshot (`notifications`: latest 50 plus the unread count), never in another participant's. Writing one adds no event of its own; it arrives with the change that caused it. `POST /notifications/read` bumps no revision and emits no event, so the client updates locally at once and refetches; snapshots at an equal revision still apply, which is how the badge follows the server.
+
 ## Pending changes
 Own changes queue on the device and go to the server one at a time, in order, each with its idempotency key; repeated taps on one stepper collapse into the final number; network failures retry automatically with backoff (2 s doubling to 30 s) and resume when the browser comes back online. A change leaves the screen only when a snapshot containing it has arrived; refused changes are listed by name with the reason.
 
