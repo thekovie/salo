@@ -92,6 +92,7 @@ test("a first-time guest gets the guest guide; Not now hides the offer; Help rep
 
 test("the landing page shows the four steps with their pictures", async ({ page }) => {
   await page.goto("/");
+  await expect(page.getByText("Order together, keep track of what’s been served, and settle everyone’s share—all in one place.")).toBeVisible();
   for (const title of ["Start, then invite the table", "Everyone adds their own", "Hand the waiter one ticket", "Settle up later"]) {
     await expect(page.getByRole("heading", { name: title })).toBeVisible();
   }

@@ -88,7 +88,7 @@ export const HOST_GUIDE: readonly GuideStep[] = [
   {
     id: "kkb",
     title: "Settle up with KKB",
-    body: "In Who ordered what → KKB, type prices from the receipt and the service charge. Everyone sees their own food subtotal and share. Shared dishes stay apart until you pick who pays.",
+    body: "In Who ordered what → KKB, type prices from the receipt and the service charge. Everyone sees their own food subtotal and share. Shared dishes stay apart until you pick who pays. The host can check the total against the receipt, and anyone can Copy summary for the group chat.",
     scene: "kkb",
     action: "kkb",
     label: "Settle up with KKB",

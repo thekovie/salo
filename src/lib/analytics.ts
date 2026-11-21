@@ -30,7 +30,7 @@ export type AnalyticsEvent =
   | { name: "guest_removed"; props: { with_reason: boolean } }
   | { name: "guest_restored" }
   | { name: "summary_opened"; props: { source: "auto" | "button" } }
-  | { name: "summary_copied" }
+  | { name: "summary_copied"; props: { tab: "items" | "kkb" } }
   | { name: "summary_image_saved"; props: { method: "share" | "download" } }
   | { name: "tour_offer_shown" }
   | { name: "tour_started"; props: { source: "offer" | "replay" } }

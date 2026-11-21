@@ -63,9 +63,11 @@ export interface SettlementView {
   defaults: Record<string, { unitCentavos: number | null; revision: number }>;
   /** null = not entered; 0 = the receipt has none. */
   serviceCharge: { centavos: number | null; revision: number };
+  /** The receipt's printed total, for comparison only. null = not entered. */
+  receiptTotal: { centavos: number | null; revision: number };
 }
 
-export const EMPTY_SETTLEMENT: SettlementView = { entries: {}, corrections: {}, defaults: {}, serviceCharge: { centavos: null, revision: 0 } };
+export const EMPTY_SETTLEMENT: SettlementView = { entries: {}, corrections: {}, defaults: {}, serviceCharge: { centavos: null, revision: 0 }, receiptTotal: { centavos: null, revision: 0 } };
 
 /** Any price anywhere: a line's, a replacement's or a table price. */
 export const anyPrice = (s: Pick<SessionSnapshot, "settlement">) =>

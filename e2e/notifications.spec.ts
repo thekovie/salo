@@ -25,7 +25,7 @@ test("scenario C: a confirmed dish goes unavailable; the guest's bell goes up li
   await expect(sheet.getByText("JD gets an update.")).toBeVisible();
   await sheet.getByRole("button", { name: "Mark unavailable" }).click();
   await page.getByRole("dialog", { name: "Mark Sisig unavailable?" }).getByRole("button", { name: "Mark unavailable" }).click();
-  await expect(page.getByText("Sisig marked unavailable · 2 cancelled.")).toBeVisible(SLOW);
+  await expect(page.getByRole("dialog", { name: "Mark Sisig unavailable?" })).toBeHidden(SLOW);
 
   await expect(guest.page.getByRole("button", { name: "Updates, 2 unread" })).toBeVisible(SLOW);
   await bell.click();

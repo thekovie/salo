@@ -29,11 +29,11 @@ test("scenario C: the waiter says Sisig is out; it comes off at once for everyon
   const confirm = page.getByRole("dialog", { name: "Mark Sisig unavailable?" });
   await expect(confirm).toContainText("This can’t be undone.");
   await confirm.getByRole("button", { name: "Mark unavailable" }).click();
-  await expect(page.getByText("Sisig marked unavailable · 2 cancelled.")).toBeVisible({ timeout: 15_000 });
+  // Wait on the lasting record, not the toast: a later toast can replace it before the check runs.
+  await expect(page.getByRole("region", { name: "Corrections" })).toContainText("Sisig ×2 cancelled", { timeout: 15_000 });
   await expect(page.getByRole("button", { name: "Undo" })).toHaveCount(0);
 
   // Listed as told, round 1's ticket unchanged.
-  await expect(page.getByRole("region", { name: "Corrections" })).toContainText("Sisig ×2 cancelled");
   await expect(page.getByRole("region", { name: "Corrections" })).toContainText("Unavailable · Told the waiter");
   await page.getByRole("button", { name: /^Round 1 · Confirmed/ }).click();
   await expect(page.getByRole("region", { name: "Round 1, confirmed with the waiter" })).toContainText("Sisig");

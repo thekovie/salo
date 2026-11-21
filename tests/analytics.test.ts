@@ -30,6 +30,6 @@ describe("analytics", () => {
       throw new Error("blocked");
     });
     setAnalyticsClient(client);
-    expect(() => track({ name: "summary_copied" })).not.toThrow();
+    expect(() => track({ name: "summary_copied", props: { tab: "items" } })).not.toThrow();
   });
 });

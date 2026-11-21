@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Copy, ImageDown, Plus, UserPlus, UserRound } from "lucide-react";
+import { Check, Copy, Plus, UserPlus, UserRound } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
 import { Ticker } from "@/components/motion/ticker";
 import { Stamp } from "@/components/ticket/stamp";
@@ -268,7 +268,7 @@ const PEOPLE = [
 
 /**
  * Step 4: who ordered what with KKB: prices land on each dish, then the receipt's service charge is split by food and
- * each person's total ticks up. Copy text and Save image follow.
+ * each person's total ticks up. Copy summary follows.
  */
 export function SummaryScene() {
   const { ref, step } = useScene<HTMLDivElement>([500, 500, 500, 900, 900, 900]);
@@ -306,14 +306,10 @@ export function SummaryScene() {
           <Check className="size-3.5 shrink-0 text-ok" />
           Service charge ₱80, split by how much each person ordered
         </Reveal>
-        <Reveal on={step >= 5} className="mt-2 grid grid-cols-2 gap-1.5 text-sm font-semibold">
-          <span className="inline-flex items-center justify-center gap-1 rounded-full bg-tomato py-2 text-on-tomato">
+        <Reveal on={step >= 5} className="mt-2 text-sm font-semibold">
+          <span className="inline-flex items-center justify-center gap-1 rounded-full bg-ticket px-4 py-2 ring-[1.5px] ring-input">
             <Copy className="size-4" />
-            Copy text
-          </span>
-          <span className="inline-flex items-center justify-center gap-1 rounded-full py-2 ring-[1.5px] ring-input">
-            <ImageDown className="size-4" />
-            Save image
+            Copy summary
           </span>
         </Reveal>
       </Phone>
