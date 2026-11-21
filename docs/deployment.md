@@ -24,6 +24,7 @@ Salo runs as two independent resources on the Coolify VPS (brief 13.2). Never po
 | `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | no | Cloudflare Turnstile bot check before starting an order (`/new`). Both unset: no check. Create the widget for your domain in the Cloudflare dashboard (managed mode). |
 | `POSTHOG_KEY` | no | PostHog (US cloud) project API key, `phc_…`. Set it to turn on analytics and session replay (sent through `/ingest` on this domain). Unset: no analytics at all. |
 | `NEW_ORDERS_PER_HOUR` | no (20) | New orders one client address may start per hour. Leave it in production; the e2e suite raises it. |
+| `JOINS_PER_HOUR` | no (30) | Guest joins one client address may make per hour. Leave it in production; the e2e suite raises it. |
 | `INACTIVE_RETENTION_DAYS` | no (30) | Days without activity before an unclosed order is deleted. |
 
 4. Health check: the image has one (`GET /api/health`: 200 when the database answers, 503 otherwise). Coolify's own health check may point at the same path.

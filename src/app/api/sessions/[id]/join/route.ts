@@ -15,7 +15,7 @@ import { singleton } from "@/server/singleton";
 
 const HOUR_MS = 60 * 60 * 1000;
 /** Also slows down guessing join codes (brief 11.3). */
-const limiter = singleton("join-limiter", () => createTieredLimiter({ limit: 30, windowMs: HOUR_MS }, { limit: 600, windowMs: HOUR_MS }));
+const limiter = () => singleton("join-limiter", () => createTieredLimiter({ limit: getEnv().JOINS_PER_HOUR, windowMs: HOUR_MS }, { limit: getEnv().JOINS_PER_HOUR * 20, windowMs: HOUR_MS }));
 
 const joins = createReplayStore<{ sessionId: string; token: string }>("join");
 
@@ -32,7 +32,7 @@ const bodySchema = z.object({
 /** Join as a guest. The session id in the path must match the code (a code alone never reveals another session). */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   return handle(async () => {
-    const { allowed, retryAfterMs } = limiter.hit(clientIp(request.headers));
+    const { allowed, retryAfterMs } = limiter().hit(clientIp(request.headers));
     if (!allowed) throw new AppError(429, "RATE_LIMITED", `Too many tries. Wait ${Math.ceil(retryAfterMs / 60000)} minutes.`);
     const { id } = await params;
     const { code, displayName } = await readJson(request, bodySchema);

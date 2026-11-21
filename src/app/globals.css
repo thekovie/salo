@@ -262,6 +262,9 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+  .tick {
+    animation: none !important;
+  }
   /* The wash is a colour change that says "this just changed", not movement: keep it. */
   .wash {
     animation-duration: var(--dur-wash) !important;

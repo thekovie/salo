@@ -18,6 +18,7 @@ const schema = z.object({
   TURNSTILE_SITE_KEY: z.string().trim().optional().or(z.literal("").transform(() => undefined)),
   TURNSTILE_SECRET_KEY: z.string().trim().optional().or(z.literal("").transform(() => undefined)),
   NEW_ORDERS_PER_HOUR: z.coerce.number().int().min(1).max(10_000).default(20),
+  JOINS_PER_HOUR: z.coerce.number().int().min(1).max(10_000).default(30),
   /** Sessions never closed are deleted after this long without activity (brief 12.2). */
   INACTIVE_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(30),
 });

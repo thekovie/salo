@@ -65,8 +65,9 @@ test("scenario D: food arrives in batches; host taps, All served, compact Fully 
   const sheet = page.getByRole("dialog");
   await expect(sheet).toContainText("1 item still waiting to be served. You can still end the order.");
   await sheet.getByRole("button", { name: "Yes, end the order" }).click();
-  await page.getByRole("dialog", { name: "Who ordered what" }).waitFor();
-  await page.keyboard.press("Escape");
+  const summarySheet = page.getByRole("dialog", { name: "Who ordered what" });
+  await summarySheet.getByRole("button", { name: "Close" }).click();
+  await expect(summarySheet).toBeHidden();
   await expect(page.getByText("This order has ended")).toBeVisible({ timeout: 15_000 });
   await page.getByRole("tab", { name: "Order" }).click();
   await expect(page.getByTestId("served-section")).toBeVisible();
