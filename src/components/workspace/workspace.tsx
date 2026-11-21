@@ -700,12 +700,23 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
             {/* Under 360 px the count keeps its own line and the buttons share the rows below it. */}
             <div className="flex flex-wrap gap-2 max-[359px]:basis-full max-[359px]:*:flex-1 max-[359px]:*:justify-center">
             {myShare ? (
-              <Button variant="outline" data-tour="my-share" onClick={openMyShare} className="max-[359px]:px-3">
-                <Coins className="size-5 max-[359px]:hidden" aria-hidden />
-                <span className="max-[359px]:sr-only">{myShare}</span>
-                <span className="min-[360px]:hidden" aria-hidden>
+              <Button variant="outline" data-tour="my-share" onClick={openMyShare} className="max-[429px]:px-3">
+                <Coins className="size-5 max-[429px]:hidden" aria-hidden />
+                <span className="max-[429px]:sr-only">{myShare}</span>
+                <span className="min-[430px]:hidden" aria-hidden>
                   {shortShareLabel(myShare)}
                 </span>
+              </Button>
+            ) : null}
+            {isOpen && isHost ? (
+              <Button variant="outline" data-tour="review" className="max-[429px]:px-3" onClick={() => (setMode("review"), track({ name: "review_opened" }))} disabled={total === 0 && correctionsThisRound === 0}>
+                <ReceiptText className="size-5" aria-hidden />
+                Review order
+              </Button>
+            ) : isOpen || confirmedTicket ? (
+              <Button variant="outline" data-tour="ticket" className="max-[429px]:px-3" onClick={() => (setMode("waiter"), track({ name: "waiter_view_opened" }))} disabled={!confirmedTicket && total === 0 && correctionsThisRound === 0}>
+                <ReceiptText className="size-5" aria-hidden />
+                Ticket
               </Button>
             ) : null}
             {!isHost && isOpen ? (
@@ -715,24 +726,13 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
                 data-tour="ready"
                 onClick={() => void mutate({ kind: "ready", ready: !iAmReady })}
                 className={cn(
-                  "inline-flex min-h-11 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-full px-4 font-semibold whitespace-nowrap transition-colors max-[359px]:order-last",
+                  "inline-flex min-h-11 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-full px-4 font-semibold whitespace-nowrap transition-colors",
                   iAmReady ? "bg-ok-wash text-ok" : "border-[1.5px] border-input bg-ticket text-ink hover:bg-paper",
                 )}
               >
                 <CircleCheck className="size-5" aria-hidden />
                 {iAmReady ? "Ready" : "I’m ready"}
               </button>
-            ) : null}
-            {isOpen && isHost ? (
-              <Button variant="outline" data-tour="review" className="max-[359px]:px-3" onClick={() => (setMode("review"), track({ name: "review_opened" }))} disabled={total === 0 && correctionsThisRound === 0}>
-                <ReceiptText className="size-5" aria-hidden />
-                Review order
-              </Button>
-            ) : isOpen || confirmedTicket ? (
-              <Button variant="outline" data-tour="ticket" className="max-[359px]:px-3" onClick={() => (setMode("waiter"), track({ name: "waiter_view_opened" }))} disabled={!confirmedTicket && total === 0 && correctionsThisRound === 0}>
-                <ReceiptText className="size-5" aria-hidden />
-                Ticket
-              </Button>
             ) : null}
             </div>
           </div>
