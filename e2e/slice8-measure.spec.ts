@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { test, type Page } from "@playwright/test";
 import { addDish, confirmRound1, inviteCode, joinAsGuest, openDetail, startOrder } from "./support/helpers";
 
@@ -122,5 +122,57 @@ test("dock heights, Served row heights and 320 screenshots", async ({ page, brow
   numbers.round2 = round2 as never;
 
   await writeFile(`${DIR}/numbers.json`, JSON.stringify(numbers, null, 2));
+  console.log(JSON.stringify(numbers));
+});
+
+// Follow-ups 22-24: Tab states and round-2 docks at several widths. Output: .shots/after-fu/ (screenshots, geometry, numbers).
+const AFTER = ".shots/after-fu";
+const MEASURE_ROWS = "/Users/kovie/Documents/claude skills custom/claude-workflow-main/skills/verify/references/measure-rows.js";
+const capture = async (page: Page, stem: string) => {
+  await page.screenshot({ path: `${AFTER}/${stem}.png` });
+  await writeFile(`${AFTER}/${stem}.geometry.json`, JSON.stringify(await page.evaluate(await readFile(MEASURE_ROWS, "utf8"))));
+};
+
+test("follow-ups 22-24: Tab through the empty composer, round-2 docks", async ({ page, browser }) => {
+  test.setTimeout(180_000);
+  await mkdir(AFTER, { recursive: true });
+  const numbers: Record<string, unknown> = {};
+  const dish = page.getByRole("textbox", { name: "Dish" });
+
+  await page.setViewportSize({ width: 375, height: 700 });
+  await startOrder(page);
+  for (const width of [320, 375]) {
+    await page.setViewportSize({ width, height: 700 });
+    await dish.focus();
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Tab");
+    await capture(page, `composer-tab-stepper-${width}`);
+    await dish.blur();
+    await page.mouse.click(5, 5);
+  }
+
+  const guest = await joinAsGuest(browser, await inviteCode(page), "JD");
+  await openDetail(page, "Price");
+  await page.getByLabel("Price each (₱)").fill(process.env.AMOUNT ?? "12480");
+  await dish.fill("Whole lechon");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await dish.press("Escape");
+  await addDish(guest.page, "Iced Tea");
+  await confirmRound1(page);
+  await page.getByRole("button", { name: "Add more (round 2)" }).click();
+  await addDish(page, "Halo-halo");
+  await addDish(guest.page, "Leche Flan");
+  await page.waitForTimeout(800);
+
+  for (const width of [320, 360, 375, 390, 412, 430]) {
+    await page.setViewportSize({ width, height: 700 });
+    await guest.page.setViewportSize({ width, height: 700 });
+    await page.waitForTimeout(400);
+    numbers[`host_${width}`] = await bar(page);
+    numbers[`guest_${width}`] = await bar(guest.page);
+    if (width === 320) await capture(guest.page, "dock-round2-guest-320");
+    if (width === 375 || width === 390) await capture(page, `dock-round2-host-${width}`);
+  }
+  await writeFile(`${AFTER}/numbers.json`, JSON.stringify(numbers, null, 2));
   console.log(JSON.stringify(numbers));
 });
