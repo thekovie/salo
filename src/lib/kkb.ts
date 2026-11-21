@@ -359,5 +359,5 @@ export function myShareLabel(kkb: Kkb): string | null {
   return `My share${mine.status === "complete" ? "" : " so far"} · ${formatPesoShort(mine.pricedCentavos)}`;
 }
 
-/** The same label under 360 px: "Share ₱1,240" (the full text stays the accessible name). */
+/** The same label under 430 px: "Share ₱1,240" (the full text stays the accessible name). */
 export const shortShareLabel = (full: string): string => full.replace(/^My share(?: so far)? · (?=₱)/, "Share ").replace(/^My share/, "Share");

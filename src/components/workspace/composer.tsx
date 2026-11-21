@@ -73,19 +73,21 @@ export function Composer({ dishNames, people, names, groups, entries, defaults, 
   const [field, setField] = useState<DetailField | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [active, setActive] = useState(false);
+  const [typing, setTyping] = useState(false);
   const [lastSignal, setLastSignal] = useState(detailsSignal);
   if (detailsSignal !== lastSignal) {
     setLastSignal(detailsSignal);
     setField("price");
     setDetailsOpen(true);
     setActive(true);
+    setTyping(true);
   }
   const narrow = useSyncExternalStore(subscribeNarrow, () => matchMedia(NARROW).matches, () => false);
   const formRef = useRef<HTMLFormElement>(null);
   // Between a pointer press and its click, focus changes (a tapped button takes focus after the press on touch) must
   // not collapse the composer: the layout would move under the finger and the click would miss.
   const pressing = useRef(false);
-  useEffect(() => onActiveChange?.(active), [active, onActiveChange]);
+  useEffect(() => onActiveChange?.(typing), [typing, onActiveChange]);
   useEffect(() => () => onActiveChange?.(false), [onActiveChange]);
   useEffect(() => {
     let fallback: ReturnType<typeof setTimeout>;
@@ -98,13 +100,18 @@ export function Composer({ dishNames, people, names, groups, entries, defaults, 
       clearTimeout(fallback);
       fallback = setTimeout(release, 1000);
     };
+    const collapse = () => {
+      setActive(false);
+      setTyping(false);
+    };
     const outside = (event: Event) => !formRef.current?.contains(event.target as Node);
     const clicked = (event: Event) => {
       release();
-      if (outside(event)) setActive(false);
+      if (outside(event)) collapse();
+      else setTyping(!!document.activeElement && isTextField(document.activeElement));
     };
     const focused = (event: Event) => {
-      if (!pressing.current && outside(event)) setActive(false);
+      if (!pressing.current && outside(event)) collapse();
     };
     document.addEventListener("pointerdown", press, true);
     document.addEventListener("pointercancel", release, true);
@@ -192,12 +199,17 @@ export function Composer({ dishNames, people, names, groups, entries, defaults, 
       className="rounded-[1.4rem] bg-ticket p-2 shadow-ticket ring-[1.5px] ring-rule"
       aria-label="Add a dish"
       onFocus={(event) => {
-        if (isTextField(event.target)) setActive(true);
-        else if (!pressing.current) setActive(false);
+        if (isTextField(event.target)) {
+          setActive(true);
+          setTyping(true);
+        } else if (!pressing.current) setTyping(false);
       }}
       onBlur={(event) => {
-        if (!pressing.current && !event.currentTarget.contains(event.relatedTarget)) setActive(false);
+        if (pressing.current || event.currentTarget.contains(event.relatedTarget)) return;
+        setActive(false);
+        setTyping(false);
       }}
+      onKeyDown={(e) => e.key === "Escape" && e.target instanceof HTMLElement && e.target.blur()}
     >
       {suggestions.length > 0 ? (
         <div className="flex flex-wrap gap-1.5 px-1 pb-2" aria-label="Dishes already in this order" data-ph-mask="">
@@ -261,7 +273,6 @@ export function Composer({ dishNames, people, names, groups, entries, defaults, 
             setDish(e.target.value);
             setError("");
           }}
-          onKeyDown={(e) => e.key === "Escape" && e.currentTarget.blur()}
           maxLength={60}
           autoComplete="off"
           enterKeyHint="done"

@@ -164,6 +164,26 @@ test("keyboard: Tab from the Dish after Add reaches Review order; Escape in the 
   await expect(page.getByTestId("round-total")).toBeVisible();
 });
 
+for (const [width, stops] of [[320, ["Add", "Details"]], [375, ["One more this dish", "Add"]]] as const) {
+  test(`keyboard at ${width}: Tab from an empty Dish reaches For, the stepper and the details`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 700 });
+    await startOrder(page);
+    await page.getByRole("textbox", { name: "Dish" }).focus();
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("button", { name: /^For / })).toBeFocused();
+    await expect(page.getByRole("button", { name: "One more this dish" })).toBeVisible();
+    for (const name of stops) {
+      await page.keyboard.press("Tab");
+      await expect(page.getByRole("button", { name, exact: true })).toBeFocused();
+    }
+    await expect(page.getByRole("button", { name: "One more this dish" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Review order" })).toBeVisible();
+    if (width === 375) await expect(page.getByRole("button", { name: "+ Size", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("button", { name: "One more this dish" })).toHaveCount(0);
+  });
+}
+
 test("re-expanding the composer leaves focus on the Dish, not on a detail field", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 700 });
   await startOrder(page);
