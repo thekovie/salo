@@ -5,12 +5,15 @@ test("privacy and cookie policies are reachable, readable and accessible", async
   await page.goto("/");
   await page.getByRole("navigation", { name: "Policies" }).getByRole("link", { name: "Privacy" }).click();
   await expect(page.getByRole("heading", { name: "Privacy policy", level: 1 })).toBeVisible();
+  // The title streams in after a client-side navigation; axe flags a missing <title> if it runs first.
+  await expect(page).toHaveTitle(/Privacy/);
   await expect(page.getByRole("link", { name: "salo@projects.thekovie.com" }).first()).toHaveAttribute("href", "mailto:salo@projects.thekovie.com");
   await expect(page.getByText(/Replays hide everything you type/)).toBeVisible();
   expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
 
   await page.getByRole("navigation", { name: "Policies" }).first().getByRole("link", { name: "Cookies" }).click();
   await expect(page.getByRole("heading", { name: "Cookie policy", level: 1 })).toBeVisible();
+  await expect(page).toHaveTitle(/Cookie/);
   await expect(page.getByRole("cell", { name: "salo_s_<order>" })).toBeVisible();
   // Analytics isn't configured in tests, so the switch says there's nothing to turn off.
   await expect(page.getByText(/Analytics isn’t running in this browser/)).toBeVisible({ timeout: 6000 });

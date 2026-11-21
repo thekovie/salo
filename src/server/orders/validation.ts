@@ -80,6 +80,22 @@ export const correctionSchema = z.object({
 });
 export type CorrectionInput = z.infer<typeof correctionSchema>;
 
+/** One change across several source entries (one per person of a preparation); all-or-nothing. */
+export const correctionBatchSchema = z.object({
+  entries: z
+    .array(z.object({ sourceEntryId: z.uuid(), quantity: z.number().int().min(1).max(LIMITS.quantity).optional() }))
+    .min(1)
+    .max(LIMITS.correctionsPerSession)
+    .refine((list) => new Set(list.map((e) => e.sourceEntryId)).size === list.length, "Each dish can be listed once."),
+  type: z.enum(["QUANTITY", "REPLACE"]),
+  replacement: optional(LIMITS.dishName),
+  explanation: optional(LIMITS.instructions),
+});
+export type CorrectionBatchInput = z.infer<typeof correctionBatchSchema>;
+
+export const unavailableSchema = z.object({ replacement: optional(LIMITS.dishName), note: optional(LIMITS.instructions) });
+export type UnavailableInput = z.infer<typeof unavailableSchema>;
+
 export const removeParticipantSchema = z.object({ reason: z.string().trim().max(LIMITS.removalReason, `Keep the reason under ${LIMITS.removalReason} characters.`).nullish() });
 
 /** Whole centavos; null clears (unknown price / service charge not entered). */
@@ -99,8 +115,37 @@ export type EntrySettlementInput = z.infer<typeof entrySettlementSchema>;
 export const correctionPriceSchema = z.object({ expectedRevision: z.number().int().min(0), unitPriceCentavos: centavos(MAX_UNIT_PRICE_CENTAVOS) });
 export type CorrectionPriceInput = z.infer<typeof correctionPriceSchema>;
 
+export const sharedPriceSchema = z
+  .object({
+    dishId: z.uuid(),
+    /** Size as typed; null or blank = no size. */
+    variant: text(LIMITS.variant).nullable(),
+    /** null removes the table price. */
+    unitCentavos: centavos(MAX_UNIT_PRICE_CENTAVOS),
+    expectedRevision: z.number().int().min(0),
+    /** "Every … here": this line's own price is cleared in the same change. */
+    clearEntryId: z.uuid().optional(),
+    /** The line's settlement revision the host saw; required with clearEntryId so a price set meanwhile is not wiped unseen. */
+    expectedEntryRevision: z.number().int().min(0).optional(),
+  })
+  .refine((v) => !v.clearEntryId || v.expectedEntryRevision !== undefined, { message: "expectedEntryRevision is required with clearEntryId", path: ["expectedEntryRevision"] });
+export type SharedPriceInput = z.infer<typeof sharedPriceSchema>;
+
 export const serviceChargeSchema = z.object({ expectedRevision: z.number().int().min(0), centavos: centavos(MAX_SERVICE_CHARGE_CENTAVOS) });
 export type ServiceChargeInput = z.infer<typeof serviceChargeSchema>;
 
+export const receiptTotalSchema = z.object({ expectedRevision: z.number().int().min(0), centavos: centavos(MAX_SERVICE_CHARGE_CENTAVOS) });
+export type ReceiptTotalInput = z.infer<typeof receiptTotalSchema>;
+
 export const renameMeSchema = z.object({ displayName: text(LIMITS.label).min(1, "Type your name so the table knows whose order is whose.") });
 export type RenameMeInput = z.infer<typeof renameMeSchema>;
+
+export const servingSchema = z.object({
+  roundId: z.uuid(),
+  lineKey: z.string().min(1).max(600),
+  delta: z.number().int().min(-999).max(999).refine((n) => n !== 0, "Nothing to change."),
+});
+export type ServingInput = z.infer<typeof servingSchema>;
+
+/** Mark some (or all) of your own updates read. */
+export const markReadSchema = z.union([z.strictObject({ ids: z.array(z.uuid()).min(1).max(50) }), z.strictObject({ all: z.literal(true) })]);

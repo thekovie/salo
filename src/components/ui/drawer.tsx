@@ -16,15 +16,24 @@ export const DrawerClose = Vaul.Close;
 export const DrawerTitle = Vaul.Title;
 export const DrawerDescription = Vaul.Description;
 
+/** A native confirm dialog inside the drawer takes Escape for itself: stop the drawer's dismissal (which also cancels the browser's own) and close the dialog the way the browser would. */
+function closeNestedDialog(event: KeyboardEvent) {
+  const dialog = event.target instanceof Element ? event.target.closest("dialog[open]") : null;
+  if (!dialog) return;
+  event.preventDefault();
+  if (dialog.dispatchEvent(new Event("cancel", { cancelable: true }))) (dialog as HTMLDialogElement).close();
+}
+
 export function DrawerContent({ className, children, ...props }: React.ComponentProps<typeof Vaul.Content>) {
   return (
     <Vaul.Portal>
-      <Vaul.Overlay className="fixed inset-0 z-50 bg-ink/55" />
+      <Vaul.Overlay className="fixed inset-0 z-50 bg-black/55" />
       <Vaul.Content
         className={cn(
           "ticket-top fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[92dvh] w-full max-w-lg flex-col bg-ticket text-ink shadow-ticket outline-none",
           className,
         )}
+        onEscapeKeyDown={closeNestedDialog}
         {...props}
       >
         {/* Grab handle: the visible hint that this sheet can be dragged down. */}

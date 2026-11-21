@@ -1,3 +1,4 @@
+import { confirmedIds, effectiveEntry } from "./effective-order";
 import { consolidate, isPlain, preparationLabel } from "./consolidate";
 import { everyone, type SessionSnapshot, type SnapshotEntry } from "./snapshot";
 import { byGroup, byPerson } from "./views";
@@ -8,7 +9,7 @@ export interface SummarySection {
   /** "host", "shared by Rafa, JD", "shared by the table"… */
   note: string | null;
   items: number;
-  lines: { label: string; quantity: number }[];
+  lines: { label: string; quantity: number; pendingChange: boolean }[];
 }
 
 export interface OrderSummary {
@@ -19,29 +20,32 @@ export interface OrderSummary {
   total: number;
   /** An open round with dishes that never reached the waiter (left out of the summary). */
   unconfirmedRound: number | null;
+  /** Dishes with a cancellation or swap that hasn't reached the waiter yet (not applied above). */
+  pendingDishes: string[];
 }
 
 /**
- * What was actually ordered, per entry: confirmed rounds only, with corrections applied. A cancellation lowers the
- * entry's count (gone at zero); a replacement becomes its own line, "Chicken Katsu → Pork Katsu".
+ * What was actually ordered, per entry: confirmed rounds only, with the corrections the waiter was told about (same
+ * rule as KKB). A cancellation lowers the entry's count (gone at zero); a replacement becomes its own line,
+ * "Chicken Katsu → Pork Katsu". Corrections still waiting for a round are not applied; their entry ids are returned in `pending`.
  */
-function settledEntries(snapshot: SessionSnapshot): SnapshotEntry[] {
-  const confirmed = new Set(snapshot.rounds.filter((r) => r.status === "CONFIRMED").map((r) => r.id));
-  return snapshot.entries
+function settledEntries(snapshot: SessionSnapshot): { entries: SnapshotEntry[]; pending: Set<string> } {
+  const confirmed = confirmedIds(snapshot.rounds);
+  const pending = new Set<string>();
+  const entries = snapshot.entries
     .filter((e) => confirmed.has(e.roundId))
     .flatMap((e) => {
-      const fixes = snapshot.corrections.filter((c) => c.sourceEntryId === e.id);
-      const cancelled = fixes.filter((c) => c.type === "QUANTITY").reduce((n, c) => n + Math.abs(c.quantityDelta ?? 0), 0);
-      const quantity = e.quantity - cancelled;
+      const { quantity, replacement, pendingChange } = effectiveEntry(e, snapshot.corrections, confirmed);
+      if (pendingChange) pending.add(e.id);
       if (quantity <= 0) return [];
-      const replaced = [...fixes].reverse().find((c) => c.type === "REPLACE" && c.replacement);
-      return [replaced ? { ...e, quantity, dishId: `replaced:${e.id}`, dishName: `${e.dishName} → ${replaced.replacement}` } : { ...e, quantity }];
+      return [replacement ? { ...e, quantity, dishId: `replaced:${e.id}`, dishName: `${e.dishName} → ${replacement}` } : { ...e, quantity }];
     });
+  return { entries, pending };
 }
 
-function linesOf(entries: SnapshotEntry[]): SummarySection["lines"] {
+function linesOf(entries: SnapshotEntry[], pending: Set<string>): SummarySection["lines"] {
   return consolidate(entries).dishes.flatMap((dish) =>
-    dish.preparations.map((p) => ({ label: isPlain(p) ? dish.name : `${dish.name} (${preparationLabel(p)})`, quantity: p.quantity })),
+    dish.preparations.map((p) => ({ label: isPlain(p) ? dish.name : `${dish.name} (${preparationLabel(p)})`, quantity: p.quantity, pendingChange: p.entries.some((e) => pending.has(e.id)) })),
   );
 }
 
@@ -50,14 +54,14 @@ const NOBODY_NOTE = "not assigned to anyone";
 
 /** "Who ordered what" for settling up later (owner request): people, then groups, then the whole table and the rest. */
 export function buildSummary(snapshot: SessionSnapshot): OrderSummary {
-  const entries = settledEntries(snapshot);
+  const { entries, pending } = settledEntries(snapshot);
   const people = everyone(snapshot);
   const name = (id: string) => people.find((p) => p.id === id)?.displayName ?? "Someone";
   const section = (title: string, note: string | null, list: SnapshotEntry[]): SummarySection => ({
     title,
     note,
     items: list.reduce((n, e) => n + e.quantity, 0),
-    lines: linesOf(list),
+    lines: linesOf(list, pending),
   });
 
   const personal = byPerson(entries, people)
@@ -76,6 +80,7 @@ export function buildSummary(snapshot: SessionSnapshot): OrderSummary {
     sections: [...personal.filter((s) => !isShared(s)), ...groups, ...personal.filter(isShared)],
     total: entries.reduce((n, e) => n + e.quantity, 0),
     unconfirmedRound: draftHasDishes && draft ? draft.number : null,
+    pendingDishes: [...new Set(snapshot.entries.filter((e) => pending.has(e.id)).map((e) => e.dishName))],
   };
 }
 
@@ -95,6 +100,7 @@ export function summaryText(summary: OrderSummary, dateLabel: string): string {
     for (const line of s.lines) out.push(`  ${line.label} ×${line.quantity}`);
   }
   if (summary.unconfirmedRound) out.push("", `Round ${summary.unconfirmedRound} was never confirmed with the waiter (not included).`);
+  if (summary.pendingDishes.length > 0) out.push("", `Changes waiting for the waiter: ${summary.pendingDishes.join(", ")}`);
   out.push("", `Total: ${itemsLabel(summary.total)} · no prices included`, "Made with Salo");
   return out.join("\n");
 }

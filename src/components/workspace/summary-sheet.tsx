@@ -57,7 +57,7 @@ export function SummarySheet({ open, onOpenChange, snapshot, tab, onTabChange, r
     try {
       await navigator.clipboard.writeText(text);
       flash({ kind: "copied" });
-      track({ name: "summary_copied" });
+      track({ name: "summary_copied", props: { tab: "items" } });
     } catch {
       setStatus({ kind: "error", message: "Couldn’t copy. Try Share, or select the text in your notes app." });
     }
@@ -149,7 +149,7 @@ export function SummarySheet({ open, onOpenChange, snapshot, tab, onTabChange, r
 
         {tab === "kkb" ? (
           <div role="tabpanel" id="summary-panel-kkb" aria-labelledby="summary-tab-kkb">
-            <KkbView snapshot={snapshot} refresh={refresh} onRenameMe={onRenameMe} />
+            <KkbView snapshot={snapshot} refresh={refresh} onRenameMe={onRenameMe} dateLabel={dateLabel} canShare={canShare} />
           </div>
         ) : (
         <div role="tabpanel" id="summary-panel-items" aria-labelledby="summary-tab-items">
@@ -170,7 +170,10 @@ export function SummarySheet({ open, onOpenChange, snapshot, tab, onTabChange, r
                   <ul className="mt-1 space-y-0.5">
                     {s.lines.map((line) => (
                       <li key={line.label} className="flex items-baseline justify-between gap-3 pl-3 text-ink-soft">
-                        <span className="min-w-0 break-words">{line.label}</span>
+                        <span className="min-w-0 break-words">
+                          {line.label}
+                          {line.pendingChange ? <span className="ml-1.5 text-sm text-ink-soft">· waiting for the waiter</span> : null}
+                        </span>
                         <span className="tally shrink-0 text-tomato-ink">×{line.quantity}</span>
                       </li>
                     ))}

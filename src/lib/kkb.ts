@@ -1,6 +1,8 @@
-import { isPlain, preparationLabel } from "./consolidate";
+import { isPlain, preparationKey, preparationLabel } from "./consolidate";
 import { normalizeText } from "./dish-name";
-import { everyone, type SessionSnapshot, type SnapshotEntry } from "./snapshot";
+import { confirmedIds, effectiveEntry } from "./effective-order";
+import { formatPeso } from "./money";
+import { everyone, sharedPriceKey, type SessionSnapshot, type SnapshotEntry } from "./snapshot";
 
 /**
  * KKB ("kanya-kanyang bayad"): each person's food subtotal from confirmed rounds, and their share of the receipt's
@@ -11,6 +13,8 @@ export type KkbInput = Pick<SessionSnapshot, "participants" | "removedPeople" | 
 
 export interface KkbLine {
   entryId: string;
+  /** The dish line this belongs to in Items (dish + size + notes); replacements add their own id. */
+  dishKey: string;
   /** The confirmed replacement whose price applies to this line, if any. */
   correctionId: string | null;
   label: string;
@@ -26,6 +30,13 @@ export interface KkbLine {
   /** Shared or unassigned by attribution, so the host may set Bill to. */
   billable: boolean;
   submittedBy: string;
+  /** Where the price comes from: the line itself, the table price, or nowhere. Replacements are "line" or null. */
+  priceSource: "line" | "table" | null;
+  /** The table price key (`sharedPriceKey`) this line would follow; null for replacements. */
+  tableKey: string | null;
+  /** The table price for this dish + size, when one is set (even if the line has its own). */
+  tableCentavos: number | null;
+  hasTable: boolean;
   /** Revision of the price being shown (entry's or replacement's), 0 when never set. */
   priceRevision: number;
 }
@@ -80,7 +91,7 @@ interface Bucket {
 export function buildKkb(input: KkbInput, meId: string): Kkb {
   const people = everyone(input);
   const nameOf = (id: string) => people.find((p) => p.id === id)?.displayName ?? "Someone";
-  const confirmedRounds = new Set(input.rounds.filter((r) => r.status === "CONFIRMED").map((r) => r.id));
+  const confirmedRounds = confirmedIds(input.rounds);
   const groupMembers = new Map(input.groups.map((g) => [normalizeText(g.label), g.memberIds.map(nameOf)]));
   const buckets = new Map<string, Bucket & { lines: KkbLine[]; drafts: KkbLine[] }>();
   const bucket = (b: Bucket) => {
@@ -136,9 +147,21 @@ function dishLabel(entry: SnapshotEntry) {
   return isPlain(entry) ? entry.dishName : `${entry.dishName} (${preparationLabel(entry)})`;
 }
 
-function line(entry: SnapshotEntry, quantity: number, unit: number | null, priceRevision: number): KkbLine {
+/** A line's own price (override) first, then the table price for its dish + size, else unknown (never zero). */
+function resolvePrice(settlement: Pick<KkbInput["settlement"], "entries" | "defaults">, entry: Pick<SnapshotEntry, "id" | "dishId" | "variant">) {
+  const own = settlement.entries[entry.id];
+  const tableKey = sharedPriceKey(entry.dishId, normalizeText(entry.variant ?? ""));
+  const table = settlement.defaults[tableKey];
+  const unit = own?.unitCentavos ?? table?.unitCentavos ?? null;
+  const tableCentavos = table?.unitCentavos ?? null;
+  const priceSource = own?.unitCentavos != null ? ("line" as const) : tableCentavos != null ? ("table" as const) : null;
+  return { unit, priceSource, tableKey, revision: own?.revision ?? 0, tableCentavos };
+}
+
+function line(entry: SnapshotEntry, quantity: number, unit: number | null, priceRevision: number, priceSource: KkbLine["priceSource"] = unit == null ? null : "line", tableKey: string | null = null, tableCentavos: number | null = null): KkbLine {
   return {
     entryId: entry.id,
+    dishKey: preparationKey(entry),
     correctionId: null,
     label: dishLabel(entry),
     quantity,
@@ -150,29 +173,31 @@ function line(entry: SnapshotEntry, quantity: number, unit: number | null, price
     billable: false,
     submittedBy: entry.submittedBy,
     priceRevision,
+    priceSource,
+    tableKey,
+    tableCentavos,
+    hasTable: tableCentavos != null,
   };
 }
 
+function entryLine(input: KkbInput, entry: SnapshotEntry, quantity: number): KkbLine {
+  const p = resolvePrice(input.settlement, entry);
+  return line(entry, quantity, p.unit, p.revision, p.priceSource, p.tableKey, p.tableCentavos);
+}
+
 function draftLine(input: KkbInput, entry: SnapshotEntry): KkbLine {
-  const price = input.settlement.entries[entry.id];
-  return line(entry, entry.quantity, price?.unitCentavos ?? null, price?.revision ?? 0);
+  return entryLine(input, entry, entry.quantity);
 }
 
 /** Confirmed quantity cancellations lower the count; a confirmed swap becomes "A → B" priced on its own. */
 function confirmedLine(input: KkbInput, entry: SnapshotEntry, confirmedRounds: Set<string>): KkbLine | null {
-  const fixes = input.corrections.filter((c) => c.sourceEntryId === entry.id);
-  const done = fixes.filter((c) => confirmedRounds.has(c.targetRoundId));
-  const pendingChange = fixes.some((c) => !confirmedRounds.has(c.targetRoundId));
-  const cancelled = done.filter((c) => c.type === "QUANTITY").reduce((sum, c) => sum + Math.abs(c.quantityDelta ?? 0), 0);
-  const quantity = entry.quantity - cancelled;
+  const { quantity, replacement, replacementId, pendingChange } = effectiveEntry(entry, input.corrections, confirmedRounds);
   if (quantity <= 0) return null;
-  const swap = [...done].reverse().find((c) => c.type === "REPLACE" && c.replacement);
-  if (!swap) {
-    const price = input.settlement.entries[entry.id];
-    return { ...line(entry, quantity, price?.unitCentavos ?? null, price?.revision ?? 0), pendingChange };
+  if (!replacementId) {
+    return { ...entryLine(input, entry, quantity), pendingChange };
   }
-  const price = input.settlement.corrections[swap.id];
-  return { ...line(entry, quantity, price?.unitCentavos ?? null, price?.revision ?? 0), correctionId: swap.id, label: `${dishLabel(entry)} → ${swap.replacement}`, pendingChange };
+  const price = input.settlement.corrections[replacementId];
+  return { ...line(entry, quantity, price?.unitCentavos ?? null, price?.revision ?? 0), dishKey: `${preparationKey(entry)}|${replacementId}`, correctionId: replacementId, label: `${dishLabel(entry)} → ${replacement}`, pendingChange };
 }
 
 function toSection(b: Bucket & { lines: KkbLine[]; drafts: KkbLine[] }, meId: string, groupMembers: Map<string, string[]>): KkbSection {
@@ -243,4 +268,84 @@ export function allocate(charge: number, weights: readonly (readonly [string, nu
   // Stable sort keeps key order among equal remainders.
   const winners = new Set([...parts].sort((a, b) => (a.remainder === b.remainder ? 0 : a.remainder > b.remainder ? -1 : 1)).slice(0, leftover).map((p) => p.key));
   return new Map(parts.map((p) => [p.key, Number(p.share) + (winners.has(p.key) ? 1 : 0)]));
+}
+
+export interface PriceCompleteness {
+  /** Distinct dish lines (dish + size + notes) in confirmed rounds. */
+  total: number;
+  /** Lines where every entry resolves to a price, a table price included. */
+  priced: number;
+  /** The first unpriced line in card order, for the "Show" link. */
+  first: { sectionKey: string; line: KkbLine } | null;
+}
+
+export function priceCompleteness(kkb: Kkb): PriceCompleteness {
+  const dishes = new Map<string, boolean>();
+  let first: PriceCompleteness["first"] = null;
+  for (const section of kkb.sections) {
+    for (const line of section.lines) {
+      if (line.billedTo) continue;
+      const known = line.unitCentavos != null;
+      dishes.set(line.dishKey, (dishes.get(line.dishKey) ?? true) && known);
+      if (!known && !first) first = { sectionKey: section.key, line };
+    }
+  }
+  const priced = [...dishes.values()].filter(Boolean).length;
+  return { total: dishes.size, priced, first };
+}
+
+export type Reconciliation =
+  | { state: "incomplete"; unpriced: number }
+  | { state: "pending" }
+  | { state: "matches" }
+  | { state: "more" | "less"; differenceCentavos: number };
+
+/** Salo's total (food plus the service charge, when entered) against the receipt. Only compared, never split. */
+export function saloTotal(kkb: Kkb): number {
+  return kkb.foodCentavos + (kkb.charge.state === "allocated" || kkb.charge.state === "blocked" ? kkb.charge.centavos : 0);
+}
+
+export const hasPending = (kkb: Kkb) => kkb.sections.some((s) => s.pendingChanges > 0);
+
+export function reconcile(kkb: Kkb, receiptCentavos: number): Reconciliation {
+  const { total, priced } = priceCompleteness(kkb);
+  if (priced < total) return { state: "incomplete", unpriced: total - priced };
+  if (hasPending(kkb)) return { state: "pending" };
+  const difference = receiptCentavos - saloTotal(kkb);
+  if (difference === 0) return { state: "matches" };
+  return { state: difference > 0 ? "more" : "less", differenceCentavos: Math.abs(difference) };
+}
+
+const dishes = (n: number) => `${n} ${n === 1 ? "dish" : "dishes"}`;
+
+/** Messenger-friendly text of the KKB view, from the same calculation. `dateLabel` is formatted on the device. */
+export function kkbText(kkb: Kkb, title: string, dateLabel: string): string {
+  const { charge } = kkb;
+  const split = charge.state === "allocated";
+  const out = [`${title} · ${dateLabel}`, ""];
+  const people = kkb.sections.filter((s) => !s.shared && s.status !== "empty");
+  for (const s of people) {
+    const food = s.status === "none" ? "no prices yet" : formatPeso(s.pricedCentavos);
+    if (s.serviceCentavos != null && s.totalCentavos != null) out.push(`${s.title}  ${food} + ${formatPeso(s.serviceCentavos)} service = ${formatPeso(s.totalCentavos)}`);
+    else out.push(`${s.title}  ${food}${s.status !== "none" && (s.unpricedUnits > 0 || s.pendingChanges > 0) ? " so far" : ""}`);
+  }
+  if (!split && charge.state !== "none") out.push("", charge.state === "unset" ? "Service charge not entered yet, so these are food only." : "Service charge not split yet, so these are food only.");
+
+  const open = kkb.sections.flatMap((s) => s.lines.filter((l) => !l.billedTo && (l.unitCentavos == null || s.shared)).map((l) => ({ s, l })));
+  if (open.length > 0) {
+    out.push("", "Not yet settled:");
+    for (const { s, l } of open) out.push(`  ${l.label} ×${l.quantity} (${s.title})${l.unitCentavos == null ? ", no price" : ""}`);
+  }
+
+  const { total, priced } = priceCompleteness(kkb);
+  const unbilled = kkb.sections.filter((s) => s.shared).reduce((sum, s) => sum + s.lines.filter((l) => !l.billedTo).length, 0);
+  const reasons = [
+    priced < total && `${dishes(total - priced)} no price`,
+    unbilled > 0 && `${unbilled} shared ${unbilled === 1 ? "dish has" : "dishes have"} no payer`,
+    charge.state === "unset" && "service charge not entered",
+    hasPending(kkb) && "a change is pending with the waiter",
+  ].filter(Boolean);
+  const blocked = reasons.length > 0 || charge.state === "blocked" || open.length > 0;
+  out.push("", blocked ? `Total not final: ${reasons.join(", ") || "some items are not settled"}` : `Total ${formatPeso(saloTotal(kkb))}`, "Made with Salo");
+  return out.join("\n");
 }

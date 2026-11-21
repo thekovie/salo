@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { addDish, inviteCode, joinAsGuest, openNotes, orderFor, startOrder } from "./support/helpers";
+import { addDish, inviteCode, joinAsGuest, openDetail, orderFor, startOrder } from "./support/helpers";
 
 async function confirmRound(page: Page) {
   await page.getByRole("button", { name: "Review order" }).click();
@@ -19,7 +19,7 @@ test("KKB: price while ordering, price from the receipt, bill a shared dish, spl
   const guest = await joinAsGuest(browser, code, "JD");
 
   // A price while ordering: the subtotal shows before saving.
-  await openNotes(page);
+  await openDetail(page, "Price");
   await page.getByLabel("Price each (₱)").fill("120");
   await page.getByRole("textbox", { name: "Dish" }).fill("Chicken Katsu");
   await page.getByRole("button", { name: "One more this dish" }).click();
@@ -28,7 +28,7 @@ test("KKB: price while ordering, price from the receipt, bill a shared dish, spl
   await expect(page.getByRole("textbox", { name: "Dish" })).toHaveValue("");
 
   // An invalid price is refused in words, nothing is added.
-  await openNotes(page);
+  await openDetail(page, "Price");
   await page.getByLabel("Price each (₱)").fill("1.234");
   await page.getByRole("textbox", { name: "Dish" }).fill("Mystery");
   await page.getByRole("button", { name: "Add", exact: true }).click();

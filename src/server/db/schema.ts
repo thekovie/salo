@@ -27,6 +27,7 @@ export const ROLES = ["HOST", "GUEST"] as const;
 export const ATTRIBUTION_TYPES = ["INDIVIDUAL", "GROUP", "TABLE", "UNASSIGNED"] as const;
 export const CLAIM_STATUSES = ["PENDING", "APPROVED", "REJECTED"] as const;
 export const CORRECTION_TYPES = ["QUANTITY", "REPLACE", "CANCEL"] as const;
+export const CORRECTION_REASONS = ["UNAVAILABLE"] as const;
 
 const inList = (column: string, values: readonly string[]) =>
   sql.raw(`${column} IN (${values.map((v) => `'${v}'`).join(", ")})`);
@@ -50,6 +51,9 @@ export const sessions = pgTable(
     /** The receipt's service charge in centavos (KKB): null = not entered, 0 = the receipt has none. */
     serviceChargeCentavos: integer("service_charge_centavos"),
     serviceChargeRevision: integer("service_charge_revision").notNull().default(0),
+    /** The receipt's printed total in centavos (KKB check): null = not entered. Never split; only compared. */
+    receiptTotalCentavos: integer("receipt_total_centavos"),
+    receiptTotalRevision: integer("receipt_total_revision").notNull().default(0),
   },
   (t) => [
     uniqueIndex("sessions_join_code_uq").on(t.joinCode),
@@ -59,6 +63,8 @@ export const sessions = pgTable(
     check("sessions_closed_ck", sql`(status = 'CLOSED') = (closed_at IS NOT NULL)`),
     check("sessions_service_charge_ck", sql`service_charge_centavos BETWEEN 0 AND 99999999`),
     check("sessions_service_charge_revision_ck", sql`service_charge_revision >= 0`),
+    check("sessions_receipt_total_ck", sql`receipt_total_centavos BETWEEN 0 AND 99999999`),
+    check("sessions_receipt_total_revision_ck", sql`receipt_total_revision >= 0`),
   ],
 );
 
@@ -275,11 +281,20 @@ export const orderCorrections = pgTable(
     quantityDelta: integer("quantity_delta"),
     replacementData: jsonb("replacement_data"),
     explanation: text("explanation"),
+    /** Why, when it is more than a plain correction: "UNAVAILABLE" = the waiter said it's out (told at once). */
+    reason: text("reason", { enum: CORRECTION_REASONS }),
+    /** Rows written by one change (several people's entries, or a whole dish) share it and are shown as one. */
+    groupId: uuid("group_id"),
     createdBy: uuid("created_by").references(() => participants.id, { onDelete: "set null" }),
     createdAt: createdAt(),
     communicatedAt: timestamp("communicated_at", { withTimezone: true }),
   },
-  (t) => [index("corrections_target_round_idx").on(t.targetRoundId), check("corrections_type_ck", inList("correction_type", CORRECTION_TYPES))],
+  (t) => [
+    index("corrections_target_round_idx").on(t.targetRoundId),
+    index("corrections_group_idx").on(t.groupId),
+    check("corrections_type_ck", inList("correction_type", CORRECTION_TYPES)),
+    check("corrections_reason_ck", sql`reason IS NULL OR ${inList("reason", CORRECTION_REASONS)}`),
+  ],
 );
 
 /** A guest asking the host to hand over an entry the host recorded for them (brief 5.10). Not in brief section 8. */
@@ -380,5 +395,79 @@ export const correctionSettlements = pgTable(
     index("correction_settlements_session_idx").on(t.sessionId),
     check("correction_settlements_price_ck", sql`unit_price_centavos BETWEEN 0 AND 9999999`),
     check("correction_settlements_revision_ck", sql`revision >= 1`),
+  ],
+);
+
+/**
+ * A table price (KKB): price each for one dish + size within a session, set by the host. A line's own price
+ * (`entry_settlements`) overrides it. `variant_key` is the normalized size, '' for none. Clearing sets `unit_centavos` to null and keeps the row, so its revision keeps counting up.
+ */
+export const sharedPrices = pgTable(
+  "shared_prices",
+  {
+    sessionId: sessionRef(),
+    dishId: uuid("dish_id")
+      .notNull()
+      .references(() => dishes.id, { onDelete: "cascade" }),
+    variantKey: text("variant_key").notNull(),
+    unitCentavos: integer("unit_centavos"),
+    revision: integer("revision").notNull().default(1),
+    updatedBy: uuid("updated_by").references(() => participants.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.sessionId, t.dishId, t.variantKey] }),
+    check("shared_prices_price_ck", sql`unit_centavos BETWEEN 0 AND 9999999`),
+    check("shared_prices_revision_ck", sql`revision >= 1`),
+  ],
+);
+
+/**
+ * Food tracker: how many of one line (a preparation or a told replacement) of a confirmed round the host has seen
+ * served. Raw count; the display clamps it to what is still ordered. Independent from KKB.
+ */
+export const servedCounts = pgTable(
+  "served_counts",
+  {
+    sessionId: sessionRef(),
+    roundId: uuid("round_id")
+      .notNull()
+      .references(() => rounds.id, { onDelete: "cascade" }),
+    lineKey: text("line_key").notNull(),
+    served: integer("served").notNull(),
+    revision: integer("revision").notNull().default(1),
+    updatedBy: uuid("updated_by").references(() => participants.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.sessionId, t.roundId, t.lineKey] }),
+    check("served_counts_served_ck", sql`served >= 0`),
+    check("served_counts_revision_ck", sql`revision >= 1`),
+  ],
+);
+
+/**
+ * In-app notifications, one row per recipient, written in the same transaction as the change that caused them (so Undo
+ * or removal can delete them via `source`, and dedup never swallows a later, legitimate one). Private to the recipient.
+ */
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: id(),
+    sessionId: sessionRef(),
+    recipientId: uuid("recipient_id")
+      .notNull()
+      .references(() => participants.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    subject: jsonb("subject").notNull().default({}),
+    /** What created it (`entry:<id>` of removed draft entries), so undoing that change deletes or trims it. */
+    source: text("source").array().notNull().default(sql`'{}'::text[]`),
+    dedupKey: text("dedup_key").notNull(),
+    createdAt: createdAt(),
+    readAt: timestamp("read_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("notifications_dedup_uq").on(t.sessionId, t.recipientId, t.dedupKey),
+    index("notifications_recipient_idx").on(t.recipientId, t.createdAt),
   ],
 );

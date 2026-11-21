@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allocate, buildKkb, type KkbInput } from "@/lib/kkb";
+import { allocate, buildKkb, hasPending, kkbText, priceCompleteness, reconcile, type KkbInput } from "@/lib/kkb";
 import { EMPTY_SETTLEMENT, type EntrySettlement, type SnapshotEntry } from "@/lib/snapshot";
 import type { CorrectionView } from "@/lib/ticket";
 
@@ -39,9 +39,9 @@ function input(entries: SnapshotEntry[], over: Partial<KkbInput> = {}): KkbInput
 }
 const withPrices = (base: KkbInput, prices: Record<string, EntrySettlement>, charge: number | null = null): KkbInput => ({
   ...base,
-  settlement: { entries: prices, corrections: base.settlement.corrections, serviceCharge: { centavos: charge, revision: charge == null ? 0 : 1 } },
+  settlement: { ...base.settlement, entries: prices, serviceCharge: { centavos: charge, revision: charge == null ? 0 : 1 } },
 });
-const correction = (over: Partial<CorrectionView>): CorrectionView => ({ id: `c${++n}`, sourceEntryId: null, sourceRoundNumber: 1, targetRoundId: "r2", dishName: "x", preparation: null, type: "QUANTITY", quantityDelta: null, replacement: null, explanation: null, ...over });
+const correction = (over: Partial<CorrectionView>): CorrectionView => ({ id: `c${++n}`, sourceEntryId: null, sourceRoundNumber: 1, targetRoundId: "r2", dishName: "x", preparation: null, type: "QUANTITY", quantityDelta: null, replacement: null, explanation: null, reason: null, groupId: null, createdAt: "2026-11-06T12:00:00Z", ...over });
 
 describe("buildKkb food subtotals", () => {
   it("the brief's example: Ana has a priced subtotal with one unpriced item; the platter stays shared", () => {
@@ -205,5 +205,87 @@ describe("allocate (largest remainder)", () => {
   it("handles big totals without float error", () => {
     const shares = allocate(99_999_999, [["a", 9_999_999 * 99 * 150], ["b", 9_999_999 * 99 * 150 + 1]]);
     expect([...shares.values()].reduce((s, v) => s + v, 0)).toBe(99_999_999);
+  });
+});
+
+describe("price completeness", () => {
+  it("counts distinct dish lines; a line is priced only when every entry resolves, table prices included", () => {
+    const a = e("Katsu", 1, me("ana"));
+    const b = e("Katsu", 2, me("jd"));
+    const tea = e("Tea", 1, me("ana"));
+    const sisig = e("Sisig", 1, TABLE);
+    const base = withPrices(input([a, b, tea, sisig]), { [a.id]: price(10000) });
+    expect(priceCompleteness(buildKkb(base, "ana"))).toMatchObject({ total: 3, priced: 0 });
+    const withTable = { ...base, settlement: { ...base.settlement, defaults: { [`${a.dishId}|`]: { unitCentavos: 9000, revision: 1 }, [`${tea.dishId}|`]: { unitCentavos: 500, revision: 1 } } } };
+    const done = priceCompleteness(buildKkb(withTable, "ana"));
+    expect(done).toMatchObject({ total: 3, priced: 2 });
+    expect(done.first?.line.label).toBe("Sisig");
+  });
+
+  it("a line's own price overrides the table price and still counts as priced", () => {
+    const a = e("Katsu", 1, me("ana"));
+    const base = withPrices(input([a]), { [a.id]: price(10000) });
+    const kkb = buildKkb({ ...base, settlement: { ...base.settlement, defaults: { [`${a.dishId}|`]: { unitCentavos: 9000, revision: 1 } } } }, "ana");
+    expect(priceCompleteness(kkb)).toMatchObject({ total: 1, priced: 1, first: null });
+  });
+
+  it("ignores unconfirmed dishes", () => {
+    const draft = e("Tea", 1, me("ana"), { roundId: "r2" });
+    expect(priceCompleteness(buildKkb(input([draft]), "ana"))).toMatchObject({ total: 0, priced: 0 });
+  });
+});
+
+describe("reconcile and kkbText", () => {
+  const ana = e("Katsu", 1, me("ana"));
+  const jd = e("Ramen", 1, me("jd"));
+  const priced = (charge: number | null) => buildKkb(withPrices(input([ana, jd]), { [ana.id]: price(30000), [jd.id]: price(70000) }, charge), "ana");
+
+  it("matches, more and less on the receipt, from food plus the charge", () => {
+    expect(reconcile(priced(10000), 110000)).toEqual({ state: "matches" });
+    expect(reconcile(priced(10000), 113600)).toEqual({ state: "more", differenceCentavos: 3600 });
+    expect(reconcile(priced(10000), 108000)).toEqual({ state: "less", differenceCentavos: 2000 });
+  });
+
+  it("with no service charge entered, Salo's total is the food alone", () => {
+    expect(reconcile(priced(null), 100000)).toEqual({ state: "matches" });
+  });
+
+  it("is incomplete, never a match, while a dish has no price", () => {
+    const kkb = buildKkb(withPrices(input([ana, jd]), { [ana.id]: price(30000) }, 1000), "ana");
+    expect(reconcile(kkb, 31000)).toEqual({ state: "incomplete", unpriced: 1 });
+  });
+
+  it("kkbText shows each person's food, service and total, then the grand total", () => {
+    expect(kkbText(priced(10000), "Kovie's table", "Thu, Nov 19")).toBe(
+      ["Kovie's table · Thu, Nov 19", "", "Ana  ₱300.00 + ₱30.00 service = ₱330.00", "JD  ₱700.00 + ₱70.00 service = ₱770.00", "", "Total ₱1,100.00", "Made with Salo"].join("\n"),
+    );
+  });
+
+  it("kkbText is honest when the charge is missing or dishes have no price", () => {
+    const unset = kkbText(priced(null), "T", "D");
+    expect(unset).toContain("Ana  ₱300.00\n");
+    expect(unset).toContain("Service charge not entered yet, so these are food only.");
+    expect(unset).toContain("Total not final: service charge not entered");
+    const platter = e("Gyoza", 3, TABLE);
+    const open = kkbText(buildKkb(withPrices(input([ana, platter]), { [ana.id]: price(30000) }, 1000), "ana"), "T", "D");
+    expect(open).toContain("Not yet settled:\n  Gyoza ×3 (Whole table), no price");
+    expect(open).toContain("Total not final: 1 dish no price");
+  });
+
+  it.each([0, 1000])("a pending change blocks a final total and a verdict (service charge %i)", (charge) => {
+    const kkb = buildKkb(withPrices(input([ana, jd], { corrections: [correction({ sourceEntryId: ana.id, quantityDelta: -1 })] }), { [ana.id]: price(30000), [jd.id]: price(70000) }, charge), "ana");
+    expect(hasPending(kkb)).toBe(true);
+    expect(reconcile(kkb, 100000 + charge)).toEqual({ state: "pending" });
+    const text = kkbText(kkb, "T", "D");
+    expect(text).toContain("Total not final: a change is pending with the waiter");
+    expect(text).toContain("Ana  ");
+    expect(text).not.toMatch(/^Total ₱/m);
+  });
+
+  it("kkbText lists every reason the total is not final", () => {
+    const tea = e("Tea", 1, me("ana"));
+    const platter = e("Gyoza", 3, TABLE);
+    const kkb = buildKkb(withPrices(input([ana, tea, platter], { corrections: [correction({ sourceEntryId: ana.id, quantityDelta: -1 })] }), { [ana.id]: price(30000) }, 0), "ana");
+    expect(kkbText(kkb, "T", "D")).toContain("Total not final: 2 dishes no price, 1 shared dish has no payer, a change is pending with the waiter");
   });
 });

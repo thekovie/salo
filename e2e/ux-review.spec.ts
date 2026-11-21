@@ -3,7 +3,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { addDish, inviteCode } from "./support/helpers";
 
-// UI/UX review pass for the landing scenes and the first-time tour. Skipped unless UX_REVIEW=1:
+// UI/UX review pass for the landing scenes and the first-time setup guide. Skipped unless UX_REVIEW=1:
 //   UX_REVIEW=1 pnpm e2e e2e/ux-review.spec.ts
 // Screenshots and a findings report land in .impeccable/review/ux (git-ignored).
 test.skip(!process.env.UX_REVIEW, "set UX_REVIEW=1 to run the UI/UX review captures");
@@ -89,34 +89,32 @@ test("landing with reduced motion shows finished scenes", async ({ browser }) =>
   await ctx.close();
 });
 
-async function walkTour(page: Page, where: string, expected: number) {
-  const card = page.getByRole("dialog");
-  await expect(card).toBeVisible();
+async function walkGuide(page: Page, where: string, expected: number) {
+  const guide = page.getByRole("dialog", { name: "How Salo works" });
+  await expect(guide).toBeVisible();
   for (let i = 0; i < expected; i++) {
-    await page.waitForTimeout(500); // spotlight settles after scrolling
-    const geometry = await page.evaluate(() => {
-      const dialog = document.querySelector('[role="dialog"]')!.getBoundingClientRect();
-      const frame = [...document.querySelectorAll<HTMLElement>("div[aria-hidden].fixed")].find((el) => el.style.boxShadow)?.getBoundingClientRect();
-      const buttons = [...document.querySelectorAll<HTMLElement>('[role="dialog"] button')].map((b) => {
+    await expect(guide).toContainText(`Step ${i + 1} of ${expected}`);
+    await page.waitForTimeout(300);
+    const rect = await guide.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, vh: window.innerHeight, vw: window.innerWidth };
+    });
+    const buttons = await guide.getByRole("button").evaluateAll((els) =>
+      els.map((b) => {
         const r = b.getBoundingClientRect();
         return { text: b.textContent?.trim() || b.getAttribute("aria-label"), w: Math.round(r.width), h: Math.round(r.height) };
-      });
-      return { dialog: { top: dialog.top, bottom: dialog.bottom, left: dialog.left, right: dialog.right }, frame: frame && { top: frame.top, bottom: frame.bottom }, vh: window.innerHeight, vw: window.innerWidth, buttons, focus: document.activeElement?.textContent?.trim() };
-    });
-    const title = await card.getByRole("heading").textContent();
+      }),
+    );
+    const title = await guide.getByRole("heading").first().textContent();
     const step = `${where} step ${i + 1} "${title}"`;
-    note(step, "card inside the viewport", geometry.dialog.top >= 0 && geometry.dialog.bottom <= geometry.vh && geometry.dialog.left >= 0 && geometry.dialog.right <= geometry.vw, JSON.stringify(geometry.dialog));
-    if (geometry.frame) {
-      const overlaps = geometry.dialog.top < geometry.frame.bottom && geometry.dialog.bottom > geometry.frame.top;
-      note(step, "card does not cover the spotlight", !overlaps, `card ${Math.round(geometry.dialog.top)}–${Math.round(geometry.dialog.bottom)}, spot ${Math.round(geometry.frame.top)}–${Math.round(geometry.frame.bottom)}`);
-      note(step, "spotlight inside the viewport", geometry.frame.top >= 0 && geometry.frame.bottom <= geometry.vh, JSON.stringify(geometry.frame));
-    } else note(step, "spotlight found", false);
-    const small = geometry.buttons.filter((b) => b.w < 44 || b.h < 44);
-    note(step, "card buttons ≥ 44 px", small.length === 0, small.map((b) => `${b.text} ${b.w}×${b.h}`).join(", ") || undefined);
-    note(step, "focus on the primary button", geometry.focus === "Next" || geometry.focus === "Done", `focus: ${geometry.focus}`);
-    await page.screenshot({ path: `${DIR}/${where}-step-${i + 1}.png` });
-    if (i === 0) await axe(page, `${step} (tour open)`);
-    await card.getByRole("button", { name: i === expected - 1 ? "Done" : "Next" }).click();
+    note(step, "guide inside the viewport", rect.top >= -1 && rect.bottom <= rect.vh + 1 && rect.left >= 0 && rect.right <= rect.vw, JSON.stringify(rect));
+    const small = buttons.filter((b) => !b.text?.startsWith("Step ") && (b.w < 44 || b.h < 44));
+    note(step, "guide buttons ≥ 44 px (step dots excluded: WCAG 24 px)", small.length === 0, small.map((b) => `${b.text} ${b.w}×${b.h}`).join(", ") || undefined);
+    await page.screenshot({ path: `${DIR}/guide-${where}-step-${i + 1}.png` });
+    const tinyDots = buttons.filter((b) => b.text?.startsWith("Step ") && (b.w < 24 || b.h < 24));
+    note(step, "step dots ≥ 24 px (WCAG 2.5.8)", tinyDots.length === 0);
+    if (i === 0 || i === expected - 1) await axe(page, `${step} (guide open)`);
+    await guide.getByRole("button", { name: i === expected - 1 ? "Finish" : "Next" }).click();
   }
   await expect(page.getByRole("dialog")).toHaveCount(0);
 }
@@ -126,7 +124,7 @@ for (const [label, viewport, dark] of [
   ["host-phone-dark", PHONE, true],
   ["host-small", SMALL, false],
 ] as const) {
-  test(`tour: ${label}`, async ({ browser }) => {
+  test(`guide: ${label}`, async ({ browser }) => {
     const { ctx, page } = await context(browser, { viewport, dark, fresh: true });
     await page.goto("/");
     await page.getByRole("link", { name: "Start an order" }).click();
@@ -138,13 +136,13 @@ for (const [label, viewport, dark] of [
     await page.screenshot({ path: `${DIR}/${label}-offer.png` });
     await noOverflow(page, `${label} workspace with offer`);
     await axe(page, `${label} offer`);
-    await offer.getByRole("button", { name: "Show me" }).click();
-    await walkTour(page, label, 5);
+    await offer.getByRole("button", { name: "Start guide" }).click();
+    await walkGuide(page, label, 9);
     await ctx.close();
   });
 }
 
-test("tour: guest phone", async ({ browser }) => {
+test("guide: guest phone", async ({ browser }) => {
   const host = await context(browser, { viewport: PHONE });
   await host.page.goto("/");
   await host.page.getByRole("link", { name: "Start an order" }).click();
@@ -160,8 +158,8 @@ test("tour: guest phone", async ({ browser }) => {
   const offer = guest.page.getByRole("region", { name: "Tour offer" });
   await expect(offer).toBeVisible({ timeout: 10_000 });
   await guest.page.screenshot({ path: `${DIR}/guest-offer.png` });
-  await offer.getByRole("button", { name: "Show me" }).click();
-  await walkTour(guest.page, "guest-phone", 5);
+  await offer.getByRole("button", { name: "Start guide" }).click();
+  await walkGuide(guest.page, "guest-phone", 6);
   await host.ctx.close();
   await guest.ctx.close();
 });

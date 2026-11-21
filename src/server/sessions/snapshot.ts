@@ -1,8 +1,9 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
-import type { SessionSnapshot } from "@/lib/snapshot";
+import { sharedPriceKey, type SessionSnapshot } from "@/lib/snapshot";
 import type { Db } from "@/server/db/client";
-import { confirmedRoundSnapshots, correctionSettlements, dishes, entryClaims, entrySettlements, orderBatches, orderEntries, orderGroupMembers, orderGroups, participantRoundReadiness, participants, rounds, sessions } from "@/server/db/schema";
+import { confirmedRoundSnapshots, correctionSettlements, dishes, entryClaims, entrySettlements, orderBatches, orderEntries, orderGroupMembers, orderGroups, participantRoundReadiness, participants, rounds, servedCounts, sessions, sharedPrices } from "@/server/db/schema";
 import { notFound } from "@/server/errors";
+import { loadNotifications } from "@/server/notifications";
 import { loadCorrections } from "@/server/orders/rounds";
 import { LIMITS } from "@/server/orders/validation";
 import type { TicketSnapshot } from "@/lib/ticket";
@@ -33,7 +34,7 @@ export async function getSnapshot(db: Db, actor: Actor): Promise<SessionSnapshot
           .limit(LIMITS.dishesPerSession),
       ]);
       const draft = roundRows.find((r) => r.status === "DRAFT") ?? roundRows[roundRows.length - 1];
-      const [claimRows, readyRows, groupRows, memberRows, correctionRows, ticketRows, entryPriceRows, correctionPriceRows] = await Promise.all([
+      const [claimRows, readyRows, groupRows, memberRows, correctionRows, ticketRows, entryPriceRows, correctionPriceRows, sharedPriceRows, servedRows, notificationsView] = await Promise.all([
         tx.select().from(entryClaims).where(and(eq(entryClaims.sessionId, session.id), eq(entryClaims.status, "PENDING"))).orderBy(asc(entryClaims.createdAt)),
         tx.select().from(participantRoundReadiness).where(eq(participantRoundReadiness.roundId, draft.id)),
         tx.select().from(orderGroups).where(eq(orderGroups.sessionId, session.id)).orderBy(asc(orderGroups.createdAt)),
@@ -50,6 +51,9 @@ export async function getSnapshot(db: Db, actor: Actor): Promise<SessionSnapshot
           .where(eq(rounds.sessionId, session.id)),
         tx.select().from(entrySettlements).where(eq(entrySettlements.sessionId, session.id)),
         tx.select().from(correctionSettlements).where(eq(correctionSettlements.sessionId, session.id)),
+        tx.select().from(sharedPrices).where(eq(sharedPrices.sessionId, session.id)),
+        tx.select().from(servedCounts).where(eq(servedCounts.sessionId, session.id)),
+        loadNotifications(tx, actor),
       ]);
       const membersByGroup = new Map<string, string[]>();
       for (const m of memberRows) membersByGroup.set(m.groupId, [...(membersByGroup.get(m.groupId) ?? []), m.participantId]);
@@ -89,6 +93,8 @@ export async function getSnapshot(db: Db, actor: Actor): Promise<SessionSnapshot
         corrections: correctionRows,
         tickets: Object.fromEntries(ticketRows.map((t) => [t.roundId, t.data as TicketSnapshot])),
         groups: groupRows.map((g) => ({ id: g.id, label: g.label, createdBy: g.createdBy, memberIds: membersByGroup.get(g.id) ?? [] })),
+        servedCounts: servedRows.map((r) => ({ roundId: r.roundId, lineKey: r.lineKey, served: r.served })),
+        notifications: notificationsView,
         settlement: {
           entries: Object.fromEntries(
             entryPriceRows.map((p) => [
@@ -97,7 +103,9 @@ export async function getSnapshot(db: Db, actor: Actor): Promise<SessionSnapshot
             ]),
           ),
           corrections: Object.fromEntries(correctionPriceRows.map((p) => [p.correctionId, { unitCentavos: p.unitPriceCentavos, revision: p.revision }])),
+          defaults: Object.fromEntries(sharedPriceRows.map((p) => [sharedPriceKey(p.dishId, p.variantKey), { unitCentavos: p.unitCentavos, revision: p.revision }])),
           serviceCharge: { centavos: session.serviceChargeCentavos, revision: session.serviceChargeRevision },
+          receiptTotal: { centavos: session.receiptTotalCentavos, revision: session.receiptTotalRevision },
         },
       };
     },

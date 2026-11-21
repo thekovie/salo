@@ -10,7 +10,7 @@ web
 Groups eating out together in the Philippines: barkadas, families, coworkers. One person (the host) ends up collecting everyone's dishes on a phone while the table talks and a waiter waits. Guests may join from their own phones by scanning a QR code or opening a shared link (Messenger, Viber). Waiters never use the app; they only hear or see the final ticket.
 
 ## Product Purpose
-Salo collects a table's restaurant order in one place, merges identical dishes into exact counts while keeping every variant and instruction, and produces a clear ticket for the waiter. Success: faster and more accurate than a list in Notes or a Messenger thread, with no wrong quantities and no lost changes. Full specification: `docs/brief.md`.
+Salo collects a table's restaurant order in one place, merges identical dishes into exact counts while keeping every variant and instruction, produces a clear ticket for the waiter, tracks what has been served, keeps everyone updated in-app, and helps settle each person's share. Success: faster and more accurate than a list in Notes or a Messenger thread, with no wrong quantities and no lost changes. Full specification: `docs/brief.md`.
 
 ## Positioning
 No restaurant integration, no menu setup, no accounts. A host can use it alone in seconds; guests can add their own dishes live; one person can order for a sub-group. Consolidation is computed from source entries, so nobody's order is silently changed.
@@ -19,7 +19,7 @@ No restaurant integration, no menu setup, no accounts. A host can use it alone i
 Used at the table, often one-handed, in noisy and variably lit restaurants (bright food courts to dim bars), on mid-range Android phones and iPhones over patchy mobile data. The waiter view is both read aloud by the host and handed or shown to the waiter. Orders come in rounds: a first order, then add-ons.
 
 ## Capabilities and Constraints
-Next.js PWA, PostgreSQL, Server-Sent Events, self-hosted on Coolify. Host-only: confirm a round, open rounds, end the session. Closed sessions stay read-only for 7 days, then are deleted. Out of scope: payments, automatic bill splitting, menus, AI/OCR, restaurant accounts. KKB (optional prices per dish, each person's food subtotal and their share of one receipt service charge) is in scope since the KKB brief; taxes, discounts, tips, splitting shared dishes and tracking who paid are not.
+Next.js PWA, PostgreSQL, Server-Sent Events, self-hosted on Coolify. Host-only: confirm a round, open rounds, end the session. Closed sessions stay read-only for 7 days, then are deleted. Out of scope: payments, automatic bill splitting, menus, AI/OCR, restaurant accounts. KKB (optional prices per dish, each person's food subtotal and their share of one receipt service charge) is in scope since the KKB brief, together with a receipt-total check (a comparison, never split) and a plain-text Copy summary; food arrival tracking and the in-app updates bell are in scope too; taxes, discounts, tips, splitting shared dishes and tracking who paid are not.
 
 ## Brand Commitments
 - Name: **Salo** (from *salu-salo*, a shared meal). Tagline: "One table. Everyone's order."

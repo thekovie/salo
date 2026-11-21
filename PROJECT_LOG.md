@@ -431,3 +431,126 @@ Owner brief (2026-11-08): let a table of 7–12+ doing KKB see each person's foo
 
 Owner: no prompt for the host's name when creating an order; it took the Help guide. Starting stays one tap, so a saffron card at the top of the order now asks "What should the table call you?" (Save / Later; Later hides it until the order is opened again) until a name is given. KKB reuses the same `HostNamePrompt`. Lesson: a new capability needs an entry point at first use, not only inside a guide or a later screen. 39 e2e.
 
+## v1.3 · Dining coordination
+
+Plan, decisions D1–D22 and mockups: `docs/plans/salo-v1-3.md`. Phase 0 audit: `docs/plans/salo-v1-3-audit.md`. Each slice was one squash PR into `dev`.
+
+### #34 · Next.js 16.4.5
+
+- Next.js 16.4.2 → 16.4.5 for GHSA-mfr8-8qww-v76h and GHSA-vc7v-qv4w-wrv8.
+- Decision D11: a separate PR, first.
+
+### #35 · Slice 1: composer details, Items follows KKB
+
+**Built**
+- "+ Size", "+ Note" and "+ Price" chips under the dish field. The For panel holds recipients only.
+- Size suggestions come from earlier entries of the same dish.
+- A comma in a dish name offers a split (Split or Keep as typed). It is never applied on its own.
+- The edit dish sheet has the same size and note chips. It has no price field.
+- Items and KKB share one rule for pending corrections (`src/lib/effective-order.ts`). Pending changes read "waiting for the waiter".
+
+**Decisions**: D5 (Items follows KKB on pending corrections), D8 (chips row layout).
+
+**Follow-ups opened**: 1–3.
+
+**Tests**: 173 unit (30 files).
+
+### #36 · Slice 2: table prices
+
+**Built**
+- One price per dish and size, notes ignored. Migration `0008_shared_prices`.
+- The host sets it in KKB. The composer shows "table price" when one exists. A different typed price is a "this line only" override. The composer never creates a default.
+
+**Decisions**: D2 (key is dish and size), D3 (host sets table prices in KKB only).
+
+**Follow-ups opened**: 4–6.
+
+**Tests**: 183 unit (31 files). E2e: 43 passed, 0 failed (15 skipped).
+
+### #37 · Slice 3: unavailable and corrections
+
+**Built**
+- Mark unavailable removes a dish in every size and every round (D4b).
+- On a draft round, its entries go at once, with Undo.
+- On a confirmed round, the cancellations count at once, after a "This can't be undone" confirm (D4).
+- Undo restores the draft part only (D12). Pending cancels become told cancels, and a replacement covers the rest (D13).
+- Cancel some, Replace and Unavailable share one correction sheet. A batch writes one correction per source entry and shows as one row.
+- "Change a dish…" opens per confirmed round. Confirmed round tickets collapse by default (D15). Replaced dishes stay listed (D16), and a replacement sits under its original (D19). Focus never drops (D17).
+- Toasts pause on hover and focus (U9).
+- Migration `0009_unavailable_corrections`.
+
+**Decisions**: D4, D4b, D12, D13, D15, D16, D17, D19.
+
+**Open**: follow-up 7 asks for the D14 default (every person starts at 0). It is not struck.
+
+**Tests**: 247 unit (34 files). E2e: 45 passed, 15 skipped, 1 failed (`standalone.spec.ts:141`, the bot-check wait). It failed again on a rerun alone. Not confirmed as pre-existing.
+
+### #38 · Focus return on slow devices
+
+- Focus returns after the correction sheet closes on slow devices. Follows CI run #84.
+
+### #39 · Slice 4: food arrival tracker
+
+**Built**
+- Served section on the Order tab, once a round is confirmed. It sits above "What's next?", or above the draft ticket while the next round is open. Host steppers; guests read only.
+- Served counts per round and preparation. Replaced dishes keep their served history, and only the missing part waits.
+- End-order sheet: "n dishes still waiting" as a warning, not a block.
+- Migration `0010_food_tracker`.
+
+**Decisions**: D9 (served unit is per round and preparation), D10 (Order tab placement), D21 (replaced dish after serving).
+
+**Open**: follow-ups 15 and 16. Follow-up 17 (Served height at 320) goes to slice 8.
+
+**Tests**: 344 unit (36 files). E2e: 55 passed, 15 skipped; `food-tracker.spec.ts` 2 passed.
+
+### #40 · Slice 5: in-app notifications
+
+**Built**
+- Header bell with an unread count, and an Updates drawer with "Mark all read".
+- Rows are written per recipient, in the same transaction as the change that triggers them.
+- Migration `0011_notifications`.
+
+**Decisions**: D22 (correction notices only when told to the waiter).
+
+**Shipped as D22**: the fix batch removed the "recorded" notice; a correction notifies once, when the round carrying it is confirmed (contract scenarios E05/E05b/U02).
+
+**Known**: read state isn't live across one person's devices until refresh.
+
+**Tests**: 418 unit (39 files). E2e: 58 passed (full run).
+
+### #41 · Slice 6: receipt check, completeness, Copy summary
+
+**Built**
+- The host enters the receipt total. The KKB "Check against receipt" block shows food plus service charge against it, with the difference. The difference is never split (A17).
+- KKB status line: "n of m dishes priced", with a jump to the first unpriced line.
+- Copy summary on the KKB tab. Items' Copy text stays price-free.
+- Landing copy describes only shipped features.
+- Migration `0012_receipt_total`.
+
+**Decisions**: D6 (Copy summary lives on the KKB tab).
+
+**Tests**: 479 unit (41 files). E2e: first run had 2 load flakes (`notifications.spec.ts:6`, `unavailable.spec.ts:13`); rerun 59 passed, 15 skipped.
+
+### Phase 7 · Final pass (`chore/v1-3-final`)
+
+**Built**
+- Opt-in review specs (`capture`, `density-review`, `ux-review`) updated to the current UI. The tour is now the setup guide.
+- Round summaries count dishes as lines (D18). This fixes a mismatch in the final QA: the round card and the Served list counted differently.
+- Clearer "Bill to" hint. Served rows at 320: the stepper sits on the name row. Confirmed-round summaries on paper cards.
+- Dark-mode scrim is black/55 on drawers and dialogs.
+- 15 s wait in the e2e `confirmRound1` helper.
+- Golden contracts in `docs/contracts/` (table-prices, unavailable-corrections, serving, notifications, receipt-total), tested by `tests/contract-*.test.ts`.
+
+**Deviation**: D1 asked for `interactive-widget=resizes-content`. It was never applied (HANDOFF, known limitations).
+
+**Checks**
+- Typecheck, lint and build pass. 596 unit and contract tests pass.
+- E2e: 59 passed. Occasional load flakes pass on rerun.
+- Opt-in review specs: 14/14, 0 axe violations across 16 axe checks.
+- `pnpm audit --prod` is clean.
+- Black-box QA (scripted Playwright, not real users): scenarios A–F pass. Numbers are in `.shots/qa/final.md` and audit section 11.
+
+**Owner tasks added**: a phone check of v1.3, and a real-table run (HANDOFF owner tasks 12 and 13).
+
+**Open**: follow-up 21 (offline direct saves). Slice 8 covers follow-ups 17–20.
+

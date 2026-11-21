@@ -1,4 +1,5 @@
 import type { AttributionType, SourceEntry } from "./consolidate";
+import type { NotificationsView } from "./notifications";
 import type { CorrectionView, TicketSnapshot } from "./ticket";
 
 /** Everything a client needs to draw a session, at one revision. Sent by GET /sync and the initial page render. */
@@ -39,6 +40,10 @@ export interface SessionSnapshot {
    * waiter ticket, its snapshot or the invite preview, and entries flow into all of those.
    */
   settlement: SettlementView;
+  /** Food tracker: raw served counts per round line (see `trackerLines`). Independent from KKB. */
+  servedCounts: { roundId: string; lineKey: string; served: number }[];
+  /** The viewer's own updates only: private, never another participant's. */
+  notifications: NotificationsView;
 }
 
 export interface EntrySettlement {
@@ -54,11 +59,22 @@ export interface SettlementView {
   entries: Record<string, EntrySettlement>;
   /** Price each for a replacement ("Change it to …"), by correction id. */
   corrections: Record<string, { unitCentavos: number | null; revision: number }>;
+  /** Table prices (host-set) by `sharedPriceKey(dishId, variantKey)`. */
+  defaults: Record<string, { unitCentavos: number | null; revision: number }>;
   /** null = not entered; 0 = the receipt has none. */
   serviceCharge: { centavos: number | null; revision: number };
+  /** The receipt's printed total, for comparison only. null = not entered. */
+  receiptTotal: { centavos: number | null; revision: number };
 }
 
-export const EMPTY_SETTLEMENT: SettlementView = { entries: {}, corrections: {}, serviceCharge: { centavos: null, revision: 0 } };
+export const EMPTY_SETTLEMENT: SettlementView = { entries: {}, corrections: {}, defaults: {}, serviceCharge: { centavos: null, revision: 0 }, receiptTotal: { centavos: null, revision: 0 } };
+
+/** Any price anywhere: a line's, a replacement's or a table price. */
+export const anyPrice = (s: Pick<SessionSnapshot, "settlement">) =>
+  [...Object.values(s.settlement.entries), ...Object.values(s.settlement.corrections), ...Object.values(s.settlement.defaults)].some((p) => p.unitCentavos != null);
+
+/** Stable key of a table price: the dish and its normalized size ('' for none). */
+export const sharedPriceKey = (dishId: string, variantKey: string) => `${dishId}|${variantKey}`;
 
 export interface SnapshotEntry extends SourceEntry {
   roundId: string;

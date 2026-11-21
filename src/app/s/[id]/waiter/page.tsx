@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { WaiterTicket } from "@/components/ticket/waiter-ticket";
 import { WaiterActions } from "@/components/waiter/waiter-actions";
 import { consolidate } from "@/lib/consolidate";
+import { confirmedIds } from "@/lib/effective-order";
 import { liveTicket, snapshotText } from "@/lib/ticket";
 import { loadSessionForPage } from "@/server/sessions/page-data";
 
@@ -21,7 +22,7 @@ export default async function WaiterPage({ params }: Props) {
   const confirmed = round.status === "CONFIRMED" ? snapshot.tickets[round.id] : undefined;
   const ticket =
     confirmed ??
-    liveTicket({ roundNumber: round.number, title: snapshot.session.title, ticket: consolidate(snapshot.entries.filter((e) => e.roundId === round.id)), corrections: snapshot.corrections, roundId: round.id });
+    liveTicket({ roundNumber: round.number, title: snapshot.session.title, ticket: consolidate(snapshot.entries.filter((e) => e.roundId === round.id)), corrections: snapshot.corrections, roundId: round.id, confirmed: confirmedIds(snapshot.rounds) });
 
   return (
     <div className="min-h-dvh bg-paper pt-[env(safe-area-inset-top)] pb-[calc(env(safe-area-inset-bottom)+1.5rem)]">

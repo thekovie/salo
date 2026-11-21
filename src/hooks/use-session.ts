@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { api, ApiError, newKey } from "@/lib/api-client";
 import { coalesceTarget, fromStored, nextToSend, revisionToSend, toStored } from "@/lib/queue";
 import { normalizeText, optionalText, tidyText } from "@/lib/dish-name";
+import { markReadLocal } from "@/lib/notifications";
 import type { SessionSnapshot, SnapshotEntry } from "@/lib/snapshot";
 
 export type AddInput = {
@@ -40,6 +41,8 @@ export type Op =
   | { kind: "confirm"; roundId: string; roundNumber: number; expectedRevision: number }
   | { kind: "openRound"; roundNumber: number }
   | { kind: "correction"; sourceEntryId: string; dishName: string; type: "QUANTITY" | "REPLACE"; quantity?: number; replacement?: string; explanation?: string }
+  | { kind: "corrections"; dishName: string; entries: { sourceEntryId: string; quantity?: number }[]; type: "QUANTITY" | "REPLACE"; replacement?: string; explanation?: string }
+  | { kind: "unavailable"; dishId: string; dishName: string; replacement?: string; note?: string }
   | { kind: "removeCorrection"; correctionId: string; dishName: string }
   | { kind: "close" }
   | { kind: "removeGuest"; participantId: string; name: string; reason: string | null }
@@ -65,7 +68,8 @@ export interface Pending {
 
 export type SyncState = "saving" | "saved" | "reconnecting" | "unsynced" | "conflict" | "failed";
 
-type MutationResponse = { result: { entryId?: string; revision?: number }; revision: number };
+export type MutationResult = { entryId?: string; revision?: number; removedEntryIds?: string[]; removed?: number; cancelled?: number; replaced?: number };
+type MutationResponse = { result: MutationResult; revision: number };
 
 const RETRY_BASE_MS = 2000;
 const RETRY_MAX_MS = 30_000;
@@ -80,7 +84,7 @@ const POLL_WITHOUT_STREAM_MS = 10_000;
 /** The entry a change is about, if any (for coalescing and revision tracking). */
 export const entryOf = (op: Op): string | null => (op.kind === "update" || op.kind === "edit" || op.kind === "remove" || op.kind === "restore" ? op.entry.id : null);
 
-const OP_KINDS = new Set(["add", "update", "edit", "remove", "restore", "rename", "renameMe", "ready", "claim", "resolveClaim", "groupMembers", "confirm", "openRound", "correction", "removeCorrection", "close", "removeGuest", "restoreGuest"]);
+const OP_KINDS = new Set(["add", "update", "edit", "remove", "restore", "rename", "renameMe", "ready", "claim", "resolveClaim", "groupMembers", "confirm", "openRound", "correction", "corrections", "unavailable", "removeCorrection", "close", "removeGuest", "restoreGuest"]);
 const isOp = (value: unknown): value is Op => typeof value === "object" && value !== null && OP_KINDS.has((value as { kind?: string }).kind ?? "");
 
 function request(sessionId: string, op: Op, latest: SessionSnapshot, ownRevisions: ReadonlyMap<string, ReadonlySet<number>>) {
@@ -122,6 +126,10 @@ function request(sessionId: string, op: Op, latest: SessionSnapshot, ownRevision
       return { path: `${base}/rounds`, method: "POST", body: undefined };
     case "correction":
       return { path: `${base}/corrections`, method: "POST", body: { sourceEntryId: op.sourceEntryId, type: op.type, quantity: op.quantity, replacement: op.replacement, explanation: op.explanation } };
+    case "corrections":
+      return { path: `${base}/corrections`, method: "POST", body: { entries: op.entries, type: op.type, replacement: op.replacement, explanation: op.explanation } };
+    case "unavailable":
+      return { path: `${base}/dishes/${op.dishId}/unavailable`, method: "POST", body: { replacement: op.replacement, note: op.note } };
     case "removeCorrection":
       return { path: `${base}/corrections/${op.correctionId}`, method: "DELETE", body: undefined };
     case "close":
@@ -164,6 +172,10 @@ export function describeOp(op: Op): string {
       return `Start round ${op.roundNumber}`;
     case "correction":
       return `Correct ${op.dishName}`;
+    case "corrections":
+      return `Change ${op.dishName}`;
+    case "unavailable":
+      return `Mark ${op.dishName} unavailable`;
     case "removeCorrection":
       return `Remove the correction for ${op.dishName}`;
     case "close":
@@ -188,7 +200,7 @@ export function useSession(initial: SessionSnapshot) {
   const snapshotRef = useRef(initial);
   const [pending, setPendingState] = useState<Pending[]>([]);
   const queueRef = useRef<Pending[]>([]);
-  const resolvers = useRef(new Map<string, { resolve: (result: MutationResponse["result"] | null) => void; onError?: (message: string) => void }>());
+  const resolvers = useRef(new Map<string, { resolve: (result: MutationResult | null) => void; onError?: (message: string) => void }>());
   const pumping = useRef(false);
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const online = useSyncExternalStore(subscribeOnline, () => navigator.onLine, () => true);
@@ -214,7 +226,7 @@ export function useSession(initial: SessionSnapshot) {
 
   const patch = useCallback((key: string, fields: Partial<Pending>) => setQueue((list) => list.map((p) => (p.key === key ? { ...p, ...fields } : p))), [setQueue]);
 
-  const finish = useCallback((key: string, result: MutationResponse["result"] | null, error?: string) => {
+  const finish = useCallback((key: string, result: MutationResult | null, error?: string) => {
     const entry = resolvers.current.get(key);
     if (error) entry?.onError?.(error);
     entry?.resolve(result);
@@ -355,7 +367,7 @@ export function useSession(initial: SessionSnapshot) {
   }, [sessionId, patch, finish, refresh, setQueue]);
 
   const mutate = useCallback(
-    (op: Op, options: { onError?: (message: string) => void } = {}): Promise<MutationResponse["result"] | null> => {
+    (op: Op, options: { onError?: (message: string) => void } = {}): Promise<MutationResult | null> => {
       // Several taps on one stepper before the earlier one was sent (queued or waiting for the network): keep one
       // change with the final number, still based on the revision the first tap saw.
       if (op.kind === "update") {
@@ -366,7 +378,7 @@ export function useSession(initial: SessionSnapshot) {
         }
       }
       const item: Pending = { key: newKey(), op, status: "queued", createdAt: new Date().toISOString(), attempts: 0 };
-      const promise = new Promise<MutationResponse["result"] | null>((resolve) => resolvers.current.set(item.key, { resolve, onError: options.onError }));
+      const promise = new Promise<MutationResult | null>((resolve) => resolvers.current.set(item.key, { resolve, onError: options.onError }));
       setQueue((list) => [...list, item]);
       void pump();
       return promise;
@@ -455,7 +467,20 @@ export function useSession(initial: SessionSnapshot) {
   /** The latest committed version of an entry (for Undo after an add). */
   const entryById = useCallback((id: string) => snapshotRef.current.entries.find((e) => e.id === id), []);
 
-  return { snapshot, entries, pending, failed, sync, mutate, dismiss, retry, refresh, entryById, online, stream };
+  /** Private state: the badge drops at once; the server is told without a revision bump, and the snapshot corrects us if that failed. */
+  const markRead = useCallback(
+    async (input: { ids: string[] } | { all: true }) => {
+      const current = snapshotRef.current;
+      const next = { ...current, notifications: markReadLocal(current.notifications, input, new Date().toISOString()) };
+      snapshotRef.current = next;
+      setSnapshotState(next);
+      await api(`/api/sessions/${sessionId}/notifications/read`, { method: "POST", body: input }).catch(() => undefined);
+      await refresh().catch(() => undefined);
+    },
+    [sessionId, refresh],
+  );
+
+  return { snapshot, entries, pending, failed, sync, mutate, dismiss, retry, refresh, entryById, online, stream, markRead };
 }
 
 function subscribeOnline(onChange: () => void) {

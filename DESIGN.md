@@ -39,7 +39,7 @@ The system preference sets dark mode in CSS alone; `.dark` / `.light` on `<html>
 - **Stepper**: − n + with 44 px targets; at 1 the minus becomes a red Remove when removal is allowed; count in `tally` tomato-ink.
 - **Sync pill**: words + icon; on the tomato band uses `bg-ink/20`; warnings switch to saffron.
 - **Stamp**: double-ruled tomato-ink rubber stamp, rotated −8°, blend multiply/screen, sized in `em`. On round tickets it sits in the header row so it never covers a dish or count; it lands once (rotate/scale keyframes) right after confirming. Screen readers get "confirmed with the waiter" from the ticket's label.
-- **Corrections** print inside the round's ticket; the host's Remove sits on the line itself (never a second list).
+- **Corrections** print inside the round's ticket for the waiter (read-only). Confirmed rounds on the Rounds tab collapse to a one-line summary; one **Change a dish…** button per round opens the correction sheet. The tab also ends with one **Corrections** list, one row per change (pending or told); Remove lives only there, on pending rows.
 - **Ended order**: the header says "Order ended"; a plain line with a lock gives the deletion date; no bottom bar.
 - **Toast**: one at a time, bottom above the composer, 6 s, Undo action, polite live region.
 - **View tabs**: flat text tabs on the paper ground, active one underlined in tomato (3 px), counts in tomato mono. No segmented-control track.

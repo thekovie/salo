@@ -8,8 +8,11 @@ import { describeOp, useSession, type AddInput, type EntryChanges, type OverlayE
 import { consolidate } from "@/lib/consolidate";
 import { arrivalsBetween, type Arrival } from "@/lib/arrivals";
 import { setAnalyticsContext, track } from "@/lib/analytics";
-import { everyone, type SessionSnapshot } from "@/lib/snapshot";
+import { anyPrice, everyone, type SessionSnapshot } from "@/lib/snapshot";
 import { normalizeText } from "@/lib/dish-name";
+import { confirmedIds } from "@/lib/effective-order";
+import { notificationTarget, type NotificationTarget, type NotificationView } from "@/lib/notifications";
+import { focusWhenFree } from "@/lib/focus";
 import { liveTicket } from "@/lib/ticket";
 import { withViewTransition } from "@/lib/view-transition";
 import { Ticker } from "@/components/motion/ticker";
@@ -21,12 +24,14 @@ import { Composer } from "./composer";
 import { GroupsView } from "./groups-view";
 import { PeopleView } from "./people-view";
 import { ReviewPanel } from "./review-panel";
-import { RoundsView, type CorrectionRequest } from "./rounds-view";
+import { RoundsView } from "./rounds-view";
+import type { CorrectionRequest } from "./correction-sheet";
 import { WaiterPanel } from "./waiter-panel";
 import { ViewTabs, type View } from "./view-tabs";
 import { InviteSheet } from "./invite-sheet";
 import { OrderTicket, type TicketActions } from "./order-ticket";
 import { ArrivalPills, ARRIVAL_MS } from "./arrival-pills";
+import { NotificationBell, NotificationsDrawer } from "./notifications-drawer";
 import { ConnectionPill } from "./connection-pill";
 import { OrderOptionsSheet } from "./order-options-sheet";
 import { SummarySheet, type SummaryTab } from "./summary-sheet";
@@ -35,6 +40,9 @@ import { EditDishSheet } from "./edit-dish-sheet";
 import { Guide } from "@/components/onboarding/guide";
 import { TourOffer } from "@/components/onboarding/tour-offer";
 import { guideFor, markTourSeen, subscribeTourSeen, tourSeen, type GuideAction } from "@/components/onboarding/guide-steps";
+import { ServedSection } from "./served-section";
+import { useServedEdits } from "@/hooks/use-served-edits";
+import { trackerLines } from "@/lib/serving";
 import { SessionHeader } from "./session-header";
 import { Toasts, useToasts } from "./toasts";
 import { useDockHeight } from "@/hooks/use-dock-height";
@@ -52,7 +60,7 @@ function asAttribution(a: OverlayEntry["attribution"]): AddInput["attribution"] 
 const copyFor = (roundNumber: number): 1 | 2 | 3 => (roundNumber >= 3 ? 3 : roundNumber === 2 ? 2 : 1);
 
 export function Workspace({ initial, appUrl, justJoined = false }: { initial: SessionSnapshot; appUrl: string; justJoined?: boolean }) {
-  const { snapshot, entries, pending, failed, sync, mutate, dismiss, retry, refresh, entryById, online, stream } = useSession(initial);
+  const { snapshot, entries, pending, failed, sync, mutate, dismiss, retry, refresh, entryById, online, stream, markRead } = useSession(initial);
   const { toasts, show, dismiss: dismissToast } = useToasts();
   const round = snapshot.rounds.find((r) => r.id === snapshot.activeRoundId) ?? snapshot.rounds[0];
   const roundEntries = useMemo(() => entries.filter((e) => e.roundId === round.id), [entries, round.id]);
@@ -116,6 +124,24 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
     setSummaryOpen(true);
     track({ name: "summary_opened", props: { source } });
   };
+  const [updatesOpen, setUpdatesOpen] = useState(false);
+  const updatesTarget = useRef<NotificationTarget | null>(null);
+  function openUpdate(item: NotificationView) {
+    if (!item.readAt) void markRead({ ids: [item.id] });
+    const target = notificationTarget(item.type);
+    updatesTarget.current = target;
+    if (target === "rounds") setView("rounds");
+    else if (target !== "kkb") setView("order");
+    setUpdatesOpen(false);
+  }
+  // After the drawer has closed: land on the place the update is about (the bell when it was just dismissed).
+  function returnFromUpdates() {
+    const target = updatesTarget.current;
+    updatesTarget.current = null;
+    if (target === "kkb" && hasSummary) return openSummary("button", "kkb");
+    const panel = `panel-${target === "rounds" ? "rounds" : "order"}`;
+    focusWhenFree(() => (target ? [target === "served" ? document.getElementById("served-h") : null, document.getElementById(panel)] : [document.querySelector("[data-bell]")]));
+  }
   const endTour = useCallback(() => setTouring(false), []);
 
   // Someone else's new dishes, noticed when a newer snapshot arrives (compared during render, React's "previous
@@ -177,7 +203,23 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
     const timer = setTimeout(() => setJustConfirmed(null), 1500); // the stamp plays once
     return () => clearTimeout(timer);
   }, [justConfirmed]);
-  const ticket = liveTicket({ roundNumber: round.number, title: snapshot.session.title, ticket: consolidate(roundEntries), corrections: snapshot.corrections, roundId: round.id });
+  const ticket = liveTicket({ roundNumber: round.number, title: snapshot.session.title, ticket: consolidate(roundEntries), corrections: snapshot.corrections, roundId: round.id, confirmed: confirmedIds(snapshot.rounds) });
+  const tracker = useMemo(() => trackerLines(snapshot), [snapshot]);
+  const served = useServedEdits(snapshot.session.id, refresh, snapshot.session.revision);
+  const [changeRequest, setChangeRequest] = useState<{ roundId: string; lineKey: string } | null>(null);
+  const servedSection = anyConfirmed ? (
+    <ServedSection
+      tracker={tracker}
+      canEdit={isHost && sessionOpen}
+      edits={served.edits}
+      bump={served.bump}
+      retry={served.retry}
+      onChange={(roundId, lineKey) => {
+        setChangeRequest({ roundId, lineKey });
+        setView("rounds");
+      }}
+    />
+  ) : null;
   const confirmedTicket = round.status === "CONFIRMED" ? snapshot.tickets[round.id] : undefined;
   const correctionsThisRound = ticket.corrections.length;
   const ready = readinessSummary(snapshot);
@@ -285,15 +327,32 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
     return failure || "Not confirmed. Check your connection and try again.";
   }
 
-  async function openRound() {
+  async function openRound({ stay = false } = {}) {
     const next = round.number + 1;
-    if (await mutate({ kind: "openRound", roundNumber: next })) {
+    if (await mutate({ kind: "openRound", roundNumber: next }) && !stay) {
       setView("order");
       show({ message: `Round ${next} started. Add-ons go here.` });
     }
   }
 
-  const correct = (request: CorrectionRequest) => void mutate({ kind: "correction", ...request });
+  const correct = (request: CorrectionRequest) => void mutate({ kind: "corrections", ...request });
+
+  /** Mark a dish unavailable; waits for the server because part of it can't be undone. Resolves to an error message or null. */
+  async function markUnavailable(dishId: string, dishName: string, replacement = ""): Promise<string | null> {
+    const draftEntries = entries.filter((e) => e.dishId === dishId && e.roundId === snapshot.activeRoundId && round.status === "DRAFT");
+    let failure = "";
+    const result = await mutate({ kind: "unavailable", dishId, dishName, replacement: replacement.trim() || undefined }, { onError: (message) => (failure = message) });
+    if (!result) return failure || "Not saved. Check your connection and try again.";
+    const { removed = 0, cancelled = 0, replaced = 0, removedEntryIds = [] } = result;
+    const parts = [removed && `${removed} removed`, cancelled && `${cancelled} cancelled`, replaced && `${replaced} replaced`].filter(Boolean);
+    // Undo brings back only the removed open-round entries; whatever the waiter was told stays.
+    const undo = removedEntryIds.length > 0;
+    show({
+      message: `${dishName} marked unavailable${parts.length ? ` · ${parts.join(", ")}` : ""}.`,
+      action: undo ? { label: cancelled + replaced > 0 ? "Undo removal" : "Undo", run: () => draftEntries.filter((e) => removedEntryIds.includes(e.id)).forEach((entry) => void mutate({ kind: "restore", entry })) } : undefined,
+    });
+    return null;
+  }
 
   async function removeGuest(participantId: string, name: string, reason: string | null): Promise<boolean> {
     const accepted = Boolean(await mutate({ kind: "removeGuest", participantId, name, reason }));
@@ -320,8 +379,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
     // one has neither, so it stays on the (now read-only) order.
     if (accepted && anyConfirmed) {
       setView("rounds");
-      const anyPrice = Object.values(snapshot.settlement.entries).some((p) => p.unitCentavos != null);
-      openSummary("auto", anyPrice ? "kkb" : "items");
+      openSummary("auto", anyPrice(snapshot) ? "kkb" : "items");
     }
     return accepted;
   }
@@ -389,13 +447,26 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
         sync={sync}
         onOptions={isHost && sessionOpen ? openOptions : undefined}
         onHelp={!isHost && sessionOpen ? () => startTour("replay") : undefined}
+        bell={<NotificationBell unread={snapshot.notifications.unread} onClick={() => setUpdatesOpen(true)} />}
         actions={
           sessionOpen ? (
             <InviteSheet appUrl={appUrl} joinCode={snapshot.session.joinCode} title={snapshot.session.title} peopleCount={snapshot.participants.length} open={inviteOpen} onOpenChange={setInviteOpen} />
           ) : null
         }
       />
-      <EditDishSheet entry={editing} onClose={() => setEditing(null)} meId={snapshot.me.participantId} {...recipients} onSave={saveEdit} />
+      <EditDishSheet entry={editing} onClose={() => setEditing(null)} meId={snapshot.me.participantId} {...recipients}
+        onSave={saveEdit}
+        onUnavailable={isHost && editing ? (entry) => markUnavailable(entry.dishId, entry.dishName) : undefined}
+        unavailableIsFinal={editing ? entries.some((e) => e.dishId === editing.dishId && snapshot.rounds.find((r) => r.id === e.roundId)?.status === "CONFIRMED") : false}
+      />
+      <NotificationsDrawer
+        open={updatesOpen}
+        onOpenChange={setUpdatesOpen}
+        notifications={snapshot.notifications}
+        onMarkAll={() => void markRead({ all: true })}
+        onOpenItem={openUpdate}
+        onReturnFocus={returnFromUpdates}
+      />
       {touring ? (
         <Guide
           steps={guideFor(role)}
@@ -426,6 +497,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
           title={snapshot.session.title}
           anyConfirmed={anyConfirmed}
           unsentRound={round.status === "DRAFT" && roundEntries.length > 0 ? round.number : null}
+          waitingItems={tracker.expected - tracker.served}
           onRename={(title) => void mutate({ kind: "rename", title })}
           myName={snapshot.me.displayName}
           onRenameMe={(displayName) => void mutate({ kind: "renameMe", displayName })}
@@ -523,10 +595,11 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
           />
         ) : null}
         <ViewTabs view={view} onChange={setView} counts={{ people: snapshot.participants.length, groups: groupCount, rounds: snapshot.rounds.length > 1 ? snapshot.rounds.length : 0 }} />
-        <div role="tabpanel" id={`panel-${view}`} aria-labelledby={`tab-${view}`}>
+        <div role="tabpanel" id={`panel-${view}`} aria-labelledby={`tab-${view}`} tabIndex={-1} className="outline-none">
           {view === "order" && confirmedTicket ? (
             <div className="space-y-4">
               <WaiterTicket ticket={confirmedTicket} size="compact" confirmed justConfirmed={justConfirmed === round.id} />
+              {servedSection}
               {sessionOpen ? (
                 isHost ? (
                   // The moment people are done: both next steps, side by side (usability check, 2026-11-07).
@@ -558,16 +631,22 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
               ) : null}
             </div>
           ) : view === "order" ? (
-            <OrderTicket entries={roundEntries} people={people} recent={recent} roundNumber={round.number} copy={copyFor(round.number)} actions={actions} readOnly={!isOpen} />
+            <div className="space-y-4">
+              {servedSection}
+              <OrderTicket entries={roundEntries} people={people} recent={recent} roundNumber={round.number} copy={copyFor(round.number)} actions={actions} readOnly={!isOpen} />
+            </div>
           ) : view === "rounds" ? (
             <RoundsView
               snapshot={snapshot}
               entries={entries}
+              changeRequest={changeRequest}
+              onChangeRequestHandled={() => setChangeRequest(null)}
               justConfirmedRoundId={justConfirmed}
-              onOpenRound={() => void openRound()}
+              onOpenRound={(options) => void openRound(options)}
               onEnd={isHost && sessionOpen ? openEnd : undefined}
               onKkb={anyConfirmed ? () => openSummary("button", "kkb") : undefined}
               onCorrect={correct}
+              onUnavailable={markUnavailable}
               onRemoveCorrection={(correctionId, dishName) => void mutate({ kind: "removeCorrection", correctionId, dishName })}
             />
           ) : view === "people" ? (
@@ -590,7 +669,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
       {sessionOpen ? (
       <div ref={dockRef} className="fixed inset-x-0 bottom-0 z-30 bg-gradient-to-t from-paper from-70% to-transparent pt-6 pb-[calc(env(safe-area-inset-bottom)+0.5rem)]">
         <div className="mx-auto max-w-2xl space-y-2 px-3">
-          {isOpen ? <Composer dishNames={snapshot.dishNames} {...recipients} view={view} detailsSignal={detailsSignal} onAdd={(input) => void add({ ...input, roundId: round.id })} /> : null}
+          {isOpen ? <Composer dishNames={snapshot.dishNames} entries={snapshot.entries} defaults={snapshot.settlement.defaults} {...recipients} view={view} detailsSignal={detailsSignal} onAdd={(input) => void add({ ...input, roundId: round.id })} /> : null}
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-2">
             <div className="min-w-0">
               <p className="whitespace-nowrap text-ink-soft" data-testid="round-total">

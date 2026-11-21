@@ -1,33 +1,30 @@
 "use client";
 
-import { Plus, ReceiptText, Wrench } from "lucide-react";
-import { useId, useState } from "react";
+import { ChevronDown, Plus, ReceiptText } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
 import { WaiterTicket } from "@/components/ticket/waiter-ticket";
-import { consolidate, preparationLabel } from "@/lib/consolidate";
-import type { SessionSnapshot, SnapshotEntry } from "@/lib/snapshot";
+import { consolidate } from "@/lib/consolidate";
+import { preparationsOfRound, visiblePreps } from "@/lib/corrections";
+import { confirmedIds } from "@/lib/effective-order";
+import { focusWhenFree } from "@/lib/focus";
+import { everyone, type SessionSnapshot, type SnapshotEntry } from "@/lib/snapshot";
 import { liveTicket } from "@/lib/ticket";
-import { cn } from "@/lib/utils";
 import { LocalTime } from "@/components/ui/local-time";
-import { useRovingRadio } from "@/hooks/use-roving-radio";
-import { Stepper } from "./stepper";
-
-export interface CorrectionRequest {
-  sourceEntryId: string;
-  dishName: string;
-  type: "QUANTITY" | "REPLACE";
-  quantity?: number;
-  replacement?: string;
-  explanation?: string;
-}
+import { CorrectionSheet, type CorrectionRequest } from "./correction-sheet";
+import { CorrectionsList } from "./corrections-list";
 
 interface RoundsViewProps {
   snapshot: SessionSnapshot;
   entries: SnapshotEntry[];
   justConfirmedRoundId: string | null;
-  onOpenRound: () => void;
+  /** The host asked (from Served) to change this tracker line: open that round's sheet on it. */
+  changeRequest?: { roundId: string; lineKey: string } | null;
+  onChangeRequestHandled?: () => void;
+  /** `stay`: start the round without leaving the Rounds tab (the correction sheet stays open). */
+  onOpenRound: (options?: { stay?: boolean }) => void;
   onCorrect: (request: CorrectionRequest) => void;
+  onUnavailable: (dishId: string, dishName: string, replacement: string) => Promise<string | null>;
   onRemoveCorrection: (id: string, dishName: string) => void;
   /** Host: end (or cancel) the order. */
   onEnd?: () => void;
@@ -35,149 +32,45 @@ interface RoundsViewProps {
   onKkb?: () => void;
 }
 
-/** One option per preparation of a confirmed round; corrections attach to its largest source entry. */
-function preparationsOf(entries: SnapshotEntry[], corrections: SessionSnapshot["corrections"]) {
-  const cancelled = (entryId: string) =>
-    corrections.filter((c) => c.sourceEntryId === entryId && c.type === "QUANTITY").reduce((sum, c) => sum + Math.abs(c.quantityDelta ?? 0), 0);
-  return consolidate(entries).dishes.flatMap((dish) =>
-    dish.preparations.flatMap((p) => {
-      const sources = p.entries.map((e) => ({ id: e.id, left: e.quantity - cancelled(e.id) })).sort((a, b) => b.left - a.left);
-      const source = sources[0];
-      const label = dish.preparations.length > 1 || p.variant || p.instructions ? `${dish.name} · ${preparationLabel(p)}` : dish.name;
-      const left = sources.reduce((sum, x) => sum + Math.max(0, x.left), 0);
-      return source ? [{ key: p.key, label, dishName: dish.name, entryId: source.id, max: Math.max(0, source.left), left }] : [];
-    }),
-  );
-}
-
-function CorrectionDialog({ roundNumber, entries, corrections, onCorrect }: { roundNumber: number; entries: SnapshotEntry[]; corrections: SessionSnapshot["corrections"]; onCorrect: (r: CorrectionRequest) => void }) {
-  const [open, setOpen] = useState(false);
-  const id = useId();
-  const options = preparationsOf(entries, corrections);
-  const [choice, setChoice] = useState(0);
-  const [type, setType] = useState<"QUANTITY" | "REPLACE">("QUANTITY");
-  const typeRadio = useRovingRadio(2, type === "QUANTITY" ? 0 : 1, (i) => setType(i === 0 ? "QUANTITY" : "REPLACE"));
-  const [quantity, setQuantity] = useState(1);
-  const [replacement, setReplacement] = useState("");
-  const [note, setNote] = useState("");
-  const option = options[Math.min(choice, options.length - 1)];
-  if (!option) return null;
-
-  return (
-    <>
-      <Button
-        variant="outline"
-        onClick={() => {
-          setChoice(0);
-          setType("QUANTITY");
-          setQuantity(1);
-          setReplacement("");
-          setNote("");
-          setOpen(true);
-        }}
-      >
-        <Wrench className="size-4" aria-hidden /> Correct a dish
-      </Button>
-      <Drawer open={open} onOpenChange={setOpen}>
-        <DrawerContent>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if ((type === "REPLACE" && !replacement.trim()) || (type === "QUANTITY" && option.max === 0)) return;
-            setOpen(false);
-            onCorrect({ sourceEntryId: option.entryId, dishName: option.dishName, type, quantity: type === "QUANTITY" ? Math.min(quantity, option.max) : undefined, replacement: type === "REPLACE" ? replacement : undefined, explanation: note || undefined });
-          }}
-        >
-          <DrawerTitle className="font-display text-xl font-medium">Correct round {roundNumber}</DrawerTitle>
-          <DrawerDescription className="mt-1 text-sm text-ink-soft">Confirmed dishes never change. The correction goes to the waiter with the open round.</DrawerDescription>
-          <label htmlFor={`${id}-dish`} className="mt-4 block text-sm font-semibold">
-            Dish
-          </label>
-          <select
-            id={`${id}-dish`}
-            value={choice}
-            onChange={(e) => {
-              setChoice(Number(e.target.value));
-              setQuantity(1);
-            }}
-            className="mt-1 min-h-11 w-full rounded-xl border-[1.5px] border-input bg-ticket px-3 text-base"
-          >
-            {options.map((o, i) => (
-              <option key={o.key} value={i}>
-                {o.label} ×{o.left}
-              </option>
-            ))}
-          </select>
-          <fieldset className="mt-4">
-            <legend id="correction-type" className="text-sm font-semibold">
-              What changed?
-            </legend>
-            <div className="mt-1.5 flex gap-1.5" role="radiogroup" aria-labelledby="correction-type">
-              {(["QUANTITY", "REPLACE"] as const).map((t, i) => (
-                <button
-                  key={t}
-                  type="button"
-                  role="radio"
-                  aria-checked={type === t}
-                  {...typeRadio(i)}
-                  onClick={() => setType(t)}
-                  className={cn("min-h-11 cursor-pointer rounded-full border-[1.5px] px-3.5 text-sm font-semibold", type === t ? "border-ink bg-ink text-paper" : "border-input bg-ticket")}
-                >
-                  {t === "QUANTITY" ? "Cancel some" : "Change it"}
-                </button>
-              ))}
-            </div>
-          </fieldset>
-          {type === "QUANTITY" ? (
-            option.max > 0 ? (
-              <div className="mt-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm">How many to cancel</span>
-                  <Stepper value={Math.min(quantity, option.max)} label={`${option.label} to cancel`} max={option.max} onChange={setQuantity} />
-                </div>
-                {option.max < option.left ? <p className="text-xs text-ink-soft">Up to {option.max} at a time (it was ordered in parts). Add another correction for more.</p> : null}
-              </div>
-            ) : (
-              <p className="mt-3 text-sm text-ink-soft">All of this dish is already cancelled.</p>
-            )
-          ) : (
-            <div className="mt-3">
-              <label htmlFor={`${id}-to`} className="text-sm font-semibold">
-                Change it to
-              </label>
-              <input id={`${id}-to`} value={replacement} onChange={(e) => setReplacement(e.target.value)} maxLength={60} placeholder="Large, no ice, Pork instead…" className="mt-1 min-h-11 w-full rounded-xl border-[1.5px] border-input bg-ticket px-3 text-base" />
-            </div>
-          )}
-          <label htmlFor={`${id}-note`} className="mt-3 block text-sm font-semibold">
-            Note for the waiter <span className="font-normal text-ink-soft">(optional)</span>
-          </label>
-          <input id={`${id}-note`} value={note} onChange={(e) => setNote(e.target.value)} maxLength={140} className="mt-1 min-h-11 w-full rounded-xl border-[1.5px] border-input bg-ticket px-3 text-base" />
-          <div className="mt-5 flex justify-end gap-2">
-            <Button variant="ghost" type="button" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit">Add correction</Button>
-          </div>
-        </form>
-        </DrawerContent>
-      </Drawer>
-    </>
-  );
-}
-
 /** Round history (brief 5.3, 5.15): each confirmed round on its own carbon copy, stamped; corrections. Ending the order lives in the header's order options. */
-export function RoundsView({ snapshot, entries, justConfirmedRoundId, onOpenRound, onCorrect, onRemoveCorrection, onEnd, onKkb }: RoundsViewProps) {
+export function RoundsView({ snapshot, entries, changeRequest, onChangeRequestHandled, justConfirmedRoundId, onOpenRound, onCorrect, onUnavailable, onRemoveCorrection, onEnd, onKkb }: RoundsViewProps) {
+  const [changing, setChanging] = useState<string | null>(changeRequest?.roundId ?? null);
+  const [pickLine, setPickLine] = useState<string | null>(changeRequest?.lineKey ?? null);
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
+  const changeButton = useRef<HTMLElement | null>(null);
+  const changedRound = useRef<string | null>(null);
+  const people = everyone(snapshot);
   const isHost = snapshot.me.role === "HOST";
   const isOpen = snapshot.session.status === "OPEN";
   const draft = snapshot.rounds.find((r) => r.status === "DRAFT");
   const last = snapshot.rounds[snapshot.rounds.length - 1];
   const rounds = [...snapshot.rounds].reverse();
+  const changed = snapshot.rounds.find((r) => r.id === changing);
+  const confirmed = confirmedIds(snapshot.rounds);
+  const prepsOf = (roundId: string) => visiblePreps(preparationsOfRound(entries.filter((e) => e.roundId === roundId), snapshot.corrections, people, confirmed));
+  const changingPreps = changed ? prepsOf(changed.id) : [];
+  const pickKey = pickLine ? changingPreps.find((p) => p.kind !== "replaced" && (p.key === pickLine || p.key.startsWith(`${pickLine}|`)))?.key : undefined;
+  const changingRound = changed ? { roundNumber: changed.number, preps: changingPreps, pickKey } : null;
+  useEffect(() => {
+    if (!changeRequest) return;
+    changedRound.current = changeRequest.roundId;
+    onChangeRequestHandled?.();
+  }, [changeRequest, onChangeRequestHandled]);
+  // Nothing left to change (a save or a live update emptied the round): close the sheet.
+  if (changing && changingRound && !changingRound.preps.some((p) => p.kind !== "replaced")) setChanging(null);
+  const returnFocus = () => focusWhenFree(() => [changeButton.current, document.getElementById(`summary-${changedRound.current}`)]);
+  const wasChanging = useRef(false);
+  // The drawer's own close callback can be skipped when it unmounts mid-animation, so also return focus on close.
+  useEffect(() => {
+    if (wasChanging.current && !changing) returnFocus();
+    wasChanging.current = changing !== null;
+  });
 
   return (
     <div className="space-y-5" data-ph-mask="">
       {isHost && isOpen && !draft ? (
         <div className="grid gap-2 sm:grid-cols-2">
-          <Button size="lg" variant="outline" onClick={onOpenRound}>
+          <Button size="lg" variant="outline" onClick={() => onOpenRound()}>
             <Plus className="size-5" aria-hidden /> Start round {last.number + 1}
           </Button>
           {onEnd ? (
@@ -198,36 +91,78 @@ export function RoundsView({ snapshot, entries, justConfirmedRoundId, onOpenRoun
       {rounds.map((round) => {
         if (round.status === "DRAFT") {
           const roundEntries = entries.filter((e) => e.roundId === round.id);
-          const ticket = liveTicket({ roundNumber: round.number, title: snapshot.session.title, ticket: consolidate(roundEntries), corrections: snapshot.corrections, roundId: round.id });
-          const corrections = snapshot.corrections.filter((c) => c.targetRoundId === round.id);
+          const ticket = liveTicket({ roundNumber: round.number, title: snapshot.session.title, ticket: consolidate(roundEntries), corrections: snapshot.corrections, roundId: round.id, confirmed: confirmedIds(snapshot.rounds) });
           return (
             <div key={round.id} className="space-y-2">
-              <WaiterTicket
-                ticket={ticket}
-                size="compact"
-                removableCorrections={isHost && isOpen ? corrections.map((c) => ({ id: c.id, onRemove: () => onRemoveCorrection(c.id, c.dishName) })) : undefined}
-              />
+              <WaiterTicket ticket={ticket} size="compact" />
               {!isOpen ? <p className="px-1 text-sm text-ink-soft">Never confirmed with the waiter.</p> : null}
             </div>
           );
         }
         const ticket = snapshot.tickets[round.id];
         if (!ticket) return null;
-        const roundEntries = entries.filter((e) => e.roundId === round.id);
+        const canChange = prepsOf(round.id).some((p) => p.kind !== "replaced");
+        const isExpanded = expanded.has(round.id);
+        const items = ticket.dishes.reduce((sum, d) => sum + d.quantity, 0);
+        // D18: "dishes" are distinct lines (dish + size + notes), the same count Served and KKB use.
+        const lines = ticket.dishes.reduce((sum, d) => sum + Math.max(1, d.lines.length), 0);
         return (
-          <div key={round.id} className="space-y-2">
-            <WaiterTicket ticket={ticket} size="compact" confirmed justConfirmed={round.id === justConfirmedRoundId} />
-            <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-              <span className="text-sm text-ink-soft">
-                Confirmed {round.confirmedAt ? <LocalTime iso={round.confirmedAt} /> : null}
+          <div key={round.id} className="space-y-2 rounded-2xl bg-ticket p-2">
+            <button
+              type="button"
+              aria-expanded={isExpanded}
+              id={`summary-${round.id}`}
+              aria-controls={`ticket-${round.id}`}
+              onClick={() => setExpanded((open) => new Set(isExpanded ? [...open].filter((id) => id !== round.id) : [...open, round.id]))}
+              className="flex min-h-11 w-full cursor-pointer items-center justify-between gap-2 rounded-xl px-1 text-left hover:bg-ink/6"
+            >
+              <span className="py-1">
+                <span className="block">
+                  <span className="font-semibold">Round {round.number}</span> · Confirmed {round.confirmedAt ? <LocalTime iso={round.confirmedAt} /> : null}
+                </span>
+                <span className="sr-only"> · </span>
+                <span className="block text-sm text-ink-soft">
+                  {lines} {lines === 1 ? "dish" : "dishes"} · {items} {items === 1 ? "item" : "items"}
+                </span>
               </span>
-              {isHost && isOpen && draft && roundEntries.length ? <CorrectionDialog roundNumber={round.number} entries={roundEntries} corrections={snapshot.corrections} onCorrect={onCorrect} /> : null}
+              <ChevronDown className={`size-5 shrink-0 ${isExpanded ? "rotate-180" : ""}`} aria-hidden />
+            </button>
+            <div id={`ticket-${round.id}`} hidden={!isExpanded}>
+              {isExpanded ? <WaiterTicket ticket={ticket} size="compact" confirmed justConfirmed={round.id === justConfirmedRoundId} /> : null}
             </div>
-            {isHost && isOpen && !draft && roundEntries.length ? <p className="px-1 text-sm text-ink-soft">To correct this round, start a new round first.</p> : null}
+            {isHost && isOpen && canChange ? (
+              <Button
+                variant="outline"
+                onClick={(event) => {
+                  changeButton.current = event.currentTarget;
+                  changedRound.current = round.id;
+                  setPickLine(null);
+                  setChanging(round.id);
+                }}
+              >
+                Change a dish…<span className="sr-only">, round {round.number}</span>
+              </Button>
+            ) : null}
           </div>
         );
       })}
 
+      <CorrectionsList snapshot={snapshot} onRemove={isHost && isOpen ? onRemoveCorrection : undefined} />
+      <CorrectionSheet
+        round={changingRound}
+        onReturnFocus={returnFocus}
+        onClose={() => {
+          setChanging(null);
+          setPickLine(null);
+        }}
+        snapshot={snapshot}
+        entries={entries}
+        draftNumber={draft?.number ?? null}
+        nextRound={last.number + 1}
+        onStartRound={() => onOpenRound({ stay: true })}
+        onSave={onCorrect}
+        onUnavailable={onUnavailable}
+      />
     </div>
   );
 }

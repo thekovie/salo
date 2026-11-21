@@ -1,19 +1,26 @@
 "use client";
 
-import { CircleAlert, CircleCheck, Pencil } from "lucide-react";
+import { Check, CircleAlert, CircleCheck, Copy, Pencil, Share2 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { buildKkb, type Kkb, type KkbLine, type KkbSection } from "@/lib/kkb";
+import { Button } from "@/components/ui/button";
+import { normalizeText } from "@/lib/dish-name";
+import { confirmedIds, effectiveEntry } from "@/lib/effective-order";
+import { track } from "@/lib/analytics";
+import { buildKkb, kkbText, priceCompleteness, type Kkb, type KkbLine, type KkbSection } from "@/lib/kkb";
 import { formatPeso } from "@/lib/money";
 import type { SessionSnapshot } from "@/lib/snapshot";
 import { cn } from "@/lib/utils";
 import { HostNamePrompt } from "./host-name-prompt";
-import { PriceEditor, type Payer } from "./price-editor";
+import { PriceEditor, type Payer, type TablePrice } from "./price-editor";
+import { ReceiptCheckBlock } from "./receipt-check-block";
 import { ServiceChargeBlock } from "./service-charge-block";
 
 interface KkbViewProps {
   snapshot: SessionSnapshot;
   refresh: () => Promise<unknown>;
   onRenameMe: (displayName: string) => void;
+  dateLabel: string;
+  canShare: boolean;
 }
 
 const items = (n: number) => `${n} ${n === 1 ? "item" : "items"}`;
@@ -24,12 +31,13 @@ const lineKey = (section: KkbSection, line: KkbLine, draft: boolean) => `${secti
  * service charge split by food once nothing is missing. The viewer's own card comes first; the host can price
  * anything, guests the dishes they added.
  */
-export function KkbView({ snapshot, refresh, onRenameMe }: KkbViewProps) {
+export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: KkbViewProps) {
   const meId = snapshot.me.participantId;
   const isHost = snapshot.me.role === "HOST";
   const isOpen = snapshot.session.status === "OPEN";
   const kkb = useMemo(() => buildKkb(snapshot, meId), [snapshot, meId]);
   const [editing, setEditing] = useState<string | null>(null);
+  const [copy, setCopy] = useState<"idle" | "copied" | "error">("idle");
   // Which cards start open is decided once, so a card doesn't snap shut while the host is pricing it.
   const [startOpen] = useState(() => new Set(kkb.sections.filter((s) => s.shared || (isHost && (s.unpricedUnits > 0 || s.drafts.some((l) => l.unitCentavos == null)))).map((s) => s.key)));
   const payers: Payer[] = useMemo(
@@ -44,30 +52,85 @@ export function KkbView({ snapshot, refresh, onRenameMe }: KkbViewProps) {
     return <p className="mt-6 rounded-2xl bg-paper px-4 py-6 text-center text-ink-soft">Nothing ordered yet. Prices show up here once there are dishes.</p>;
   }
 
+  const confirmedRounds = confirmedIds(snapshot.rounds);
+  /** The table price a line could set: its dish + size, and how many lines would follow it (replacements never do). */
+  const tableFor = (line: KkbLine): TablePrice | null => {
+    const entry = snapshot.entries.find((e) => e.id === line.entryId);
+    if (!entry || line.correctionId || !line.tableKey) return null;
+    const size = normalizeText(entry.variant ?? "");
+    const followers = snapshot.entries.filter((e) => {
+      if (e.dishId !== entry.dishId || normalizeText(e.variant ?? "") !== size) return false;
+      if (e.id !== entry.id && snapshot.settlement.entries[e.id]?.unitCentavos != null) return false;
+      const now = effectiveEntry(e, snapshot.corrections, confirmedRounds);
+      return now.quantity > 0 && !now.replacementId;
+    });
+    const live = snapshot.settlement.defaults[line.tableKey];
+    return { dishId: entry.dishId, variant: entry.variant, label: entry.variant ? `${entry.dishName} (${entry.variant})` : entry.dishName, lines: followers.length, live: { unitCentavos: live?.unitCentavos ?? null, revision: live?.revision ?? 0 } };
+  };
+
   const lineProps = (section: KkbSection, line: KkbLine, draft: boolean): LineProps => {
     const key = lineKey(section, line, draft);
     const live = line.correctionId
       ? { unitCentavos: snapshot.settlement.corrections[line.correctionId]?.unitCentavos ?? null, billTo: null, revision: snapshot.settlement.corrections[line.correctionId]?.revision ?? 0 }
       : (snapshot.settlement.entries[line.entryId] ?? { unitCentavos: null, billTo: null, revision: 0 });
     const canPrice = isOpen && (line.correctionId ? isHost : isHost || line.submittedBy === meId);
+    const table = isHost && canPrice ? tableFor(line) : null;
     const canBillTo = isOpen && isHost && line.billable && !line.correctionId && !draft;
     return {
+      rowKey: key,
       line,
       editing: editing === key,
       canEdit: canPrice || canBillTo,
       onEdit: () => setEditing(key),
-      editor: <PriceEditor key={key} line={line} sessionId={snapshot.session.id} refresh={refresh} canPrice={canPrice} canBillTo={canBillTo} payers={payers} live={live} onDone={() => setEditing((open) => (open === key ? null : open))} />,
+      editor: <PriceEditor key={key} line={line} sessionId={snapshot.session.id} refresh={refresh} canPrice={canPrice} canBillTo={canBillTo} payers={payers} table={table} live={live} onDone={() => setEditing((open) => (open === key ? null : open))} />,
     };
   };
 
   const mine = kkb.sections.find((s) => s.isMe);
   const people = kkb.sections.filter((s) => !s.isMe && !s.shared);
   const shared = kkb.sections.filter((s) => s.shared);
+  const title = snapshot.session.title ?? "Table order";
+  const text = kkbText(kkb, title, dateLabel);
+
+  async function copySummary() {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopy("copied");
+      setTimeout(() => setCopy("idle"), 2500);
+      track({ name: "summary_copied", props: { tab: "kkb" } });
+    } catch {
+      setCopy("error");
+    }
+  }
+
+  async function shareSummary() {
+    try {
+      await navigator.share({ title: `${title}: KKB`, text });
+    } catch {
+      // Cancelled: nothing to say.
+    }
+  }
+
   const needsName = isHost && isOpen && snapshot.me.displayName.trim().toLowerCase() === "host";
 
   return (
     <div className="mt-4 space-y-4" data-ph-mask="">
       <StatusStrip kkb={kkb} />
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="outline" onClick={() => void copySummary()}>
+          {copy === "copied" ? <Check className="size-5" aria-hidden /> : <Copy className="size-5" aria-hidden />}
+          Copy summary
+        </Button>
+        {canShare ? (
+          <Button variant="outline" onClick={() => void shareSummary()}>
+            <Share2 className="size-5" aria-hidden />
+            Share summary
+          </Button>
+        ) : null}
+        <p role="status" className={cn("text-sm", copy === "error" ? "text-bad" : "text-ok")}>
+          {copy === "copied" ? "Summary copied" : copy === "error" ? "Couldn’t copy. Try Share, or select the text yourself." : ""}
+        </p>
+      </div>
       {needsName ? <HostNamePrompt onSave={onRenameMe} label="Add your name so the table knows which dishes are yours" /> : null}
 
       {mine ? (
@@ -98,11 +161,49 @@ export function KkbView({ snapshot, refresh, onRenameMe }: KkbViewProps) {
       ) : null}
 
       <ServiceChargeBlock kkb={kkb} live={snapshot.settlement.serviceCharge} sessionId={snapshot.session.id} refresh={refresh} canEdit={isHost && isOpen} isHost={isHost} />
+      <ReceiptCheckBlock kkb={kkb} live={snapshot.settlement.receiptTotal} sessionId={snapshot.session.id} refresh={refresh} canEdit={isHost && isOpen} />
     </div>
   );
 }
 
+/** Jump to the first dish without a price: open its card, then focus its "Add price" button (or the row when it isn't yours to price). */
+function showFirstUnpriced(key: string) {
+  const row = document.querySelector<HTMLElement>(`[data-line="${CSS.escape(key)}"]`);
+  const card = row?.closest("details");
+  if (card) card.open = true;
+  const target = row?.querySelector<HTMLElement>("button") ?? row;
+  target?.scrollIntoView({ block: "center" });
+  target?.focus();
+}
+
+function Completeness({ kkb }: { kkb: Kkb }) {
+  const { total, priced, first } = priceCompleteness(kkb);
+  if (total === 0) return null;
+  if (!first) return <p className="text-sm font-semibold text-ink">All {total === 1 ? "1 dish" : `${total} dishes`} priced</p>;
+  const missing = total - priced;
+  return (
+    <p className="text-sm text-ink">
+      <span className="font-semibold">
+        {priced} of {total} dishes priced
+      </span>
+      {" · "}
+      <button type="button" onClick={() => showFirstUnpriced(lineKey(kkb.sections.find((x) => x.key === first.sectionKey)!, first.line, false))} className="min-h-11 cursor-pointer font-semibold text-tomato-ink underline underline-offset-2">
+        Show the {missing === 1 ? "1 without a price" : `${missing} without a price`}
+      </button>
+    </p>
+  );
+}
+
 function StatusStrip({ kkb }: { kkb: Kkb }) {
+  return (
+    <div className="space-y-2">
+      <Completeness kkb={kkb} />
+      <ChargeStrip kkb={kkb} />
+    </div>
+  );
+}
+
+function ChargeStrip({ kkb }: { kkb: Kkb }) {
   const { charge } = kkb;
   if (charge.state === "allocated") {
     return (
@@ -125,7 +226,7 @@ function StatusStrip({ kkb }: { kkb: Kkb }) {
       </a>
     );
   }
-  return <p className="px-1 text-sm text-ink-soft">{charge.state === "none" ? "No service charge on this receipt." : "Service charge: not entered yet. It goes at the bottom, from the receipt."}</p>;
+  return <p className="text-sm text-ink-soft">{charge.state === "none" ? "No service charge on this receipt." : "Service charge: not entered yet. It goes at the bottom, from the receipt."}</p>;
 }
 
 function noteOf(section: KkbSection, isMe: boolean) {
@@ -221,7 +322,7 @@ function Footer({ section }: { section: KkbSection }) {
   );
 }
 
-type LineProps = { line: KkbLine; editing: boolean; canEdit: boolean; onEdit: () => void; editor: React.ReactNode };
+type LineProps = { rowKey: string; line: KkbLine; editing: boolean; canEdit: boolean; onEdit: () => void; editor: React.ReactNode };
 
 function Lines({ section, lineProps }: { section: KkbSection; lineProps: (s: KkbSection, l: KkbLine, draft: boolean) => LineProps }) {
   return (
@@ -247,12 +348,12 @@ function Lines({ section, lineProps }: { section: KkbSection; lineProps: (s: Kkb
   );
 }
 
-function LineRow({ line, editing, canEdit, onEdit, editor }: LineProps) {
+function LineRow({ rowKey, line, editing, canEdit, onEdit, editor }: LineProps) {
   const tags = [line.pendingChange ? "Change pending with the waiter" : null, line.billedFrom ? `from ${line.billedFrom}` : null, line.billedTo ? `Billed to ${line.billedTo}` : null].filter(Boolean);
   const amount = line.subtotalCentavos != null ? formatPeso(line.subtotalCentavos) : null;
   const action = amount ?? (line.billable && line.unitCentavos != null ? "Bill to…" : "Add price");
   return (
-    <li>
+    <li data-line={rowKey} tabIndex={-1} className="rounded-lg focus-visible:bg-saffron-wash focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0 py-1 text-ink-soft">
           <p className={cn("break-words text-ink", line.billedTo && "text-ink-soft")}>
@@ -260,6 +361,7 @@ function LineRow({ line, editing, canEdit, onEdit, editor }: LineProps) {
           </p>
           <p className="text-xs">
             {line.unitCentavos != null ? <span className="tally">{formatPeso(line.unitCentavos)} each</span> : "No price yet"}
+            {line.priceSource === "table" ? " · table price" : line.priceSource === "line" && line.hasTable ? " · this line only" : ""}
             {tags.length ? ` · ${tags.join(" · ")}` : ""}
           </p>
         </div>

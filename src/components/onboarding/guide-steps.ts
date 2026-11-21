@@ -1,4 +1,4 @@
-import type { SessionSnapshot } from "@/lib/snapshot";
+import { anyPrice, type SessionSnapshot } from "@/lib/snapshot";
 
 /** Which picture a step shows (see guide-scenes.tsx and landing/scenes.tsx). */
 export type GuideScene = "setup" | "invite" | "add" | "forPrice" | "people" | "waiter" | "rounds" | "kkb" | "done";
@@ -19,7 +19,6 @@ export interface GuideStep {
 }
 
 const mine = (s: SessionSnapshot) => s.entries.filter((e) => e.submittedBy === s.me.participantId);
-const anyPrice = (s: SessionSnapshot) => Object.values(s.settlement.entries).some((p) => p.unitCentavos != null);
 const anyConfirmed = (s: SessionSnapshot) => s.rounds.some((r) => r.status === "CONFIRMED");
 
 export const HOST_GUIDE: readonly GuideStep[] = [
@@ -53,7 +52,7 @@ export const HOST_GUIDE: readonly GuideStep[] = [
   {
     id: "forPrice",
     title: "Who it’s for, sizes and prices",
-    body: "Tap For to put a dish down for a friend, a group, the whole table or anyone. Size, notes or price sits in the same panel; the price is optional and helps with KKB later.",
+    body: "Tap For to put a dish down for a friend, a group, the whole table or anyone. Under the dish, + Size, + Note and + ₱ Price add the details; the price is optional and helps with KKB later.",
     scene: "forPrice",
     action: "details",
     label: "Add a price",
@@ -71,7 +70,7 @@ export const HOST_GUIDE: readonly GuideStep[] = [
   {
     id: "review",
     title: "Check it, then show the waiter",
-    body: "Review spots double orders and unsaved changes, opens a big ticket for the waiter, and marks the round confirmed. Only you can confirm.",
+    body: "Review spots double orders and unsaved changes, opens a big ticket for the waiter, and marks the round confirmed. Only you can confirm. After that, a Served section on the Order tab lets you tick off food as it arrives.",
     scene: "waiter",
     action: "review",
     label: "Confirm a round",
@@ -80,7 +79,7 @@ export const HOST_GUIDE: readonly GuideStep[] = [
   {
     id: "rounds",
     title: "Add-ons and fixes",
-    body: "Ordering more later? Start another round; only the new dishes go to the waiter. Something wrong in a confirmed round? Correct a dish from Rounds and it’s listed apart.",
+    body: "Ordering more later? Start another round; only the new dishes go to the waiter. Something wrong in a confirmed round? Tap Change a dish… on its round in Rounds, pick the line, then cancel some, swap it, or mark it unavailable when the waiter says it’s out.",
     scene: "rounds",
     action: "rounds",
     label: "Know about rounds",
@@ -89,7 +88,7 @@ export const HOST_GUIDE: readonly GuideStep[] = [
   {
     id: "kkb",
     title: "Settle up with KKB",
-    body: "In Who ordered what → KKB, type prices from the receipt and the service charge. Everyone sees their own food subtotal and share. Shared dishes stay apart until you pick who pays.",
+    body: "In Who ordered what → KKB, type prices from the receipt and the service charge. Everyone sees their own food subtotal and share. Shared dishes stay apart until you pick who pays. The host can check the total against the receipt, and anyone can Copy summary for the group chat.",
     scene: "kkb",
     action: "kkb",
     label: "Settle up with KKB",
@@ -98,7 +97,7 @@ export const HOST_GUIDE: readonly GuideStep[] = [
   {
     id: "done",
     title: "You’re all set",
-    body: "End the order from Options when everyone’s done: tickets and KKB stay readable for 7 days. Open this guide again any time from Options → How Salo works.",
+    body: "End the order from Options when everyone’s done: tickets and KKB stay readable for 7 days. The bell at the top keeps your updates: confirmations, changes and served food. Open this guide again any time from Options → How Salo works.",
     scene: "done",
     action: null,
     label: "",
@@ -119,7 +118,7 @@ export const GUEST_GUIDE: readonly GuideStep[] = [
   {
     id: "forPrice",
     title: "For someone? Know the price?",
-    body: "Tap For to put a dish down for a friend, a group or the whole table. Size, notes or price sits in the same panel; the price is optional and helps with KKB.",
+    body: "Tap For to put a dish down for a friend, a group or the whole table. Under the dish, + Size, + Note and + ₱ Price add the details; the price is optional and helps with KKB.",
     scene: "forPrice",
     action: "details",
     label: "Add a price",
@@ -155,7 +154,7 @@ export const GUEST_GUIDE: readonly GuideStep[] = [
   {
     id: "done",
     title: "You’re all set",
-    body: "Open this guide again any time with the Help button at the top.",
+    body: "The bell at the top keeps your updates: confirmations, changes and served food. Open this guide again any time with the Help button at the top.",
     scene: "done",
     action: null,
     label: "",

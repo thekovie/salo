@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { addDish, inviteCode, joinAsGuest, orderFor, startOrder } from "./support/helpers";
+import { addDish, inviteCode, joinAsGuest, openDetail, orderFor, startOrder } from "./support/helpers";
 
 test("edit a dish's size, notes and who it's for; undo a quantity change (finding 6)", async ({ page, browser }) => {
   await startOrder(page);
@@ -8,7 +8,9 @@ test("edit a dish's size, notes and who it's for; undo a quantity change (findin
   await page.getByRole("button", { name: "Edit Halo-halo" }).click();
   const sheet = page.getByRole("dialog", { name: "Edit Halo-halo" });
   await sheet.getByRole("radio", { name: "JD", exact: true }).click();
+  await openDetail(sheet, "Size");
   await sheet.getByLabel("Size or variant").fill("Large");
+  await openDetail(sheet, "Note");
   await sheet.getByLabel("Instructions").fill("Less ice");
   await sheet.getByRole("button", { name: "Save changes" }).click();
   const row = page.getByTestId("dish-row").filter({ hasText: "Halo-halo" });

@@ -7,7 +7,7 @@
 
 ## Authorization (brief 4, 11.2)
 - `src/lib/permissions.ts`: host-only rename, confirm, rounds, close, claim approval, removing guests, editing others' entries; guests add entries and change only their own.
-- KKB (`src/server/orders/settlement.ts`): the host may price any entry, a guest only the entries they submitted (`canEditPrice`, confirmed rounds included); Bill to, replacement prices, the service charge and renaming yourself are host-only. Every write checks the row's own revision (stale → `409 CONFLICT`), runs in `runMutation` (closed orders refused, idempotent replay), and stays in the caller's session (also enforced by `0007` triggers). Prices are visible to everyone in the order and never reach the waiter ticket, its snapshot, the invite or its preview, or the summary text/image.
+- KKB (`src/server/orders/settlement.ts`): the host may price any entry, a guest only the entries they submitted (`canEditPrice`, confirmed rounds included); Bill to, replacement prices, the table price (also guarded by the `0008` same-session trigger), the service charge and renaming yourself are host-only. Every write checks the row's own revision (stale → `409 CONFLICT`), runs in `runMutation` (closed orders refused, idempotent replay), and stays in the caller's session (also enforced by `0007` triggers). Prices are visible to everyone in the order and never reach the waiter ticket, its snapshot, the invite or its preview, or the summary text/image.
 - Every session endpoint resolves the caller from the cookie; someone without a credential for that session gets `404` (the same as a session that does not exist). Entry ids are always scoped to the caller's session. A guest the host removed resolves to nobody (`resolveActor` returns null), so every route treats them as a stranger, except that session routes answer `403 REMOVED` so their screen can explain; their reason is only rendered on their own page. They may join again as a new guest.
 
 ## Invitations
@@ -36,6 +36,11 @@
 | Groups | 30 per order; members changed only by the host or whoever set the group up |
 | Text | dish 60, size 40, instructions 140, names 40, order name 60; no NUL |
 Rate limits live in process memory (one instance) and key on the last `X-Forwarded-For` hop (one trusted proxy; see deployment.md). Each per-address table holds 2,000 addresses (IPv6 grouped by /64); the all-addresses ceilings exist because rotating through more addresses than that would otherwise evict every counter before it filled. Preview cards and app icons are drawn once per process and served from memory. A Traefik rate limit in front is a sensible extra backstop.
+
+## Notifications (privacy)
+- A snapshot carries only the caller's own notifications; the recipient is resolved from the credential, never from the request. The read route only touches rows whose `recipient_id` is the caller, so ids of other people's updates are ignored. Covered by `tests/notifications.test.ts`.
+- The route sits behind the proxy Origin check (403 `FORBIDDEN_ORIGIN`), `requireActor` (404 for strangers) and the read limiter.
+- The drawer is masked from session replay (`data-ph-mask`).
 
 ## Analytics (PostHog)
 - Only when `POSTHOG_KEY` is set. Requests go to `/ingest` on Salo's own domain (Next rewrites to PostHog US), so the CSP stays same-origin; `worker-src 'self' blob:` is added for the replay recorder.

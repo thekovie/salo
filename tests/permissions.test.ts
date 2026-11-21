@@ -20,3 +20,17 @@ describe("permissions", () => {
     expect(canEditEntry(host, { submittedBy: "g" })).toBe(true);
   });
 });
+
+describe("table prices", () => {
+  it("only the host sets them", () => {
+    expect(can(host, "price.default")).toBe(true);
+    expect(can(guest, "price.default")).toBe(false);
+  });
+});
+
+describe("unavailable", () => {
+  it("only the host marks a dish unavailable", () => {
+    expect(can(host, "dish.unavailable")).toBe(true);
+    expect(can(guest, "dish.unavailable")).toBe(false);
+  });
+});
