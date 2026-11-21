@@ -104,15 +104,17 @@ export function RoundsView({ snapshot, entries, changeRequest, onChangeRequestHa
         const canChange = prepsOf(round.id).some((p) => p.kind !== "replaced");
         const isExpanded = expanded.has(round.id);
         const items = ticket.dishes.reduce((sum, d) => sum + d.quantity, 0);
+        // D18: "dishes" are distinct lines (dish + size + notes), the same count Served and KKB use.
+        const lines = ticket.dishes.reduce((sum, d) => sum + Math.max(1, d.lines.length), 0);
         return (
-          <div key={round.id} className="space-y-2">
+          <div key={round.id} className="space-y-2 rounded-2xl bg-ticket p-2">
             <button
               type="button"
               aria-expanded={isExpanded}
               id={`summary-${round.id}`}
               aria-controls={`ticket-${round.id}`}
               onClick={() => setExpanded((open) => new Set(isExpanded ? [...open].filter((id) => id !== round.id) : [...open, round.id]))}
-              className="-mx-1 flex min-h-11 w-[calc(100%+0.5rem)] cursor-pointer items-center justify-between gap-2 rounded-xl px-1 text-left hover:bg-ink/6"
+              className="flex min-h-11 w-full cursor-pointer items-center justify-between gap-2 rounded-xl px-1 text-left hover:bg-ink/6"
             >
               <span className="py-1">
                 <span className="block">
@@ -120,7 +122,7 @@ export function RoundsView({ snapshot, entries, changeRequest, onChangeRequestHa
                 </span>
                 <span className="sr-only"> · </span>
                 <span className="block text-sm text-ink-soft">
-                  {ticket.dishes.length} {ticket.dishes.length === 1 ? "dish" : "dishes"} · {items} {items === 1 ? "item" : "items"}
+                  {lines} {lines === 1 ? "dish" : "dishes"} · {items} {items === 1 ? "item" : "items"}
                 </span>
               </span>
               <ChevronDown className={`size-5 shrink-0 ${isExpanded ? "rotate-180" : ""}`} aria-hidden />

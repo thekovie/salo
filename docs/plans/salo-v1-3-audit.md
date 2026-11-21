@@ -102,3 +102,47 @@ Plan slices 1–6 and mockups: visible detail chips in the composer and edit she
 - A notification is written once per recipient per event, never to the actor, and survives reload and reconnect.
 - KKB shows "n of m dishes priced" with no service charge; a receipt difference shows when food + service charge ≠ receipt; Copy summary text matches the KKB view numbers.
 - No horizontal overflow and no new sub-44 px targets at 320–1280 in the after-capture.
+
+## 11. Results after v1.3 (phase 7)
+
+Phase 7 ran on `chore/v1-3-final` after slices 1 to 6. The black-box QA was scripted (Playwright with a tap counter), not real users. Full notes: `.shots/qa/final.md` (local only).
+
+### Usability issues
+
+| # | Status | What changed |
+|---|---|---|
+| U1 | Addressed | Size, note and price chips sit under the dish field, and For holds recipients only (#35). Composer height at 320 is still open (see below). |
+| U2 | Fixed | Items and KKB use one rule for pending corrections (#35). Pending changes read "waiting for the waiter". |
+| U3 | Fixed | One table price per dish and size. Lines without their own price inherit it, and overrides keep theirs (#36). QA scenario E: the "No sauce" line took the Katsu (Large) table price. |
+| U4 | Addressed | "Change…" on every confirmed round card (#37); Mark unavailable works with no open round (D4: counts at once). Verified in slice 3 QA ("No open round: Cancel some and Replace show Start round N, Unavailable still works") and the unavailable contract suite. |
+| U5 | Addressed | A batch writes one correction per source entry and shows as one row (#37). |
+| U6 | Partly | Pending and told states are labelled in Rounds, Items and KKB (#35, #37). The wording still differs between Items and KKB (follow-up 2). |
+| U7 | Fixed | The KKB status line shows "n of m dishes priced" and jumps to the first unpriced line (#41). |
+| U8 | Addressed | The edit sheet uses the same size and note chips (#35). It has no price field. |
+| U9 | Addressed | Toasts pause on hover and focus (#37). The phase 0 fix also asked that the last Undo stay reachable. These results do not cover that. |
+| U10 | Addressed | The Served section on the Order tab tracks food after confirm (#39). QA scenario D checked the counts. |
+| U11 | Not changed | The header "Name this order" button is still 25 px tall. |
+
+### Regression (58 shared states, 320 to 1280 px)
+
+- Horizontal overflow: 0 before, 0 after. Across all 83 states after, still 0.
+- Sub-44 px targets: 104 before, 104 after. No state is worse. New states add only known targets: the header title, the Dish input and the "added" pill, all as in the baseline.
+- Geometry findings: 114 before, 107 after. None worse.
+
+### Checks
+
+- Opt-in review specs: 14/14, with 0 axe violations across 16 axe checks.
+- `pnpm audit --prod` is clean.
+
+### Still open
+
+- Composer height at 320: the dock is still tall, with chips, For and the stepper stacked (follow-up 18, slice 8).
+- Served rows at 320 are tall: about 167 px each in the QA run, when names wrap (QA follow-up 2; follow-up 17, slice 8).
+- Round label styles differ (follow-up 19, slice 8). Guests have no direct path to their KKB share (follow-up 20, slice 8).
+- Offline price, served and receipt saves need Try again after reconnect (follow-up 21).
+
+### Not verified
+
+- Real Android and iPhone devices. The virtual keyboard isn't handled (`interactive-widget` was never applied), so the composer at 320 with the keyboard open is unchecked.
+- Screen readers: VoiceOver and TalkBack on the chips, the bell, the Served steppers and the receipt input.
+- Real users and real tables. The tap counts come from a scripted user.

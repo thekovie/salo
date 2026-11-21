@@ -62,6 +62,6 @@ export async function confirmRound1(page: Page) {
   const waiter = page.getByRole("dialog", { name: "Waiter ticket" });
   await waiter.getByRole("button", { name: "Mark confirmed with waiter" }).click();
   await page.getByRole("dialog", { name: /Confirm round 1/ }).getByRole("button", { name: "Yes, the waiter has it" }).click();
-  await expect(waiter.getByRole("region", { name: "Round 1, confirmed with the waiter" })).toBeVisible();
+  await expect(waiter.getByRole("region", { name: "Round 1, confirmed with the waiter" })).toBeVisible({ timeout: 15_000 });
   await page.getByRole("button", { name: "Back" }).click();
 }

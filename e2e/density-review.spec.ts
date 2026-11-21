@@ -15,7 +15,7 @@ for (const [label, viewport] of sizes) {
     const shot = (p: Page, name: string) => p.screenshot({ path: `${DIR}/${label}-${name}.png` });
     await page.setViewportSize(viewport);
     await page.emulateMedia({ reducedMotion: "reduce" });
-    await page.addInitScript(() => localStorage.setItem("salo:tour:host", "dismissed"));
+    await page.addInitScript(() => localStorage.setItem("salo:tour:host:v1", "1"));
 
     await page.goto("/");
     await shot(page, "01-landing");
@@ -68,9 +68,27 @@ for (const [label, viewport] of sizes) {
     await shot(page, "12-waiter");
     await page.getByRole("button", { name: "Mark confirmed with waiter" }).click();
     await page.getByRole("dialog", { name: /Confirm round 1/ }).getByRole("button", { name: "Yes, the waiter has it" }).click();
-    await page.getByRole("button", { name: "Back" }).click();
+    await expect(page.getByRole("dialog", { name: "Waiter ticket" }).getByRole("region", { name: /confirmed/ })).toBeVisible();
+    await page.getByRole("button", { name: "Back", exact: true }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
     await page.waitForTimeout(800);
     await shot(page, "13-whats-next");
+    await page.getByTestId("served-section").scrollIntoViewIfNeeded();
+    await shot(page, "13b-served-section");
+    await guest.page.getByRole("button", { name: /^Updates/ }).click();
+    await expect(guest.page.getByRole("dialog", { name: "Updates" })).toBeVisible();
+    await shot(guest.page, "13c-notifications-drawer");
+    await guest.page.getByRole("dialog", { name: "Updates" }).getByRole("button", { name: "Close" }).click();
+    await page.getByRole("tab", { name: /Rounds/ }).click();
+    await shot(page, "13d-rounds-collapsed");
+    await page.getByRole("button", { name: /Change a dish/ }).first().click();
+    await shot(page, "13e-dish-picker");
+    await page.keyboard.press("Escape");
+    await page.getByRole("tab", { name: /Order/ }).click();
+    await page.getByRole("button", { name: "Enter receipt prices (KKB)" }).click();
+    await expect(page.getByRole("dialog", { name: "Who ordered what" })).toBeVisible();
+    await shot(page, "13f-kkb-receipt-check");
+    await page.keyboard.press("Escape");
     await page.getByRole("button", { name: "End the order" }).click();
     await page.getByRole("button", { name: /Yes, end the order/ }).click();
     await expect(page.getByRole("dialog", { name: /Who ordered what/ })).toBeVisible();

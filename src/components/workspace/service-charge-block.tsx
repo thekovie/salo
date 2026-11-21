@@ -24,7 +24,7 @@ export function blockerText(b: KkbBlocker, isHost: boolean): string {
     case "unpriced":
       return `${items(b.units)} without a price (${b.where.join(", ")}).`;
     case "unbilled":
-      return `No one is paying for ${b.dishes.join(", ")} yet. ${isHost ? "Use Bill to on each shared dish." : "The host can choose who pays."}`;
+      return `No one is paying for ${b.dishes.join(", ")} yet. ${isHost ? "Tap each shared dish and choose who pays under Bill to." : "The host can choose who pays."}`;
     case "pending":
       return `${b.count === 1 ? "A change is" : `${b.count} changes are`} still waiting to be confirmed with the waiter.`;
     case "zeroFood":

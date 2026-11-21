@@ -27,7 +27,7 @@ function closeNestedDialog(event: KeyboardEvent) {
 export function DrawerContent({ className, children, ...props }: React.ComponentProps<typeof Vaul.Content>) {
   return (
     <Vaul.Portal>
-      <Vaul.Overlay className="fixed inset-0 z-50 bg-ink/55" />
+      <Vaul.Overlay className="fixed inset-0 z-50 bg-black/55" />
       <Vaul.Content
         className={cn(
           "ticket-top fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[92dvh] w-full max-w-lg flex-col bg-ticket text-ink shadow-ticket outline-none",

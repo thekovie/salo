@@ -51,7 +51,7 @@ export function ConfirmDialog({ trigger, title, body, confirmLabel, danger, onCo
         }}
         onCancel={(e) => busy && e.preventDefault()}
         onKeyDown={trapTab}
-        className="m-auto w-[min(26rem,calc(100vw-2rem))] ticket px-5 text-ink backdrop:bg-ink/55">
+        className="m-auto w-[min(26rem,calc(100vw-2rem))] ticket px-5 text-ink backdrop:bg-black/55">
         <h2 id={titleId} className="text-xl">
           {title}
         </h2>
