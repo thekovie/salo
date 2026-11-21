@@ -13,13 +13,15 @@ interface AmountEditorProps {
   path: string;
   live: { centavos: number | null; revision: number };
   refresh: () => Promise<unknown>;
+  /** Shown between the field row and the hint. */
+  children?: React.ReactNode;
 }
 
 /**
  * One host-typed receipt amount (service charge, receipt total) saved directly: stale writes show the latest value
  * with Use theirs / Keep mine, and a refusal stays next to what was typed.
  */
-export function AmountEditor({ label, hint, path, live, refresh }: AmountEditorProps) {
+export function AmountEditor({ label, hint, path, live, refresh, children }: AmountEditorProps) {
   const id = useId();
   const { state, save } = useDirectSave(refresh);
   const [base, setBase] = useState(live);
@@ -80,7 +82,7 @@ export function AmountEditor({ label, hint, path, live, refresh }: AmountEditorP
               placeholder="e.g. 300"
               aria-invalid={Boolean(error) || !parsed.ok || undefined}
               aria-describedby={`${id}-hint`}
-              className="tally min-h-11 min-w-0 flex-1 basis-40 rounded-xl border-[1.5px] border-input bg-ticket px-3 text-base aria-invalid:border-bad"
+              className="tally min-h-11 min-w-0 flex-1 basis-24 rounded-xl border-[1.5px] border-input bg-ticket px-3 text-base aria-invalid:border-bad"
             />
             <Button type="submit" variant="outline" disabled={saving}>
               {saving ? <LoaderCircle className="size-5 animate-spin" aria-hidden /> : null}
@@ -92,6 +94,7 @@ export function AmountEditor({ label, hint, path, live, refresh }: AmountEditorP
               </Button>
             ) : null}
           </div>
+          {children}
           <p id={`${id}-hint`} className="text-sm text-ink-soft">
             {!parsed.ok ? <span className="text-bad">{parsed.message}</span> : hint}
           </p>

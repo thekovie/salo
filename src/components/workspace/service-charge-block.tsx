@@ -34,7 +34,7 @@ export function blockerText(b: KkbBlocker, isHost: boolean): string {
 
 /**
  * The receipt's one service charge, after everyone's food. Host types it; everyone sees whether it is split yet and,
- * if not, exactly what is holding it up. The receipt stays the final word on what the table owes.
+ * if not, exactly what is holding it up.
  */
 export function ServiceChargeBlock({ kkb, live, sessionId, refresh, canEdit, isHost }: ServiceChargeBlockProps) {
   const id = useId();
@@ -63,17 +63,6 @@ export function ServiceChargeBlock({ kkb, live, sessionId, refresh, canEdit, isH
           </ul>
         </div>
       ) : null}
-
-      <p className="mt-3 border-t-[1.5px] border-dashed border-rule pt-3 text-sm text-ink-soft">
-        Confirmed food <span className="tally text-ink">{formatPeso(kkb.foodCentavos)}</span>
-        {kkb.charge.state === "allocated" || kkb.charge.state === "blocked" ? (
-          <>
-            {" "}
-            · Service charge <span className="tally text-ink">{formatPeso(kkb.charge.centavos)}</span>
-          </>
-        ) : null}
-        . The receipt is the final word.
-      </p>
     </section>
   );
 }

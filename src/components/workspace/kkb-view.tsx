@@ -179,10 +179,10 @@ function showFirstUnpriced(key: string) {
 function Completeness({ kkb }: { kkb: Kkb }) {
   const { total, priced, first } = priceCompleteness(kkb);
   if (total === 0) return null;
-  if (!first) return <p className="px-1 text-sm font-semibold text-ink">All prices in</p>;
+  if (!first) return <p className="text-sm font-semibold text-ink">All {total === 1 ? "1 dish" : `${total} dishes`} priced</p>;
   const missing = total - priced;
   return (
-    <p className="px-1 text-sm text-ink">
+    <p className="text-sm text-ink">
       <span className="font-semibold">
         {priced} of {total} dishes priced
       </span>
@@ -226,7 +226,7 @@ function ChargeStrip({ kkb }: { kkb: Kkb }) {
       </a>
     );
   }
-  return <p className="px-1 text-sm text-ink-soft">{charge.state === "none" ? "No service charge on this receipt." : "Service charge: not entered yet. It goes at the bottom, from the receipt."}</p>;
+  return <p className="text-sm text-ink-soft">{charge.state === "none" ? "No service charge on this receipt." : "Service charge: not entered yet. It goes at the bottom, from the receipt."}</p>;
 }
 
 function noteOf(section: KkbSection, isMe: boolean) {

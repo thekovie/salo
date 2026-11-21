@@ -35,7 +35,7 @@ test("receipt check, price completeness and Copy summary across two phones", asy
     await form.getByRole("button", { name: "Save" }).click();
     await expect(form).toBeHidden();
   }
-  await expect(sheet.getByText("All prices in")).toBeVisible();
+  await expect(sheet.getByText("All 2 dishes priced")).toBeVisible();
 
   const receipt = sheet.getByRole("region", { name: "Check against the receipt" });
   await sheet.getByLabel("Service charge from receipt (₱)").fill("18");
@@ -43,7 +43,7 @@ test("receipt check, price completeness and Copy summary across two phones", asy
   await expect(receipt.getByText("₱198.00")).toBeVisible();
   await receipt.getByLabel("Receipt total (₱)").fill("234");
   await receipt.getByRole("button", { name: "Save" }).click();
-  await expect(receipt.getByText("₱36.00 more on the receipt. Not split. Check the receipt for items missing in Salo.")).toBeVisible();
+  await expect(receipt.getByText("₱36.00 more on the receipt. Not split.")).toBeVisible();
 
   await guest.page.getByRole("tab", { name: /People/ }).click();
   await guest.page.getByRole("button", { name: "Who ordered what" }).click();
