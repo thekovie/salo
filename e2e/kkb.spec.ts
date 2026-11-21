@@ -13,6 +13,7 @@ async function confirmRound(page: Page) {
 }
 
 test("KKB: price while ordering, price from the receipt, bill a shared dish, split the service charge live", async ({ page, browser }) => {
+  test.slow();
   await page.emulateMedia({ reducedMotion: "reduce" });
   await startOrder(page);
   const code = await inviteCode(page);

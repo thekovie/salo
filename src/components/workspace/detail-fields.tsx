@@ -2,7 +2,7 @@
 
 import { X } from "lucide-react";
 import { useEffect } from "react";
-import { formatPeso, type PesoParse } from "@/lib/money";
+import { formatPeso, formatPesoShort as shortPeso, type PesoParse } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
 export type DetailField = "variant" | "notes" | "price";
@@ -31,8 +31,6 @@ interface DetailFieldsProps {
 }
 
 const INPUT = "mt-1 min-h-11 w-full rounded-xl border-[1.5px] border-input bg-ticket px-3 text-base";
-/** Whole pesos drop ".00" so a long price tag still fits one line at 320 px. */
-const shortPeso = (centavos: number) => formatPeso(centavos).replace(/\.00$/, "");
 
 const CHIP = "inline-flex min-h-11 cursor-pointer items-center rounded-full px-3.5 text-sm font-semibold";
 

@@ -51,6 +51,8 @@ export const viewport: Viewport = {
     { media: "(prefers-color-scheme: dark)", color: BRAND_HEX.darkPaper },
   ],
   viewportFit: "cover",
+  // The keyboard shrinks the layout viewport, so the fixed dock rides above it instead of being covered.
+  interactiveWidget: "resizes-content",
 };
 
 // Runs before first paint so there is no flash of the wrong theme. Stamped with the request's CSP nonce.

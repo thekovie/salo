@@ -8,7 +8,7 @@ import type { SessionSnapshot } from "@/lib/snapshot";
 import { track } from "@/lib/analytics";
 import { buildSummary, itemsLabel, roundsLabel, summaryText } from "@/lib/summary";
 import { cn } from "@/lib/utils";
-import { KkbView } from "./kkb-view";
+import { KkbView, MY_CARD_ID } from "./kkb-view";
 
 const noSubscribe = () => () => {};
 const DATE: Intl.DateTimeFormatOptions = { weekday: "short", month: "short", day: "numeric" };
@@ -23,6 +23,8 @@ interface SummarySheetProps {
   onTabChange: (tab: SummaryTab) => void;
   refresh: () => Promise<unknown>;
   onRenameMe: (displayName: string) => void;
+  /** "My share": once the drawer has opened, scroll to and focus the viewer's own KKB card. */
+  focusMine?: boolean;
 }
 
 const TABS: { id: SummaryTab; label: string }[] = [
@@ -39,7 +41,7 @@ const fileName = (title: string) => `salo-${title.toLowerCase().replace(/[^a-z0-
  * "Who ordered what" (owner request): what each person, group and the table had, from the confirmed rounds, to settle
  * up later. Copy it as text for the group chat, or save it as an image.
  */
-export function SummarySheet({ open, onOpenChange, snapshot, tab, onTabChange, refresh, onRenameMe }: SummarySheetProps) {
+export function SummarySheet({ open, onOpenChange, snapshot, tab, onTabChange, refresh, onRenameMe, focusMine = false }: SummarySheetProps) {
   const summary = useMemo(() => buildSummary(snapshot), [snapshot]);
   // The date is the device's own (its time zone), on screen, in the text and in the image.
   const dateLabel = useSyncExternalStore(noSubscribe, () => new Intl.DateTimeFormat(undefined, DATE).format(new Date()), () => "");
@@ -106,7 +108,16 @@ export function SummarySheet({ open, onOpenChange, snapshot, tab, onTabChange, r
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent>
+      <DrawerContent
+        // "My share" opens on KKB: land on the viewer's own card.
+        onOpenAutoFocus={(event) => {
+          const card = focusMine && tab === "kkb" ? document.getElementById(MY_CARD_ID) : null;
+          if (!card) return;
+          event.preventDefault();
+          card.focus({ preventScroll: true });
+          card.scrollIntoView({ block: "start" });
+        }}
+      >
         <div className="flex items-start justify-between gap-3">
           <div>
             <DrawerTitle className="font-display text-2xl font-medium">Who ordered what</DrawerTitle>

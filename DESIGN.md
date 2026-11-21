@@ -46,7 +46,8 @@ The system preference sets dark mode in CSS alone; `.dark` / `.light` on `<html>
 - **Bottom bar**: Add is the single tomato button; Review order (host) and Ticket (guest) are outline. The confirm action reads "Mark confirmed with waiter" (a verb, not a status).
 - **Full-screen panels** (Review, Waiter ticket): native modal dialogs (`FullScreenSheet`).
 - **Bottom drawers** (Invite, Correct a dish): `src/components/ui/drawer.tsx` (shadcn's Drawer on `vaul`): slides up, swipe or drag the handle down to close, Escape and tapping outside close it, focus moves in and returns. Styled as a ticket torn off the pad (`.ticket-top`: perforated top edge only) with a grab handle. Confirm questions stay centred dialogs.
-- **Composer**: two rows. A full-width labelled Dish field, then For ▾ · stepper · Add. The "Who's it for?" panel sits above, with suggestion chips (saffron-wash) above that.
+- **Round label** (`.round-label`, `@layer components`): DM Mono 500, uppercase via CSS, tracking 0.14em, tomato-ink (on the band: `on-band`). Sizes: `text-sm` headings, `text-lg` waiter hero, `text-xs` compact tags. Use it for every "Round N" heading or tag; the DOM text stays "Round N".
+- **Composer**: at rest the labelled Dish field and one For ▾ · Add row; focused it expands to Dish / For · stepper · Add / Size-Note-Price chips (under 360 px behind + Details). The dock bar hides while it has focus. The "Who's it for?" panel sits above, with suggestion chips (saffron-wash) above that.
 - **Landing scenes** (`src/components/landing/scenes.tsx`): phone-shaped paper cards built from the real tokens, driven by `useScene` (a step timeline; plays in view; final frame under reduced motion). Pictures, not UI: `aria-hidden`, sample names and dishes.
 - **Tour** (`src/components/onboarding`): spotlight frame (saffron ring, ink scrim made from one huge shadow) and a ticket card placed above or below the target; offer card in saffron-wash.
 

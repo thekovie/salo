@@ -1,7 +1,7 @@
 import { isPlain, preparationKey, preparationLabel } from "./consolidate";
 import { normalizeText } from "./dish-name";
 import { confirmedIds, effectiveEntry } from "./effective-order";
-import { formatPeso } from "./money";
+import { formatPeso, formatPesoShort } from "./money";
 import { everyone, sharedPriceKey, type SessionSnapshot, type SnapshotEntry } from "./snapshot";
 
 /**
@@ -349,3 +349,15 @@ export function kkbText(kkb: Kkb, title: string, dateLabel: string): string {
   out.push("", blocked ? `Total not final: ${reasons.join(", ") || "some items are not settled"}` : `Total ${formatPeso(saloTotal(kkb))}`, "Made with Salo");
   return out.join("\n");
 }
+
+/** The dock's "My share" button text (D26); null when the viewer has nothing confirmed yet. */
+export function myShareLabel(kkb: Kkb): string | null {
+  const mine = kkb.sections.find((s) => s.isMe);
+  if (!mine || mine.lines.length === 0 || mine.status === "empty") return null;
+  if (mine.status === "none") return "My share · no prices yet";
+  if (mine.totalCentavos != null) return `My share · ${formatPesoShort(mine.totalCentavos)}`;
+  return `My share${mine.status === "complete" ? "" : " so far"} · ${formatPesoShort(mine.pricedCentavos)}`;
+}
+
+/** The same label under 360 px: "Share ₱1,240" (the full text stays the accessible name). */
+export const shortShareLabel = (full: string): string => full.replace(/^My share(?: so far)? · (?=₱)/, "Share ").replace(/^My share/, "Share");

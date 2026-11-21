@@ -118,7 +118,10 @@ export function RoundsView({ snapshot, entries, changeRequest, onChangeRequestHa
             >
               <span className="py-1">
                 <span className="block">
-                  <span className="font-semibold">Round {round.number}</span> · Confirmed {round.confirmedAt ? <LocalTime iso={round.confirmedAt} /> : null}
+                  <span className={isExpanded ? "sr-only" : undefined}>
+                    <span className="font-semibold">Round {round.number}</span> ·{" "}
+                  </span>
+                  Confirmed {round.confirmedAt ? <LocalTime iso={round.confirmedAt} /> : null}
                 </span>
                 <span className="sr-only"> · </span>
                 <span className="block text-sm text-ink-soft">

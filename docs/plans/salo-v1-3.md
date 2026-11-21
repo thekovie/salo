@@ -338,11 +338,11 @@ Owner's words, verbatim:
 
 | # | Owner's words | Planned change | Status |
 |---|---|---|---|
-| A25 | "fully served dishes … compact "All ✓" … detailed controls available when tapped" (17) | decision pending | decision pending |
-| A26 | "Prioritize outstanding food … collapsing fully served dishes into a separate section when the list becomes long" (17) | decision pending | decision pending |
-| A27 | "optimize the composer for narrow screens … compare alternative layouts and choose" (18) | decision pending (mockups) | decision pending |
-| A28 | "Standardize the presentation of round labels … reusable patterns" (19) | decision pending | decision pending |
-| A29 | "contextual "My KKB" or "My share" action … ideally one tap … directly open or scroll to the guest's own KKB" (20) | decision pending | decision pending |
+| A25 | "fully served dishes … compact "All ✓" … detailed controls available when tapped" (17) | per D23–D27 | done (slice 8, verified) |
+| A26 | "Prioritize outstanding food … collapsing fully served dishes into a separate section when the list becomes long" (17) | per D23–D27 | done (slice 8, verified) |
+| A27 | "optimize the composer for narrow screens … compare alternative layouts and choose" (18) | per D23 | done (slice 8, verified) |
+| A28 | "Standardize the presentation of round labels … reusable patterns" (19) | per D23–D27 | done (slice 8, verified) |
+| A29 | "contextual "My KKB" or "My share" action … ideally one tap … directly open or scroll to the guest's own KKB" (20) | per D23–D27 | done (slice 8, verified) |
 
 ### Research (2026-11-21, code trace)
 
@@ -354,4 +354,105 @@ Owner's words, verbatim:
 
 **Also in slice 8: the D1 native-feel fixes that were decided but never built**: `interactive-widget=resizes-content` (pairs with the composer height), dark `theme-color` matching the header band (`layout.tsx:49` vs `globals.css:74`), a long-press text-selection guard on buttons, `scroll-padding-bottom` following `--dock-h`, and a WebKit/iPhone Playwright project.
 
-Approach, sketches and decisions: next session of slice 8 (after the v1.3 release to `main`).
+### Approach (slice 8)
+
+One PR into `dev`, branch `feat/ux-polish`. Five parts, each small; no server or schema change.
+
+| Part | Change | Main files |
+|---|---|---|
+| 8a Composer (#18) | Narrow-screen layout per D23; `scroll-padding-bottom` follows `--dock-h`; `interactive-widget=resizes-content` (D1) so the dock rides above the keyboard | `composer.tsx`, `detail-fields.tsx`, `workspace.tsx` (dock), `globals.css`, `src/app/layout.tsx` (viewport), `e2e/support/helpers.ts` (`openDetail`), guide scene/copy |
+| 8b Served (#17) | Two groups per D24: Waiting (zero/partial, full controls) then Fully served (compact "All ✓" rows, tap to reveal −/+ and Change…); stable creation order inside each group, bucketed on the server count | `served-section.tsx`, `e2e/food-tracker.spec.ts`, ux-spec |
+| 8c Round labels (#19) | One `.round-label` utility (mono, tomato-ink, uppercase via CSS, one tracking value) in `globals.css` `@layer components`; used for round headings and compact status labels; prose keeps plain "round 2" | `globals.css`, `order-ticket.tsx`, `waiter-ticket.tsx`, `served-section.tsx`, `session-header.tsx`, `rounds-view.tsx` (drop the duplicate sans "Round 1" inside an expanded card), `kkb-view.tsx` |
+| 8d My share (#20) | Per D26: a "My share" button in the dock after a round is confirmed, labelled from `buildKkb` ("My share · ₱528.00" / "My share so far · ₱480.00" / "My share · no prices yet"); opens Who ordered what on KKB and scrolls to and focuses the viewer's own card | `workspace.tsx` (dock, `openSummary` gains a focus target), `summary-sheet.tsx`, `kkb-view.tsx`, `guide-steps.ts` |
+| 8e D1 native feel | Dark `theme-color` = dark header band; `-webkit-touch-callout:none` + `user-select:none` on buttons; WebKit/iPhone Playwright project (mobile Safari) running the core specs | `layout.tsx`, `globals.css`, `playwright.config.ts` |
+
+Rejected: a permanent KKB tab (owner: no new permanent tab); hiding the stepper until typing as the only composer change (full height returns while typing, the case that hurts).
+
+### Mockups (text sketches, phone 320)
+
+**M8-1a Composer at <360: "+ Details" chip on the stepper row (recommended)**
+```
+┌────────────────────────────┐   rows: 3 (was 4)
+│ Dish                       │   dock ≈ 264 px (was ≈ 312)
+│ [Chicken Katsu_          ] │
+│ [For Me ▾]         [+ Add] │
+│ (+ Details)        − 1 +   │
+└────────────────────────────┘
+ tap + Details → the Size / Note / ₱ Price chips appear inline (as today);
+ filled details show as a tag line "Large · No sauce · ₱120" with a dot on the chip.
+ ≥360: unchanged (three chips visible).
+```
+**M8-1b Composer at <360: compact until you type**
+```
+at rest (not focused, empty)        while typing
+┌────────────────────────────┐     ┌────────────────────────────┐
+│ [Add a dish…_    ] [+ Add] │     │ [Chicken Katsu_          ] │
+│ For Me ▾                   │     │ (+ Size)(+ Note)(+ ₱ Price)│
+└────────────────────────────┘     │ [For Me ▾]  − 1 +  [+ Add] │
+ ≈ 214 px                          └────────────────────────────┘ ≈ 312 px
+```
+**M8-1c Both: 1a's layout, and at rest it shrinks to Dish + [For · Add] (≈ 214), expanding to 1a (≈ 264) on focus.**
+
+**M8-2 Served, compact (both options share this row design)**
+```
+Served · 9 of 14 served · 5 waiting  ▓▓▓▓▓▓▓▓▓░░░░░
+WAITING
+ Chicken Katsu (Large)      − 3 +
+ 3 of 5 served · 2 waiting
+ Kovie ×2 · Miguel ×3   [All served] [Change…]
+ Iced Tea                   − 0 +
+ 0 of 2 served · 2 waiting
+FULLY SERVED (4)                         ▸   ← collapsed when more than 5; open otherwise
+ Gyoza ×3                   All ✓  ▾     ← tap → reveals − 3 + and Change… (undo)
+ Sisig ×1                   All ✓  ▾
+```
+**M8-2a: the All / Waiting / Served filter chips are removed (the two groups replace them).**
+**M8-2b: keep the chips above the groups.**
+
+**M8-3 My share in the dock (after a round is confirmed)**
+```
+guest                                   host
+│ 14 items   [My share · ₱330] [Ticket] │   │ 14 items  [My share · ₱528] [Review order] │
+ prices missing → "My share · no prices yet"; partly priced or pending → "My share so far · ₱300"
+ under 360 the buttons share a row in halves (as the guest bar does today), count on its own line.
+ tap → Who ordered what opens on KKB, scrolled to and focused on your own card.
+```
+
+### Decisions (slice 8)
+
+Owner answers (2026-11-21):
+
+| # | Decision | Answer |
+|---|---|---|
+| D23 | Composer at 320 | **M8-1c**: at rest Dish + [For ▾ · Add] (≈214 px, 2 rows); focusing the dish field expands to Dish / [For · Add] / [+ Details · stepper] (≈264). Size/note/price behind "+ Details" at <360, three chips at ≥360 when expanded. No extra tap for a basic dish |
+| D24 | Served grouping | **One Waiting group + one Fully served group across all rounds**, compact `.round-label` tag ("ROUND 1") on each row; Fully served collapses above 5 dishes; the All/Waiting/Served chips are removed |
+| D26 | My share | **Guests and host**, in the dock after a round is confirmed; label per the recipe in Pinned details; ended orders use the existing "Who ordered what" button, opening on the viewer's card |
+| D27 | Keyboard-up dock | **Hide the bottom bar (count / Review order / My share / I'm ready) while the composer has focus**; it returns when focus leaves |
+| D28 | My share bar width at 320 (asked 2026-11-21) | **Shorter label under 360**: "Share ₱1,240" (full "My share so far · ₱1,240" in the accessible name and at ≥360), so the buttons stay on one row |
+
+Ledger: A25–A29 → planned.
+
+### Pinned details (slice 8, from plan-critic, verified)
+- **Dock targets at 320:** host and guest stated separately. Guest with a round open keeps `I'm ready`, `Ticket` and gains `My share`; under 360 the count takes its own line and the buttons wrap (measure and state the guest height). Current guest bar alone ≈ 78 px.
+- **My share label** (reuse `SummaryAmount`, whole pesos without ".00"): allocated → "My share · ₱528"; no charge yet and complete → "My share · ₱480"; partial or pending → "My share so far · ₱480"; nothing priced → "My share · no prices yet"; viewer has no confirmed entries (no section or only drafts) → no button.
+- **My share target:** the own card gets an id, `tabIndex=-1` and a visible focus; focus moves after the drawer finishes opening (drawer open-autofocus), tab set to KKB. **Ended order:** the dock is hidden (`workspace.tsx:669`), so the existing "Who ordered what" button in the ended notice opens on KKB at the viewer's card.
+- **`.round-label`** = DM Mono 500, uppercase (CSS only), tracking 0.14em; heading `text-sm` (waiter-ticket hero `text-lg`); compact status `text-xs`. On the red band the header uses the `on-band` colour, not tomato-ink. The waiter ticket's "Corrections" heading is not a round label.
+- **Dark theme-color:** set only where the band exists (the session page's `generateViewport`), as a hex constant of `oklch(0.36 0.105 29)` in `site.ts`; other pages keep paper. The manual `.dark` toggle isn't seen by the media-query meta (gap stays, noted).
+- **WebKit / keyboard:** CI installs only Chromium (`ci.yml:65`); the WebKit project needs `playwright install --with-deps webkit` and a named spec list. No emulator raises a virtual keyboard: keyboard-up is verified by measuring `--dock-h` against `visualViewport` and stays an owner real-phone check. `interactive-widget` helps Android Chrome; iOS Safari behaviour to be checked against MDN before claiming anything.
+- **`resizes-content` side effects:** `dvh` shrinks with the keyboard, so the recipient panel (`max-h-[45dvh]`) and drawers (`max-h-[92dvh]`) are named checks; the guide's "Try it → details" must open the details first at <360.
+- **Details stay editable:** filled size/note/price keep their removable tags with ✕ (A3, slice 1), wrapping on their own row; the "+ Details" chip's accessible name includes the count ("Details, 2 added"); no colour-only dot. State the dock height with details filled.
+- **Served rows:** history rows (D21, expected 0) go in Fully served; guests see plain "All ✓" rows with no toggle; compact rows keep the people names; the D17 last resort becomes the "Served" heading when the filter chips go; after an undo moves a row back to Waiting, focus follows that dish's − control and scrolls it into view. The sketch's "FULLY SERVED (4)" example is open (collapse starts above 5).
+
+### Assumptions (slice 8)
+- Fully served group collapses by default when it holds more than 5 dishes; open otherwise; a dish moves between groups only after the server confirms (no jump under the finger).
+- Round label pattern (owner #19 gave the direction): headings and compact status use `.round-label`; references in sentences stay plain "round 2"; DOM text stays "Round N" (uppercase is CSS), so accessible names don't change.
+- The KKB "Not yet confirmed" eyebrow becomes "ROUND N · NOT YET CONFIRMED" when the number is known.
+- D1 parts ship here as decided; the WebKit project runs a core subset (standalone, composer-details, kkb, food-tracker) to keep CI time sane.
+- Guide scene and copy follow the composer change; the setup guide's "Try it" for prices opens the details first at <360.
+
+### Done when
+- Dock at 320 measured ≤ 270 px with nothing open (1a), keyboard-up behaviour checked in the WebKit and Chromium emulation, no horizontal overflow, 44 px targets.
+- Served: fully served rows ≤ 60 px each, outstanding first, D17 focus never lost (e2e), undo from a compact row works.
+- One round-label class used by every heading/status occurrence (grep), no duplicate label in an expanded Rounds card.
+- My share opens KKB on the viewer's card in one tap (e2e, guest and host); labels match `buildKkb`.
+- typecheck, lint, test, build, full e2e (+ WebKit subset), opt-in review specs with 0 axe violations.
