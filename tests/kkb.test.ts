@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allocate, buildKkb, hasPending, kkbText, priceCompleteness, reconcile, type KkbInput } from "@/lib/kkb";
+import { allocate, buildKkb, hasPending, kkbText, myShareLabel, priceCompleteness, shortShareLabel, reconcile, type KkbInput } from "@/lib/kkb";
 import { EMPTY_SETTLEMENT, type EntrySettlement, type SnapshotEntry } from "@/lib/snapshot";
 import type { CorrectionView } from "@/lib/ticket";
 
@@ -287,5 +287,39 @@ describe("reconcile and kkbText", () => {
     const platter = e("Gyoza", 3, TABLE);
     const kkb = buildKkb(withPrices(input([ana, tea, platter], { corrections: [correction({ sourceEntryId: ana.id, quantityDelta: -1 })] }), { [ana.id]: price(30000) }, 0), "ana");
     expect(kkbText(kkb, "T", "D")).toContain("Total not final: 2 dishes no price, 1 shared dish has no payer, a change is pending with the waiter");
+  });
+});
+
+describe("short My share label", () => {
+  it("drops 'My share' and the dot before the amount", () => {
+    expect(shortShareLabel("My share · ₱1,240")).toBe("Share ₱1,240");
+    expect(shortShareLabel("My share so far · ₱240")).toBe("Share ₱240");
+    expect(shortShareLabel("My share · no prices yet")).toBe("Share · no prices yet");
+  });
+});
+
+describe("My share label", () => {
+  const label = (entries: SnapshotEntry[], prices: Record<string, EntrySettlement>, charge: number | null = null) => myShareLabel(buildKkb(withPrices(input(entries), prices, charge), "ana"));
+
+  it("says no prices yet when nothing is priced", () => {
+    expect(label([e("Katsu", 1, me("ana"))], {})).toBe("My share · no prices yet");
+  });
+
+  it("shows whole pesos when everything is priced, and 'so far' when something is missing", () => {
+    const a = e("Katsu", 2, me("ana"));
+    const b = e("Gyoza", 1, me("ana"));
+    expect(label([a], { [a.id]: price(24000) })).toBe("My share · ₱480");
+    expect(label([a, b], { [a.id]: price(24000) })).toBe("My share so far · ₱480");
+  });
+
+  it("uses the total with service charge once allocated", () => {
+    const a = e("Katsu", 1, me("ana"));
+    const b = e("Gyoza", 1, me("jd"));
+    expect(label([a, b], { [a.id]: price(10000), [b.id]: price(10000) }, 2000)).toBe("My share · ₱110");
+  });
+
+  it("has no button without confirmed entries (none, or only drafts)", () => {
+    expect(label([e("Katsu", 1, me("jd"))], {})).toBeNull();
+    expect(label([e("Katsu", 1, me("ana"), { roundId: "r2" })], {})).toBeNull();
   });
 });

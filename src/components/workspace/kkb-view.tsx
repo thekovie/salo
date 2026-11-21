@@ -23,6 +23,9 @@ interface KkbViewProps {
   canShare: boolean;
 }
 
+/** The viewer's own card: "My share" in the dock lands here. */
+export const MY_CARD_ID = "kkb-mine";
+
 const items = (n: number) => `${n} ${n === 1 ? "item" : "items"}`;
 const lineKey = (section: KkbSection, line: KkbLine, draft: boolean) => `${section.key}|${line.entryId}|${line.correctionId ?? ""}|${draft ? "d" : "c"}`;
 
@@ -111,6 +114,7 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
     }
   }
 
+  const draftRound = snapshot.rounds.find((r) => r.status === "DRAFT")?.number ?? null;
   const needsName = isHost && isOpen && snapshot.me.displayName.trim().toLowerCase() === "host";
 
   return (
@@ -135,7 +139,7 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
 
       {mine ? (
         <Card section={mine} isMe>
-          <Lines section={mine} lineProps={lineProps} />
+          <Lines section={mine} lineProps={lineProps} draftRound={draftRound} />
         </Card>
       ) : null}
 
@@ -143,7 +147,7 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
         <section aria-label="Everyone else" className="space-y-2">
           {people.map((s) => (
             <Card key={s.key} section={s} collapsible defaultOpen={startOpen.has(s.key)}>
-              <Lines section={s} lineProps={lineProps} />
+              <Lines section={s} lineProps={lineProps} draftRound={draftRound} />
             </Card>
           ))}
         </section>
@@ -154,7 +158,7 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
           <h3 className="px-1 font-sans text-sm font-semibold text-ink-soft">Shared · settle at the table</h3>
           {shared.map((s) => (
             <Card key={s.key} section={s} collapsible defaultOpen={startOpen.has(s.key)}>
-              <Lines section={s} lineProps={lineProps} />
+              <Lines section={s} lineProps={lineProps} draftRound={draftRound} />
             </Card>
           ))}
         </section>
@@ -249,7 +253,12 @@ function Card({ section, isMe = false, collapsible = false, defaultOpen = false,
   );
   if (!collapsible) {
     return (
-      <section aria-label={`${section.title}, your share`} className={cn("ticket px-5 py-3", isMe && "ring-2 ring-tomato/40")}>
+      <section
+        id={isMe ? MY_CARD_ID : undefined}
+        tabIndex={isMe ? -1 : undefined}
+        aria-label={`${section.title}, your share`}
+        className={cn("ticket px-5 py-3", isMe && "ring-2 ring-tomato/40 focus:outline-2 focus:outline-offset-2 focus:outline-ink")}
+      >
         {heading}
         {children}
         <Footer section={section} />
@@ -324,7 +333,7 @@ function Footer({ section }: { section: KkbSection }) {
 
 type LineProps = { rowKey: string; line: KkbLine; editing: boolean; canEdit: boolean; onEdit: () => void; editor: React.ReactNode };
 
-function Lines({ section, lineProps }: { section: KkbSection; lineProps: (s: KkbSection, l: KkbLine, draft: boolean) => LineProps }) {
+function Lines({ section, lineProps, draftRound }: { section: KkbSection; lineProps: (s: KkbSection, l: KkbLine, draft: boolean) => LineProps; draftRound: number | null }) {
   return (
     <>
       {section.lines.length > 0 ? (
@@ -336,7 +345,7 @@ function Lines({ section, lineProps }: { section: KkbSection; lineProps: (s: Kkb
       ) : null}
       {section.drafts.length > 0 ? (
         <div className="mt-2">
-          <p className="text-xs font-semibold tracking-wide text-ink-soft uppercase">Not yet confirmed</p>
+          <p className="round-label text-xs">{draftRound ? `Round ${draftRound} · ` : ""}Not yet confirmed</p>
           <ul className="mt-1 space-y-1">
             {section.drafts.map((line) => (
               <LineRow key={lineKey(section, line, true)} {...lineProps(section, line, true)} />

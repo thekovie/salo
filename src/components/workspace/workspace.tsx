@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleCheck, Hand, Lock, Plus, ReceiptText } from "lucide-react";
+import { CircleCheck, Coins, Hand, Lock, Plus, ReceiptText } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { WaiterTicket } from "@/components/ticket/waiter-ticket";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { consolidate } from "@/lib/consolidate";
 import { arrivalsBetween, type Arrival } from "@/lib/arrivals";
 import { setAnalyticsContext, track } from "@/lib/analytics";
 import { anyPrice, everyone, type SessionSnapshot } from "@/lib/snapshot";
+import { buildKkb, myShareLabel, shortShareLabel } from "@/lib/kkb";
 import { normalizeText } from "@/lib/dish-name";
 import { confirmedIds } from "@/lib/effective-order";
 import { notificationTarget, type NotificationTarget, type NotificationView } from "@/lib/notifications";
@@ -59,6 +60,9 @@ function asAttribution(a: OverlayEntry["attribution"]): AddInput["attribution"] 
 
 const copyFor = (roundNumber: number): 1 | 2 | 3 => (roundNumber >= 3 ? 3 : roundNumber === 2 ? 2 : 1);
 
+// A module-level ref callback runs once on mount; an inline one would run on every render and fight other scrolls.
+const bringIntoView = (el: HTMLElement | null) => el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+
 export function Workspace({ initial, appUrl, justJoined = false }: { initial: SessionSnapshot; appUrl: string; justJoined?: boolean }) {
   const { snapshot, entries, pending, failed, sync, mutate, dismiss, retry, refresh, entryById, online, stream, markRead } = useSession(initial);
   const { toasts, show, dismiss: dismissToast } = useToasts();
@@ -87,6 +91,8 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
   };
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [summaryTab, setSummaryTab] = useState<SummaryTab>("items");
+  const [focusMine, setFocusMine] = useState(false);
+  const [composerActive, setComposerActive] = useState(false);
   // KKB is useful as soon as there are dishes (prices can go in while ordering); the item list needs a confirmed round.
   const hasSummary = anyConfirmed || snapshot.entries.length > 0;
   const [touring, setTouring] = useState(false);
@@ -121,9 +127,16 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
   }, [sync]);
   const openSummary = (source: "auto" | "button", tab: SummaryTab = anyConfirmed ? "items" : "kkb") => {
     setSummaryTab(tab);
+    setFocusMine(false);
     setSummaryOpen(true);
     track({ name: "summary_opened", props: { source } });
   };
+  // "My share": KKB, then (once the drawer has opened) the viewer's own card.
+  const openMyShare = () => {
+    openSummary("button", "kkb");
+    setFocusMine(true);
+  };
+  const myShare = useMemo(() => (anyConfirmed ? myShareLabel(buildKkb(snapshot, snapshot.me.participantId)) : null), [anyConfirmed, snapshot]);
   const [updatesOpen, setUpdatesOpen] = useState(false);
   const updatesTarget = useRef<NotificationTarget | null>(null);
   function openUpdate(item: NotificationView) {
@@ -412,7 +425,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
       case "ticket":
         return setMode("waiter");
       case "kkb":
-        return openSummary("button", "kkb");
+        return isHost ? openSummary("button", "kkb") : openMyShare();
       case "ready":
         return focus('[data-tour="ready"]');
     }
@@ -487,6 +500,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
           onTabChange={setSummaryTab}
           refresh={refresh}
           onRenameMe={(displayName) => void mutate({ kind: "renameMe", displayName })}
+          focusMine={focusMine}
         />
       ) : null}
       {isHost && sessionOpen ? (
@@ -545,7 +559,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
                 deleted on <LocalTime iso={snapshot.session.expiresAt} style="date" />.
               </p>
               {ended === "ended" ? (
-                <Button variant="outline" className="mt-3" onClick={() => openSummary("button")}>
+                <Button variant="outline" className="mt-3" onClick={openMyShare}>
                   <ReceiptText className="size-5" aria-hidden />
                   Who ordered what
                 </Button>
@@ -606,7 +620,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
                   <section
                     aria-labelledby="what-next"
                     // Kept clear of the dock, and brought into view when it appears (small phones, critique P1).
-                    ref={(el) => el?.scrollIntoView({ block: "nearest", behavior: "smooth" })}
+                    ref={bringIntoView}
                     className="scroll-mb-48 rounded-2xl bg-paper p-4"
                   >
                     <h2 id="what-next" className="text-lg">
@@ -669,7 +683,8 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
       {sessionOpen ? (
       <div ref={dockRef} className="fixed inset-x-0 bottom-0 z-30 bg-gradient-to-t from-paper from-70% to-transparent pt-6 pb-[calc(env(safe-area-inset-bottom)+0.5rem)]">
         <div className="mx-auto max-w-2xl space-y-2 px-3">
-          {isOpen ? <Composer dishNames={snapshot.dishNames} entries={snapshot.entries} defaults={snapshot.settlement.defaults} {...recipients} view={view} detailsSignal={detailsSignal} onAdd={(input) => void add({ ...input, roundId: round.id })} /> : null}
+          {isOpen ? <Composer dishNames={snapshot.dishNames} entries={snapshot.entries} defaults={snapshot.settlement.defaults} {...recipients} view={view} detailsSignal={detailsSignal} onActiveChange={setComposerActive} onAdd={(input) => void add({ ...input, roundId: round.id })} /> : null}
+          {isOpen && composerActive ? null : (
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-2">
             <div className="min-w-0">
               <p className="whitespace-nowrap text-ink-soft" data-testid="round-total">
@@ -682,8 +697,17 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
                 </p>
               ) : null}
             </div>
-            {/* Guest: "I'm ready" and "Ticket" get their own split row under 360 px instead of overlapping the count. */}
-            <div className={cn("flex gap-2", !isHost && isOpen && "max-[359px]:basis-full max-[359px]:*:flex-1 max-[359px]:*:justify-center")}>
+            {/* Under 360 px the count keeps its own line and the buttons share the rows below it. */}
+            <div className="flex flex-wrap gap-2 max-[359px]:basis-full max-[359px]:*:flex-1 max-[359px]:*:justify-center">
+            {myShare ? (
+              <Button variant="outline" data-tour="my-share" onClick={openMyShare} className="max-[359px]:px-3">
+                <Coins className="size-5 max-[359px]:hidden" aria-hidden />
+                <span className="max-[359px]:sr-only">{myShare}</span>
+                <span className="min-[360px]:hidden" aria-hidden>
+                  {shortShareLabel(myShare)}
+                </span>
+              </Button>
+            ) : null}
             {!isHost && isOpen ? (
               <button
                 type="button"
@@ -691,7 +715,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
                 data-tour="ready"
                 onClick={() => void mutate({ kind: "ready", ready: !iAmReady })}
                 className={cn(
-                  "inline-flex min-h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-4 font-semibold transition-colors",
+                  "inline-flex min-h-11 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-full px-4 font-semibold whitespace-nowrap transition-colors max-[359px]:order-last",
                   iAmReady ? "bg-ok-wash text-ok" : "border-[1.5px] border-input bg-ticket text-ink hover:bg-paper",
                 )}
               >
@@ -700,18 +724,19 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
               </button>
             ) : null}
             {isOpen && isHost ? (
-              <Button variant="outline" data-tour="review" onClick={() => (setMode("review"), track({ name: "review_opened" }))} disabled={total === 0 && correctionsThisRound === 0}>
+              <Button variant="outline" data-tour="review" className="max-[359px]:px-3" onClick={() => (setMode("review"), track({ name: "review_opened" }))} disabled={total === 0 && correctionsThisRound === 0}>
                 <ReceiptText className="size-5" aria-hidden />
                 Review order
               </Button>
             ) : isOpen || confirmedTicket ? (
-              <Button variant="outline" data-tour="ticket" onClick={() => (setMode("waiter"), track({ name: "waiter_view_opened" }))} disabled={!confirmedTicket && total === 0 && correctionsThisRound === 0}>
+              <Button variant="outline" data-tour="ticket" className="max-[359px]:px-3" onClick={() => (setMode("waiter"), track({ name: "waiter_view_opened" }))} disabled={!confirmedTicket && total === 0 && correctionsThisRound === 0}>
                 <ReceiptText className="size-5" aria-hidden />
                 Ticket
               </Button>
             ) : null}
             </div>
           </div>
+          )}
         </div>
       </div>
       ) : null}

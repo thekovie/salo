@@ -16,6 +16,7 @@ async function addDish(page: Page, name: string, quantity = 1) {
   for (let i = 1; i < quantity; i++) await page.getByRole("button", { name: "One more this dish" }).click();
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(dish).toHaveValue("");
+  await page.getByRole("textbox", { name: "Dish" }).press("Escape"); // focus returns to the Dish after Add, which hides the bottom bar
 }
 
 const items = (page: Page) => page.getByTestId("round-total");
@@ -37,6 +38,7 @@ test("host-only ordering: start, add dishes, consolidate, waiter ticket (scenari
   await page.getByRole("textbox", { name: "Dish" }).fill("chick");
   await expect(page.getByRole("button", { name: "Chicken Katsu", exact: true })).toBeVisible();
   await page.getByRole("textbox", { name: "Dish" }).fill("");
+  await page.getByRole("textbox", { name: "Dish" }).press("Escape");
 
   await page.getByRole("button", { name: "Review order" }).click();
   await page.getByRole("button", { name: "Show the waiter" }).click();
@@ -152,6 +154,7 @@ test("landing and workspace have no automatically detectable accessibility viola
   await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
   // Let the theme switch paint (colour transitions settle) before measuring contrast.
   await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  await page.waitForTimeout(400); // WebKit paints the colour transition a little later
   const dark = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
   expect(dark.violations).toEqual([]);
   await page.getByRole("button", { name: "Review order" }).click();

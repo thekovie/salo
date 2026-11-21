@@ -14,7 +14,7 @@ async function confirmRound(page: Page, n: number) {
 
 const summary = (page: Page) => page.getByTestId("served-summary");
 
-test("scenario D: food arrives in batches; host taps, All served, filters; guest watches read-only; End order warns but ends", async ({ page, browser }) => {
+test("scenario D: food arrives in batches; host taps, All served, compact Fully served rows; guest watches read-only; End order warns but ends", async ({ page, browser }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await startOrder(page);
   const guest = await joinAsGuest(browser, await inviteCode(page), "JD");
@@ -32,7 +32,8 @@ test("scenario D: food arrives in batches; host taps, All served, filters; guest
   await expect(guest.page.getByTestId("served-section").getByRole("button", { name: /One more/ })).toHaveCount(0);
 
   const katsu = section.getByRole("listitem").filter({ hasText: "Chicken Katsu" });
-  await katsu.getByRole("button", { name: "One more Chicken Katsu served" }).click({ clickCount: 3, delay: 20 });
+  // Rapid taps, one real click each (WebKit turns clickCount into a single click event).
+  for (let i = 0; i < 3; i++) await katsu.getByRole("button", { name: "One more Chicken Katsu served" }).click({ delay: 20 });
   await expect(katsu).toContainText("3 of 5 served · 2 waiting");
   await expect(guest.page.getByTestId("served-section")).toContainText("3 of 5 served · 2 waiting", { timeout: 15_000 });
   await expect(summary(guest.page)).toHaveText("3 of 6 served · 3 waiting");
@@ -40,19 +41,25 @@ test("scenario D: food arrives in batches; host taps, All served, filters; guest
   await katsu.getByRole("button", { name: "One less Chicken Katsu served" }).click();
   await expect(katsu).toContainText("2 of 5 served");
   await section.getByRole("listitem").filter({ hasText: "Gyoza" }).getByRole("button", { name: /All served/ }).click();
-  await expect(section.getByRole("listitem").filter({ hasText: "Gyoza" })).toContainText("✓ Served 1");
+  // The row moves to Fully served only once the server has the count, as a compact "All ✓" row.
+  const gyoza = section.getByRole("listitem").filter({ hasText: "Gyoza" });
+  await expect(gyoza).toContainText("All ✓", { timeout: 15_000 });
+  await expect(gyoza.getByRole("button", { name: /^One more/ })).toHaveCount(0);
+  await expect(section.getByText("Fully served (1)")).toBeVisible();
+  await expect(section.getByText("Waiting", { exact: true })).toBeVisible();
 
-  await section.getByRole("button", { name: "Served", exact: true }).click();
-  await expect(section.getByRole("listitem")).toHaveCount(1);
-  await section.getByRole("button", { name: /^Waiting/ }).click();
-  await expect(section.getByRole("listitem")).toHaveCount(1);
   await katsu.getByRole("button", { name: /All served/ }).click();
-  await expect(section.getByRole("listitem")).toHaveCount(0);
+  await expect(section.getByText("Fully served (2)")).toBeVisible({ timeout: 15_000 });
+  await expect(section.getByText("Waiting", { exact: true })).toHaveCount(0);
   await expect(summary(page)).toHaveText("All 6 served. Kain na!");
-  await section.getByRole("button", { name: "All", exact: true }).click();
 
+  // Tapping a compact row reveals − / + and Change…; − undoes it and focus follows the dish back to Waiting.
+  await katsu.getByRole("button", { name: /^Chicken Katsu/ }).click();
+  await expect(katsu.getByRole("button", { name: /^Change…/ })).toBeVisible();
   await katsu.getByRole("button", { name: "One less Chicken Katsu served" }).click();
   await expect(summary(guest.page)).toHaveText("5 of 6 served · 1 waiting", { timeout: 15_000 });
+  await expect(section.getByText("Waiting", { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(katsu.getByRole("button", { name: "One less Chicken Katsu served" })).toBeFocused({ timeout: 15_000 });
 
   await page.getByRole("button", { name: "End the order" }).click();
   const sheet = page.getByRole("dialog");
@@ -91,11 +98,10 @@ test("a tap survives leaving the tab; Change… on a Served row; a replaced dish
     if (r.url().includes("/serving") && r.request().method() === "POST" && r.ok()) sent.push(JSON.parse(r.request().postData() ?? "{}").delta);
   });
   const section = page.getByTestId("served-section");
-  await expect(section.getByRole("button", { name: "Waiting 5" })).toBeVisible();
   const bar = section.getByRole("progressbar", { name: "Food served" });
   await expect(bar).toHaveAttribute("aria-valuemax", "5");
   const row = section.getByRole("listitem").filter({ hasText: "Sisig" });
-  await row.getByRole("button", { name: "One more Sisig served" }).click({ clickCount: 2, delay: 20 });
+  for (let i = 0; i < 2; i++) await row.getByRole("button", { name: "One more Sisig served" }).click({ delay: 20 });
   await expect(row).toContainText("2 of 5 served");
   await expect(bar).toHaveAttribute("aria-valuenow", "2");
 
@@ -123,4 +129,36 @@ test("a tap survives leaving the tab; Change… on a Served row; a replaced dish
   await expect(history.getByRole("button")).toHaveCount(0);
   await expect(served.getByRole("listitem").filter({ hasText: "Pork Belly" })).toContainText("0 of 2 served · 2 waiting");
   await expect(summary(page)).toHaveText("3 of 5 served · 2 waiting");
+});
+
+test("Fully served collapses above 5 dishes, rows stay compact, guests get plain rows, focus is never lost", async ({ page, browser }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await startOrder(page);
+  const guest = await joinAsGuest(browser, await inviteCode(page), "JD");
+  const dishes = ["Adobo", "Bangus", "Crispy Pata", "Dinuguan", "Eggplant", "Fish Fillet"];
+  for (const dish of dishes) await addDish(page, dish);
+  await expect(page.getByTestId("dish-row")).toHaveCount(dishes.length);
+  await confirmRound(page, 1);
+
+  const section = page.getByTestId("served-section");
+  for (const dish of dishes) {
+    await section.getByRole("button", { name: new RegExp(`^All served\\s*: ${dish}$`) }).click();
+    await expect.poll(() => page.evaluate(() => document.activeElement === document.body || document.activeElement === null)).toBe(false);
+  }
+  await expect(section.getByText("Fully served (6)")).toBeVisible({ timeout: 15_000 });
+  const group = section.locator("details");
+  await expect(group).not.toHaveAttribute("open", "");
+  await group.locator("summary").click();
+  await expect(group).toHaveAttribute("open", "");
+
+  const row = group.getByRole("listitem").first();
+  await expect(row).toContainText("All ✓");
+  expect((await row.boundingBox())?.height ?? 999).toBeLessThanOrEqual(72);
+
+  // Guests read plain rows: the same facts, no toggle and no controls.
+  const guestSection = guest.page.getByTestId("served-section");
+  await expect(guestSection.getByText("Fully served (6)")).toBeVisible({ timeout: 15_000 });
+  await guestSection.locator("summary").click();
+  await expect(guestSection.getByRole("listitem").first()).toContainText("All ✓");
+  await expect(guestSection.getByRole("button", { name: /All ✓|One more|Change/ })).toHaveCount(0);
 });

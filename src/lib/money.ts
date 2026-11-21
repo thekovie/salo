@@ -8,6 +8,9 @@ export function formatPeso(centavos: number): string {
   return PESO.format(centavos / 100);
 }
 
+/** Whole pesos drop ".00" so a price fits a narrow tag or button. */
+export const formatPesoShort = (centavos: number): string => formatPeso(centavos).replace(/\.00$/, "");
+
 export type PesoParse = { ok: true; centavos: number | null } | { ok: false; message: string };
 
 /** What someone typed into a price field → centavos. Blank is `null` (unknown / not entered), not zero. */

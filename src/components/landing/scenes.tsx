@@ -108,7 +108,7 @@ export function HeroScene() {
       </div>
       <div className="ticket rotate-[1.5deg] px-6">
         <div className="flex items-baseline justify-between">
-          <span className="font-mono text-sm tracking-[0.14em] text-tomato-ink uppercase">Round 1</span>
+          <span className="round-label text-sm">Round 1</span>
           <span className="text-sm text-ink-soft">Table of 6</span>
         </div>
         {/* The full list, invisible, holds the ticket at its final height; the live list grows inside it and the
@@ -190,7 +190,7 @@ export function AddScene() {
     <div ref={ref} aria-hidden className="select-none">
       <Phone>
         <div className="rounded-2xl bg-ticket px-4 py-3 shadow-ticket">
-          <p className="font-mono text-xs tracking-[0.14em] text-tomato-ink uppercase">Round 1</p>
+          <p className="round-label text-xs">Round 1</p>
           <ul className="mt-1 text-base">
             <Line name="Gyoza" qty={gyoza} wash={step >= 4}>
               {step >= 4 ? <span className="arrival-tag absolute -top-1 right-12 rounded-full bg-saffron px-2 py-0.5 font-sans text-[0.65rem] font-semibold text-ink">+2 · JD</span> : null}

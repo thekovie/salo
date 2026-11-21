@@ -172,7 +172,7 @@ export function OrderTicket({ entries, people, roundNumber, copy, actions, readO
   return (
     <section {...focus} aria-labelledby="ticket-title" data-ph-mask="" className={cn("ticket", copy === 2 && "ticket-copy-2", copy === 3 && "ticket-copy-3")}>
       <div className="flex items-baseline justify-between px-5 pb-2">
-        <h2 id="ticket-title" className="font-mono text-sm font-medium tracking-[0.14em] text-tomato-ink uppercase">
+        <h2 id="ticket-title" className="round-label text-sm">
           Round {roundNumber}
         </h2>
         <span className="tally text-sm text-ink-soft">

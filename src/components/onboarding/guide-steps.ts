@@ -52,7 +52,7 @@ export const HOST_GUIDE: readonly GuideStep[] = [
   {
     id: "forPrice",
     title: "Who it’s for, sizes and prices",
-    body: "Tap For to put a dish down for a friend, a group, the whole table or anyone. Under the dish, + Size, + Note and + ₱ Price add the details; the price is optional and helps with KKB later.",
+    body: "Tap For to put a dish down for a friend, a group, the whole table or anyone. Tap the dish field, and + Size, + Note and + ₱ Price appear under it (behind + Details on a small phone). The price is optional and helps with KKB later.",
     scene: "forPrice",
     action: "details",
     label: "Add a price",
@@ -118,7 +118,7 @@ export const GUEST_GUIDE: readonly GuideStep[] = [
   {
     id: "forPrice",
     title: "For someone? Know the price?",
-    body: "Tap For to put a dish down for a friend, a group or the whole table. Under the dish, + Size, + Note and + ₱ Price add the details; the price is optional and helps with KKB.",
+    body: "Tap For to put a dish down for a friend, a group or the whole table. Tap the dish field, and + Size, + Note and + ₱ Price appear under it (behind + Details on a small phone). The price is optional and helps with KKB.",
     scene: "forPrice",
     action: "details",
     label: "Add a price",
@@ -145,7 +145,7 @@ export const GUEST_GUIDE: readonly GuideStep[] = [
   {
     id: "kkb",
     title: "Your share with KKB",
-    body: "People → Who ordered what → KKB shows your food subtotal and, once the host enters it, your share of the service charge. You can price the dishes you added.",
+    body: "Once the host confirms a round, My share at the bottom opens your own card in Who ordered what → KKB: your food subtotal and, once the host enters it, your share of the service charge. You can price the dishes you added.",
     scene: "kkb",
     action: "kkb",
     label: "Find your KKB share",

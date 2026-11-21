@@ -109,3 +109,18 @@ export function trackerLines(snapshot: TrackerInput): Tracker {
   const all = rounds.flatMap((r) => r.lines);
   return { rounds, expected: all.reduce((s, l) => s + l.expected, 0), served: all.reduce((s, l) => s + l.shown, 0) };
 }
+
+export interface ServedRow {
+  roundId: string;
+  number: number;
+  line: TrackerLine;
+}
+
+/**
+ * Waiting (nothing or part served) first, then fully served, across all rounds. Each group keeps round order then
+ * creation order. Bucketed on the server's count (`line.shown`), so a row only moves once the snapshot confirms it.
+ */
+export function groupServed(tracker: Tracker): { waiting: ServedRow[]; done: ServedRow[] } {
+  const rows = tracker.rounds.flatMap((r) => r.lines.map((line): ServedRow => ({ roundId: r.roundId, number: r.number, line })));
+  return { waiting: rows.filter((r) => r.line.shown < r.line.expected), done: rows.filter((r) => r.line.shown >= r.line.expected) };
+}

@@ -170,7 +170,7 @@
   html {
     -webkit-text-size-adjust: 100%;
     /* Fixed composer and bottom bar: keep keyboard focus from scrolling underneath them (WCAG 2.4.11). */
-    scroll-padding-bottom: 10rem;
+    scroll-padding-bottom: calc(var(--dock-h, 10rem) + 1rem);
     -webkit-tap-highlight-color: transparent;
   }
   body {
@@ -207,6 +207,10 @@
   textarea {
     touch-action: manipulation;
   }
+  button {
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
   html {
     scrollbar-color: var(--rule) transparent;
   }
@@ -233,6 +237,14 @@
   /* A dashed tear line inside a ticket. */
   .tear {
     border-top: 1.5px dashed var(--rule);
+  }
+  /* A round's name wherever it heads or tags something: DM Mono caps in tomato ink (on the red band, --on-band). Size comes from the text-* class. */
+  .round-label {
+    font-family: var(--font-dmmono), ui-monospace, monospace;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--tomato-ink);
   }
   .tally {
     font-family: var(--font-dmmono), ui-monospace, monospace;

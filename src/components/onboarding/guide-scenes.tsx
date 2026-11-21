@@ -97,7 +97,7 @@ export function RoundsScene() {
     <div ref={ref} aria-hidden className="select-none">
       <Phone>
         <div className="rounded-2xl bg-ticket px-4 py-3 shadow-ticket ring-2 ring-saffron/50">
-          <p className="font-mono text-xs tracking-[0.14em] text-tomato-ink uppercase">Round 2</p>
+          <p className="round-label text-xs">Round 2</p>
           <ul className="mt-1 text-base">
             <Line name="Halo-halo" qty={step >= 1 ? 3 : 2} wash={step >= 1} />
           </ul>

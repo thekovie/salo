@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { addDish, inviteCode, joinAsGuest, startOrder } from "./support/helpers";
+import { addDish, inviteCode, joinAsGuest, openDetail, startOrder } from "./support/helpers";
 
 // Every screen at 320 and 390 px for a crowding/density review. Skipped unless UX_REVIEW=1.
 test.skip(!process.env.UX_REVIEW, "set UX_REVIEW=1");
@@ -25,7 +25,7 @@ for (const [label, viewport] of sizes) {
     await page.locator('[data-tour="for"]').click();
     await page.getByRole("radio", { name: "+ Someone else", exact: true }).click();
     await page.getByLabel("Person's name").fill("Tita Marites");
-    await page.getByRole("button", { name: "+ Size", exact: true }).click();
+    await openDetail(page, "Size");
     await shot(page, "03-composer-open");
     await page.getByRole("button", { name: /^Add/ }).first().click();
     await addDish(page, "Sinigang na baboy", 2);

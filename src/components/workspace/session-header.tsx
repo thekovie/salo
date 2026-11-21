@@ -48,7 +48,7 @@ export function SessionHeader({ title, roundNumber, roundStatus, ended = null, s
             )}
           </h1>
             <div className="mt-0.5 flex min-w-0 items-center gap-2">
-              <span className="truncate font-mono text-xs tracking-[0.12em] uppercase opacity-90">{status}</span>
+              <span className="round-label truncate text-xs text-on-band opacity-90">{status}</span>
               {ended ? null : <SyncPill state={sync} compact className="shrink-0 px-1.5 py-0.5" />}
             </div>
           </div>
