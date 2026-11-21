@@ -2,7 +2,7 @@
 
 Owner's brief, kept in full: [`salo-v1-3-brief.md`](salo-v1-3-brief.md). Phase 0 audit: [`salo-v1-3-audit.md`](salo-v1-3-audit.md). Baseline screenshots: `.shots/before/` (git-ignored).
 
-Status: **decisions answered; awaiting go.** No source edited.
+Status: **slices 0–6 and phase 7 are done.** Slice 8 is planned; its decisions are pending.
 
 Each slice ships as its own branch and PR into `main`, per HANDOFF working rules (typecheck, lint, tests, build, CI, owner go).
 
@@ -30,10 +30,10 @@ Each slice ships as its own branch and PR into `main`, per HANDOFF working rules
 | A18 | "Show pricing completeness… quick access to unresolved prices" (F08) | KKB status line always shows "8 of 10 preparations priced" (unit = distinct preparation lines as in Items; priced only when every entry in it resolves) with a jump to the first unpriced line | 6 | done (slice 6, verified) |
 | A19 | "Provide a Copy summary action… Messenger-friendly plain-text" (F09) | KKB tab gets Copy summary (`kkbText()` next to `buildKkb`); Items copy stays price-free (D6) | 6 | done (slice 6, verified) |
 | A20 | "Broaden Salo's positioning… Expanded value proposition" (§2.2) | Landing hero/How it works copy updated **after** tracker and settle features ship (last slice), tagline kept | 6 | done (slice 6, verified) |
-| A21 | "Final usability validation and regression audit" (Phase 7) | `/workflow:verify` per slice; final re-run of baseline capture + axe at all widths; real-phone and real-user checks stay owner tasks | 7 | planned |
+| A21 | "Final usability validation and regression audit" (Phase 7) | `/workflow:verify` per slice; final re-run of baseline capture + axe at all widths; real-phone and real-user checks stay owner tasks | 7 | done (phase 7; real phones and real users remain owner tasks) |
 | A23 | "After confirmation surface Food Tracker… Near completion emphasize outstanding food, pricing completeness…" (§7) | Tracker above What's next; KKB link stays in What's next; End sheet gets the waiting-dishes line; nothing else moves | 4, 6 | done (slice 4, verified) |
 | A24 | "Confirm corrections: host only" (§9) | Confirming a correction = confirming the round that carries it (`rounds.ts:111`); no separate action | 3 | done (slice 3, verified) |
-| A22 | "Mobile usability audit… 320–430, tablet, desktop" (§4.2) | Mobile scope decision (D1) | all | planned |
+| A22 | "Mobile usability audit… 320–430, tablet, desktop" (§4.2) | Mobile scope decision (D1) | all | partial: layouts verified 320–1280 with no overflow; the D1 native-feel fixes (interactive-widget, dark theme-color, long-press guard, WebKit project) were not built, moved to slice 8 |
 
 ## Today (from the code trace)
 
@@ -321,3 +321,37 @@ M5-1 Cancel some                      M5-2 Unavailable
                                       │                     [Remove] │
 ```
 On a draft (unconfirmed) dish, the host's dish menu has "Unavailable", which removes every entry of that preparation in one change with Undo.
+
+## Slice 8 — Phase 7 feedback (owner, 2026-11-21)
+
+Owner's words, verbatim:
+
+> **17. Served section — Reduce vertical space.** Yes, let's make the post-confirmation serving interface more compact. For fully served dishes, replace the expanded serving controls with a compact "All ✓" indicator, similar to the mockup. Keep detailed controls available when tapped so the host can undo an accidental serving update. For partially served and outstanding dishes, retain visible quantities (e.g., "3/5 served") and appropriate controls. Prioritize outstanding food over fully served items. Consider collapsing fully served dishes into a separate section when the list becomes long. The goal is to reduce unnecessary scrolling without making it difficult to identify missing food or correct serving statuses.
+>
+> **18. Composer — Excessive height at 320px.** This is a high-priority mobile UX issue. The composer should not consume most of the available screen, especially when the primary task is reviewing and managing orders. Please optimize the composer for narrow screens (320px and above). Recommendations: Reduce unnecessary padding and vertical spacing. Keep the default composer as compact as possible. Avoid stacking controls into three permanent rows where feasible. Show optional fields only when needed, while keeping their entry points discoverable. Consider an expandable composer or a compact input dock, but avoid introducing extra taps for basic ordering. Account for the virtual keyboard, safe areas, and bottom navigation. Ensure the order list retains sufficient visible space. Do not simply reduce text sizes or touch targets to make everything fit. Preserve accessibility and usability. Please compare alternative layouts and choose the one that best balances compactness, discoverability, and interaction speed.
+>
+> **19. Round labels — Inconsistent typography.** Standardize the presentation of round labels throughout the application. "Round 1" should use the same terminology, typography hierarchy, and visual treatment when referring to the same type of information. However, distinguish between a primary round heading, a compact status label, and contextual references where appropriate. We don't need identical font sizes everywhere, but the design language should remain consistent. Review the relevant components and consolidate repeated styling into reusable patterns where practical.
+>
+> **20. Guest KKB access — Too many taps.** Agreed. Guests should have a direct and discoverable way to access their individual KKB share, just as the host already has a convenient entry point. Introduce a contextual "My KKB" or "My share" action where guests naturally encounter their orders, particularly after confirmation. Requirements: Reduce access to ideally one tap from the relevant screen. Directly open or scroll to the guest's own KKB breakdown. Show an appropriate state when prices are incomplete. Preserve access to the complete KKB view where permitted. Avoid adding another permanent navigation tab solely for this feature. Keep host and guest navigation consistent where possible. The goal is to make important functionality discoverable at the point where users need it, rather than forcing them to navigate through multiple views.
+
+### Ask ledger (slice 8)
+
+| # | Owner's words | Planned change | Status |
+|---|---|---|---|
+| A25 | "fully served dishes … compact "All ✓" … detailed controls available when tapped" (17) | decision pending | decision pending |
+| A26 | "Prioritize outstanding food … collapsing fully served dishes into a separate section when the list becomes long" (17) | decision pending | decision pending |
+| A27 | "optimize the composer for narrow screens … compare alternative layouts and choose" (18) | decision pending (mockups) | decision pending |
+| A28 | "Standardize the presentation of round labels … reusable patterns" (19) | decision pending | decision pending |
+| A29 | "contextual "My KKB" or "My share" action … ideally one tap … directly open or scroll to the guest's own KKB" (20) | decision pending | decision pending |
+
+### Research (2026-11-21, code trace)
+
+- **Served (#17):** `served-section.tsx` rows: label, host `Stepper`, status, people, then "All served" (when not done) and "Change…" (when expected > 0); filters All/Waiting/Served at :43-70; per-round `<h3>`. Order comes from `serving.ts:87` (createdAt, id) pinned by `tests/served-edits.test.ts:27-43`. Outstanding-first needs **no sort change**: stable-partition the creation-ordered lines into waiting / done, bucketing on the *server* `shown >= expected` so rows move only after the snapshot lands (taps coalesce 300 ms). D17 focus fallback (`use-row-focus-fallback.ts`) needs all `[data-serve-row]` in one container; hidden rows are skipped by `canFocus`. Breaks: `e2e/food-tracker.spec.ts:43-54,79,121-124`, ux-spec :59.
+- **Composer (#18):** at 320 the dock is ≈312 px (measured: chips top 598, Add 696, Review 758 on 812 high): dish 60 + chips 50 + For row wrapped to two lines 98 (`composer.tsx:269` `max-[359px]:basis-full`, kept so no label goes icon-only) + bar 44 + paddings. At ≥360 it is ≈264. On an SE (568) that is ≈55% before the keyboard. No virtual-keyboard handling exists (`layout.tsx:48-53`; D1's `interactive-widget` was never applied). `html { scroll-padding-bottom: 10rem }` (`globals.css:172`) is fixed and smaller than the 320 dock (WCAG 2.4.11 risk). Dependents: e2e helpers `addDish`/`orderFor`/`openDetail` (`e2e/support/helpers.ts:10-35`), many specs on textbox "Dish", `data-tour="dish"`, `data-focus-fallback`, guide "Try it" `details` (opens the price field), `guide-scenes.tsx:35` chip picture, `round-total` testid.
+  - Options: **A** at <360 replace the three chips with one "+ Details" chip on the stepper row → rows Dish / [For ▾ · Add] / [+ Details · stepper], ≈264 px (−48), ≥360 unchanged; costs one tap for size/note at <360. **B** collapse to Dish + [For · Add] at rest, reveal stepper and chips on focus/typing → ≈214 at rest but full height while typing (the case that hurts), stepper hidden until typing. **C** scrolling chip row + stepper on For row: does not fit 280 px. Extra lever: guest bar wraps to 78 px under 360; folding the count into "Ticket · 4" saves ≈34 (breaks `round-total` specs).
+- **Round labels (#19):** two recipes: mono tomato-ink uppercase letter-spaced (ticket headers `order-ticket.tsx:175`, `waiter-ticket.tsx:25` at 0.14/0.16em, header status `session-header.tsx:51` at 0.12em) vs sans eyebrow (`served-section.tsx:75`, `kkb-view.tsx:339` "Not yet confirmed"); plus sentence-case references (rounds summary, corrections, picker, notifications, dialogs). Expanded Rounds card shows both sans "Round 1" and mono "ROUND 1". No shared token; DESIGN.md says DM Mono + tomato-ink are for round labels. Proposal: `.round-label` utility (heading / compact status) + plain inline references.
+- **Guest share (#20):** KKB lives in the Summary sheet (`summary-sheet.tsx`); `openSummary(source, tab)` (`workspace.tsx:122`). Guest after confirm sees ticket, Served, a note (:629) and the dock "Ticket" (:700-711) — no share affordance. Own card is already first in KKB (`kkb.ts:122`, ringed, `kkb-view.tsx:136-141`); scroll-to-own reuses `showFirstUnpriced` (`kkb-view.tsx:170-176`). Labels to reuse: "so far", "no prices yet", card amounts. Candidates: dock "My share" button (recommended), a "See your share" text button in the guest note, People banner opening KKB.
+
+**Also in slice 8: the D1 native-feel fixes that were decided but never built**: `interactive-widget=resizes-content` (pairs with the composer height), dark `theme-color` matching the header band (`layout.tsx:49` vs `globals.css:74`), a long-press text-selection guard on buttons, `scroll-padding-bottom` following `--dock-h`, and a WebKit/iPhone Playwright project.
+
+Approach, sketches and decisions: next session of slice 8 (after the v1.3 release to `main`).

@@ -50,11 +50,9 @@ test("capture every screen", async ({ page, browser, request }) => {
   await addDish(page, "Crispy Pata");
   await orderFor(page, "A person", "Rafa");
   await addDish(page, "Halo-halo");
-  await page.getByRole("button", { name: "Close details" }).click();
   await openDetail(guest.page, "Note");
   await guest.page.getByLabel("Instructions").fill("No sauce");
   await addDish(guest.page, "Chicken Katsu");
-  await guest.page.getByRole("button", { name: "Close details" }).click();
   await addDish(guest.page, "Iced Tea", 3);
   await expect(page.getByTestId("dish-row").filter({ hasText: "Iced Tea" })).toBeVisible();
   await page.reload();
@@ -84,11 +82,16 @@ test("capture every screen", async ({ page, browser, request }) => {
   await expect(page.getByRole("dialog", { name: "Waiter ticket" }).getByRole("region", { name: /confirmed/ })).toBeVisible();
   await shot(page, "cap-09-waiter-confirmed");
   await page.getByRole("button", { name: "Back", exact: true }).click();
+  await page.getByTestId("served-section").scrollIntoViewIfNeeded();
+  await shot(page, "cap-09b-served");
+  await guest.page.getByRole("button", { name: /^Updates/ }).click();
+  await shot(guest.page, "cap-09c-notifications");
+  await guest.page.getByRole("dialog", { name: "Updates" }).getByRole("button", { name: "Close" }).click();
 
   // Rounds 2 (canary) and 3 (pink, open) with a correction.
   await page.getByRole("button", { name: "Add more (round 2)" }).click();
   await addDish(guest.page, "Extra Rice", 3);
-  await expect(page.getByText("Extra Rice")).toBeVisible();
+  await expect(page.getByTestId("dish-row").filter({ hasText: "Extra Rice" })).toBeVisible();
   await confirmCurrent(page, id);
   await api(page, `/api/sessions/${id}/rounds`, "POST");
   await addDish(guest.page, "Mango Shake", 2);
@@ -99,10 +102,19 @@ test("capture every screen", async ({ page, browser, request }) => {
   await page.getByRole("tab", { name: /Rounds/ }).click();
   await scrollTo(page, 0);
   await shot(page, "cap-10-rounds-top");
+  await page.getByRole("button", { name: /^Round 2 · Confirmed/ }).click();
   const round2 = await page.getByRole("region", { name: "Round 2, confirmed with the waiter" }).evaluate((el) => el.getBoundingClientRect().top + window.scrollY);
   // Scroll so round 2 sits just under the sticky header.
   await scrollTo(page, round2 - 90);
   await shot(page, "cap-11-rounds-history");
+  await page.getByRole("button", { name: /Change a dish/ }).first().click();
+  await shot(page, "cap-11b-dish-picker");
+  await page.keyboard.press("Escape");
+  await page.getByRole("tab", { name: /People/ }).click();
+  await page.getByRole("button", { name: "Who ordered what" }).click();
+  await page.getByRole("dialog", { name: "Who ordered what" }).getByRole("tab", { name: "KKB" }).click();
+  await shot(page, "cap-11c-kkb-receipt");
+  await page.keyboard.press("Escape");
 
   await guest.page.emulateMedia({ reducedMotion: "reduce", colorScheme: "dark" });
   await guest.page.goto(`/i/${code}`);

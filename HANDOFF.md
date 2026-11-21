@@ -29,10 +29,26 @@ After M5 (owner feedback), all merged:
 
 All 14 brief end-to-end scenarios are covered by Playwright (see `docs/testing.md`).
 
+v1.3 (dining coordination), merged into `dev` as squash PRs. CI also runs on pushes to `dev`. It reaches production when `dev` is merged into `main` and the app is redeployed.
+
+| PR | What |
+|---|---|
+| #34 | Next.js 16.4.2 → 16.4.5 (GHSA-mfr8-8qww-v76h, GHSA-vc7v-qv4w-wrv8) |
+| #35 | Composer size, note and price chips; Items follows KKB on pending corrections |
+| #36 | Table prices per dish and size (migration 0008) |
+| #37 | Mark unavailable, streamlined corrections, "Change a dish…", collapsed rounds (0009) |
+| #38 | Focus returns after the correction sheet closes on slow devices (after CI run #84) |
+| #39 | Food arrival tracker in the Served section (0010) |
+| #40 | In-app notifications: header bell and Updates drawer (0011) |
+| #41 | Receipt check, price completeness, Copy summary, landing copy (0012) |
+| This PR | Phase 7 final pass: updated review specs, golden contracts in `docs/contracts/` (`chore/v1-3-final`) |
+
+Verification on `chore/v1-3-final`: typecheck, lint and build pass; 596 unit and contract tests pass; 59 e2e tests pass (occasional load flakes pass on rerun); opt-in review specs 14/14 with 0 axe violations across 16 axe checks; `pnpm audit --prod` is clean.
+
 ## Deployment
 
-- **Deployed on Coolify by the owner on 2026-11-06**; redeploy from `main` (at `6423a0b`, PR #32) to get everything above.
-- Database migrations run when the app starts. The latest is `0007_settlement` (PR #31: `entry_settlements`, `correction_settlements`, `sessions.service_charge_*`; backward compatible, old orders load with no prices). Check the first start after deploying it logs no migration error.
+- **Deployed on Coolify by the owner on 2026-11-06** (from `main` at `6423a0b`, PR #32). After `dev` is merged into `main`, redeploy from `main` to get v1.3.
+- Database migrations run when the app starts. v1.3 adds `0008_shared_prices` through `0012_receipt_total` (PRs #36 to #41). All of them are additive. The latest is now `0012_receipt_total`; before v1.3 it was `0007_settlement` (PR #31). Check the first start after deploying logs no migration error.
 - Environment: `APP_URL` must be the real https domain (invite links, QR codes, link previews and the CSRF origin check depend on it). Optional: `NEW_ORDERS_PER_HOUR` (default 20; leave it in production), `CLOSED_RETENTION_DAYS` (default 7), `INACTIVE_RETENTION_DAYS` (default 30), `POSTHOG_KEY` (analytics on when set). A cancelled order (ended before anything was confirmed) is deleted after **1 day**: an owner decision, recorded 2026-11-07, that deliberately differs from the PRD's 7 days, since nothing was ordered. See `docs/deployment.md`.
 - After each deploy, a quick smoke check:
   - `/api/health` returns 200;
@@ -43,7 +59,7 @@ All 14 brief end-to-end scenarios are covered by Playwright (see `docs/testing.m
 
 ## Working rules
 
-- One branch per change, PR into `main`, merge only after typecheck, lint, tests, build and CI pass and the owner says go.
+- One branch per change, PR into `dev` (squash), merge only after typecheck, lint, tests, build and CI pass and the owner says go. Release = PR `dev` → `main` with a merge commit (not squash, so the branches stay aligned), then redeploy from `main`.
 - Conventional commits; no co-author or tool attribution anywhere.
 - Independent code and security review before merging auth, mutation and real-time work.
 - Public repository: never commit secrets or random-looking secret literals in tests (build them at runtime). Local/CI PostgreSQL uses trust auth for that reason.
@@ -62,6 +78,8 @@ All 14 brief end-to-end scenarios are covered by Playwright (see `docs/testing.m
 9. **KKB on real phones**: decimal keypad opens for prices, the inline price editor stays above the keyboard, service charge entry, a guest sees their share live.
 10. **KKB pilot** with a real table of 7–12 doing KKB (see Next steps).
 11. **KKB decisions**: whether Copy text / Save image should get an explicit "include prices" option (deferred); confirm the limits (₱99,999.99 per dish, ₱999,999.99 service charge); whether guests may rename themselves (endpoint is host-only today).
+12. **Try v1.3 on real phones**: the composer with the keyboard at 320, VoiceOver and TalkBack on the chips, the bell, the Served steppers and the receipt input.
+13. **Real-table run of the dining flow** (collect → confirm → track → settle).
 
 ## Known limitations
 
@@ -74,8 +92,17 @@ All 14 brief end-to-end scenarios are covered by Playwright (see `docs/testing.m
 - Removing a guest also takes them out of their groups, so a shared group dish lists only the remaining members in "Who ordered what".
 - Performance numbers in `docs/testing.md` are local measurements, not production benchmarks.
 - KKB: prices appear only in the KKB tab; Items' Copy text and Save image stay price-free (an explicit "include prices" option is a later step built on `buildKkb`). Every member sees everyone's prices. Limits: ₱99,999.99 per dish, ₱999,999.99 service charge. A shared dish goes to one payer (Bill to) or stays unallocated; no splitting. Guests can't rename themselves yet (the endpoint is host-only).
+- The virtual keyboard isn't handled: `interactive-widget` was never applied, so the fixed dock may sit under the Android keyboard. The other D1 native-feel fixes (dark `theme-color` matching the header band, long-press guard on buttons, a WebKit/iPhone Playwright project) were decided but not built either; all are planned in slice 8.
+- `html` `scroll-padding-bottom` is a fixed 10rem, smaller than the 320 px dock.
+- Offline price, served and receipt saves don't retry on reconnect until Try again (follow-up 21 in `.shots/follow-ups.md`).
+- Notification read state isn't live across one person's devices until refresh.
+- Group members are matched by group label because `batch.groupId` is never set.
 
 ## Next steps
+
+Slice 8 (owner feedback 17–20): compact Served, composer height at 320, round label consistency, and a guest "My share" entry point. The plan is in `docs/plans/salo-v1-3.md`, Slice 8. Research is done; the decisions are pending.
+
+Open follow-ups are in `.shots/follow-ups.md`, which is git-ignored and so local only. Items 9, 10, 12 and 13 are decided. The rest are open, and 17–20 belong to slice 8.
 
 KKB pilot (owner): a real table of 7–12 doing KKB. Watch whether the host can price the receipt and enter the service charge quickly, whether diners find their own totals, whether "Not yet allocated" reasons make sense, and record any difference from the receipt against the table's usual Notes/calculator.
 

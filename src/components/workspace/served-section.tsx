@@ -88,19 +88,21 @@ export function ServedSection({ tracker, canEdit, edits, bump, retry, onChange }
                 }
                 return (
                   <li key={line.key} data-serve-row className="py-2.5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-semibold">{line.label}</p>
-                        <p className="text-sm text-ink-soft">
-                          {line.cancelledSince > 0 && !busy
-                            ? `Now ${line.shown} of ${line.expected} served · ${line.cancelledSince} were cancelled`
-                            : done
-                              ? `✓ Served ${shown}`
-                              : `${shown} of ${line.expected} served · ${line.expected - shown} waiting`}
-                        </p>
-                        {line.people ? <p className="text-sm text-ink-soft">{line.people}</p> : null}
-                      </div>
-                      {canEdit ? <Stepper value={shown} min={0} max={line.expected} label={`${line.label} served`} onChange={(next) => bump(r.roundId, line.key, next - shown)} /> : null}
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3">
+                      <p className="font-semibold">{line.label}</p>
+                      {canEdit ? (
+                        <div className="col-start-2 row-start-1">
+                          <Stepper value={shown} min={0} max={line.expected} label={`${line.label} served`} onChange={(next) => bump(r.roundId, line.key, next - shown)} />
+                        </div>
+                      ) : null}
+                      <p className="col-span-full text-sm text-ink-soft">
+                        {line.cancelledSince > 0 && !busy
+                          ? `Now ${line.shown} of ${line.expected} served · ${line.cancelledSince} were cancelled`
+                          : done
+                            ? `✓ Served ${shown}`
+                            : `${shown} of ${line.expected} served · ${line.expected - shown} waiting`}
+                      </p>
+                      {line.people ? <p className="col-span-full text-sm text-ink-soft">{line.people}</p> : null}
                     </div>
                     {canEdit ? (
                       <div className="mt-1 flex flex-wrap gap-2">
