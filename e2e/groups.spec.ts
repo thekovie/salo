@@ -64,6 +64,7 @@ test("hybrid: a guest claims a dish the host recorded for them; duplicate hint; 
 
   // People and Groups views pass the automated accessibility scan, for host and guest.
   for (const target of [page, guest.page]) {
+    await expect(target.locator(".arrival-pill")).toHaveCount(0, { timeout: 10_000 });
     const results = await new AxeBuilder({ page: target }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
     expect(results.violations).toEqual([]);
   }

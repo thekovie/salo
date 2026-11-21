@@ -18,14 +18,15 @@ export function focusFirst(candidates: Iterable<Element | null | undefined>): bo
 export const focusIsLost = () => !document.activeElement || document.activeElement === document.body;
 
 // A closing drawer, then a live re-render, can drop focus to the page: keep restoring it for `ms` (timer, not rAF),
-// stopping the moment the user puts focus anywhere else.
+// stopping the moment the user puts focus anywhere else. A focused candidate keeps it watching: it may unmount.
 export function focusWhenFree(candidates: () => Iterable<Element | null | undefined>, ms = 3000): void {
   const deadline = Date.now() + ms;
   const attempt = () => {
     const active = document.activeElement;
-    const held = !active || active === document.body || active.closest("[role=dialog], dialog") !== null;
+    const list = [...candidates()];
+    const held = !active || active === document.body || active.closest("[role=dialog], dialog") !== null || list.includes(active);
     if (!held || Date.now() > deadline) return;
-    focusFirst(candidates());
+    focusFirst(list);
     setTimeout(attempt, 50);
   };
   setTimeout(attempt, 0);
