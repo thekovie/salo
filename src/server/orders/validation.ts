@@ -134,6 +134,9 @@ export type SharedPriceInput = z.infer<typeof sharedPriceSchema>;
 export const serviceChargeSchema = z.object({ expectedRevision: z.number().int().min(0), centavos: centavos(MAX_SERVICE_CHARGE_CENTAVOS) });
 export type ServiceChargeInput = z.infer<typeof serviceChargeSchema>;
 
+export const receiptTotalSchema = z.object({ expectedRevision: z.number().int().min(0), centavos: centavos(MAX_SERVICE_CHARGE_CENTAVOS) });
+export type ReceiptTotalInput = z.infer<typeof receiptTotalSchema>;
+
 export const renameMeSchema = z.object({ displayName: text(LIMITS.label).min(1, "Type your name so the table knows whose order is whose.") });
 export type RenameMeInput = z.infer<typeof renameMeSchema>;
 

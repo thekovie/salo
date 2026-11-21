@@ -34,7 +34,7 @@ describe("setup guide checklist", () => {
       participants: [...base.participants, { id: "g", displayName: "Ana", role: "GUEST" }],
       rounds: [{ id: "r1", number: 1, status: "CONFIRMED", confirmedAt: "x" }],
       entries: [{ id: "e1", batchId: "b1", roundId: "r1", dishId: "d", dishName: "Sisig", quantity: 1, variant: null, instructions: null, createdAt: "x", revision: 1, submittedBy: "h", attribution: { type: "INDIVIDUAL", label: null, participantId: "h" } }],
-      settlement: { entries: { e1: { unitCentavos: 100, billTo: null, revision: 1 } }, corrections: {}, defaults: {}, serviceCharge: { centavos: 0, revision: 1 } },
+      settlement: { entries: { e1: { unitCentavos: 100, billTo: null, revision: 1 } }, corrections: {}, defaults: {}, serviceCharge: { centavos: 0, revision: 1 }, receiptTotal: { centavos: null, revision: 0 } },
     };
     expect(done(HOST_GUIDE, used)).toEqual(["setup", "invite", "add", "forPrice", "review", "kkb"]);
   });

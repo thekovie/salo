@@ -105,6 +105,7 @@ export async function getSnapshot(db: Db, actor: Actor): Promise<SessionSnapshot
           corrections: Object.fromEntries(correctionPriceRows.map((p) => [p.correctionId, { unitCentavos: p.unitPriceCentavos, revision: p.revision }])),
           defaults: Object.fromEntries(sharedPriceRows.map((p) => [sharedPriceKey(p.dishId, p.variantKey), { unitCentavos: p.unitCentavos, revision: p.revision }])),
           serviceCharge: { centavos: session.serviceChargeCentavos, revision: session.serviceChargeRevision },
+          receiptTotal: { centavos: session.receiptTotalCentavos, revision: session.receiptTotalRevision },
         },
       };
     },

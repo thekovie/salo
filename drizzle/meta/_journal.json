@@ -85,6 +85,13 @@
       "when": 1795186838885,
       "tag": "0011_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1795189587495,
+      "tag": "0012_receipt_total",
+      "breakpoints": true
     }
   ]
 }

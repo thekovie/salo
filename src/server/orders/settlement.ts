@@ -6,13 +6,13 @@ import { correctionSettlements, dishes, entrySettlements, orderBatches, orderCor
 import { AppError, forbidden } from "@/server/errors";
 import { audienceOfEntries, notify, withMembers } from "@/server/notifications";
 import type { Applied, SessionRow } from "@/server/mutations";
-import type { CorrectionPriceInput, EntrySettlementInput, RenameMeInput, ServiceChargeInput, SharedPriceInput } from "./validation";
+import type { CorrectionPriceInput, EntrySettlementInput, RenameMeInput, ReceiptTotalInput, ServiceChargeInput, SharedPriceInput } from "./validation";
 
 /**
  * Changes that never touch what the waiter is told (prices, the receipt's service charge, a person's name). Confirming
  * a round still passes when only these happened since the host looked (owner decision, KKB brief §6).
  */
-export const NON_TICKET_EVENTS = ["entry.settled", "correction.priced", "session.serviceCharge", "participant.renamed", "price.defaultSet", "dish.unavailableTold", "serving.updated"] as const;
+export const NON_TICKET_EVENTS = ["entry.settled", "correction.priced", "session.serviceCharge", "session.receiptTotal", "participant.renamed", "price.defaultSet", "dish.unavailableTold", "serving.updated"] as const;
 
 /** Length is checked again after tidying: NFKC can expand a few characters into many (DB CHECK is 1–40). */
 function tidyName(raw: string, message: string): string {
@@ -141,6 +141,15 @@ export async function setServiceCharge(tx: Tx, session: SessionRow, actor: Actor
   const revision = session.serviceChargeRevision + 1;
   await tx.update(sessions).set({ serviceChargeCentavos: input.centavos, serviceChargeRevision: revision }).where(eq(sessions.id, session.id));
   return { result: { revision }, event: { type: "session.serviceCharge", payload: {} } };
+}
+
+/** The receipt's printed total, only compared with Salo's (never split). null = not entered. Host only. */
+export async function setReceiptTotal(tx: Tx, session: SessionRow, actor: Actor, input: ReceiptTotalInput): Promise<Applied<{ revision: number }>> {
+  if (!can(actor, "receipt.set")) throw forbidden("Only the host can enter the receipt total.");
+  if (session.receiptTotalRevision !== input.expectedRevision) throw conflict("the receipt total");
+  const revision = session.receiptTotalRevision + 1;
+  await tx.update(sessions).set({ receiptTotalCentavos: input.centavos, receiptTotalRevision: revision }).where(eq(sessions.id, session.id));
+  return { result: { revision }, event: { type: "session.receiptTotal", payload: {} } };
 }
 
 /** The host's own name (it starts as "Host"; starting an order stays one tap). */

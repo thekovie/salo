@@ -57,7 +57,7 @@ export function SummarySheet({ open, onOpenChange, snapshot, tab, onTabChange, r
     try {
       await navigator.clipboard.writeText(text);
       flash({ kind: "copied" });
-      track({ name: "summary_copied" });
+      track({ name: "summary_copied", props: { tab: "items" } });
     } catch {
       setStatus({ kind: "error", message: "Couldn’t copy. Try Share, or select the text in your notes app." });
     }
@@ -149,7 +149,7 @@ export function SummarySheet({ open, onOpenChange, snapshot, tab, onTabChange, r
 
         {tab === "kkb" ? (
           <div role="tabpanel" id="summary-panel-kkb" aria-labelledby="summary-tab-kkb">
-            <KkbView snapshot={snapshot} refresh={refresh} onRenameMe={onRenameMe} />
+            <KkbView snapshot={snapshot} refresh={refresh} onRenameMe={onRenameMe} dateLabel={dateLabel} canShare={canShare} />
           </div>
         ) : (
         <div role="tabpanel" id="summary-panel-items" aria-labelledby="summary-tab-items">

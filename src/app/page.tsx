@@ -28,19 +28,19 @@ const STEPS = [
   },
   {
     title: "Hand the waiter one ticket",
-    body: "Big, clear numbers to read out or show. The host marks it confirmed; add-ons go on a fresh round and fixes are listed apart, so nothing is ordered twice.",
+    body: "Big, clear numbers to read out or show. The host marks it confirmed; add-ons go on a fresh round and fixes are listed apart, so nothing is ordered twice. Then track what’s been served.",
     Scene: WaiterScene,
   },
   {
     title: "Settle up later",
-    body: "“Who ordered what” lists each person’s, each group’s and the table’s dishes. Add prices from the receipt and KKB shows each person’s total, service charge included. Copy the list into the group chat or save it as a picture.",
+    body: "“Who ordered what” lists each person’s, each group’s and the table’s dishes. Add prices from the receipt and KKB shows each person’s total, service charge included, checked against the receipt. Copy the list into the group chat or save it as a picture.",
     Scene: SummaryScene,
   },
 ] as const;
 
 const WHY = [
   ["No app, no sign-up", "Opens in the browser on any phone."],
-  ["Live on every phone", "Changes show up for the whole table."],
+  ["Live on every phone", "Changes, served food and in-app updates reach the whole table."],
   ["Rounds and fixes", "Add-ons and corrections without a recount."],
   ["Gone after the meal", "Orders delete themselves a week later."],
 ] as const;
@@ -63,7 +63,7 @@ export default async function Home() {
               <span className="text-tomato-ink">Everyone&rsquo;s order.</span>
             </h1>
             <p className="mt-5 max-w-md text-lg text-ink-soft">
-              Collect the whole table&rsquo;s order on one phone or everyone&rsquo;s, and give the waiter a ticket nobody has to recount.
+              Order together, keep track of what&rsquo;s been served, and settle everyone&rsquo;s share—all in one place.
             </p>
             <div className="mt-8 flex flex-col gap-6">
               <StartForm />

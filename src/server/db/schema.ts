@@ -51,6 +51,9 @@ export const sessions = pgTable(
     /** The receipt's service charge in centavos (KKB): null = not entered, 0 = the receipt has none. */
     serviceChargeCentavos: integer("service_charge_centavos"),
     serviceChargeRevision: integer("service_charge_revision").notNull().default(0),
+    /** The receipt's printed total in centavos (KKB check): null = not entered. Never split; only compared. */
+    receiptTotalCentavos: integer("receipt_total_centavos"),
+    receiptTotalRevision: integer("receipt_total_revision").notNull().default(0),
   },
   (t) => [
     uniqueIndex("sessions_join_code_uq").on(t.joinCode),
@@ -60,6 +63,8 @@ export const sessions = pgTable(
     check("sessions_closed_ck", sql`(status = 'CLOSED') = (closed_at IS NOT NULL)`),
     check("sessions_service_charge_ck", sql`service_charge_centavos BETWEEN 0 AND 99999999`),
     check("sessions_service_charge_revision_ck", sql`service_charge_revision >= 0`),
+    check("sessions_receipt_total_ck", sql`receipt_total_centavos BETWEEN 0 AND 99999999`),
+    check("sessions_receipt_total_revision_ck", sql`receipt_total_revision >= 0`),
   ],
 );
 
