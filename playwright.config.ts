@@ -25,14 +25,18 @@ export default defineConfig({
       ],
     },
   },
-  projects: [{ name: "mobile", use: { ...devices["Pixel 7"] } }],
+  projects: [
+    { name: "mobile", use: { ...devices["Pixel 7"] } },
+    // iOS Safari engine on a core subset (CI time): `pnpm exec playwright test --project=webkit`.
+    { name: "webkit", use: { ...devices["iPhone 14"] }, testMatch: /(standalone|composer-details|kkb|food-tracker)\.spec\.ts/ },
+  ],
   webServer: {
     command: `pnpm build && pnpm start -p ${PORT}`,
     url: `http://localhost:${PORT}/api/health`,
     reuseExistingServer: !process.env.CI,
     timeout: 240_000,
     // POSTHOG_KEY empty: tests never send analytics, even if a developer's .env has the real key.
-    env: { APP_URL: `http://localhost:${PORT}`, NEW_ORDERS_PER_HOUR: "1000", POSTHOG_KEY: "",
+    env: { APP_URL: `http://localhost:${PORT}`, NEW_ORDERS_PER_HOUR: "1000", JOINS_PER_HOUR: "1000", POSTHOG_KEY: "",
       // Cloudflare's published Turnstile test keys: the real widget and server check run, and always pass.
       TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
       TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA", DATABASE_URL: process.env.DATABASE_URL ?? "postgres://salo@localhost:5433/salo" },

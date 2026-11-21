@@ -11,6 +11,7 @@ async function addLarge(page: import("@playwright/test").Page, dish: string, pri
   }
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Dish" })).toHaveValue("");
+  await page.getByRole("textbox", { name: "Dish" }).press("Escape"); // focus returns to the Dish after Add, which hides the bottom bar
 }
 
 test("table price: one price for every Chicken Katsu (Large), shown live to the guest, with a per-line override", async ({ page, browser }) => {

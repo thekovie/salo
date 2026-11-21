@@ -1,13 +1,24 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { notFound, redirect } from "next/navigation";
 import { Workspace } from "@/components/workspace/workspace";
 import { getEnv } from "@/env";
+import { BRAND_HEX } from "@/lib/site";
 import { RemovedNotice } from "@/components/workspace/removed-notice";
 import { loadSessionForPage, openInviteCode, removedNotice } from "@/server/sessions/page-data";
 
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ joined?: string }> };
 
 export const metadata: Metadata = { title: "Table order", robots: { index: false, follow: false } };
+
+// The session page has the red band under the status bar: match it (light and dark), other pages keep the paper bar.
+export function generateViewport(): Viewport {
+  return {
+    themeColor: [
+      { media: "(prefers-color-scheme: light)", color: BRAND_HEX.tomato },
+      { media: "(prefers-color-scheme: dark)", color: BRAND_HEX.darkBand },
+    ],
+  };
+}
 
 export default async function SessionPage({ params, searchParams }: Props) {
   const { id } = await params;

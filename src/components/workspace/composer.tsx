@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, Plus, UserRound, UsersRound, X } from "lucide-react";
-import { useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { AddInput } from "@/hooks/use-session";
 import { track } from "@/lib/analytics";
 import { normalizeText } from "@/lib/dish-name";
@@ -15,6 +15,13 @@ import { cn } from "@/lib/utils";
 import { Stepper } from "./stepper";
 
 const MAX_SUGGESTIONS = 4;
+const isTextField = (el: EventTarget) => el instanceof HTMLElement && el.matches("textarea, input:not([type=radio], [type=checkbox])");
+const NARROW = "(max-width: 359px)";
+const subscribeNarrow = (notify: () => void) => {
+  const query = matchMedia(NARROW);
+  query.addEventListener("change", notify);
+  return () => query.removeEventListener("change", notify);
+};
 
 interface ComposerProps {
   dishNames: string[];
@@ -34,6 +41,8 @@ interface ComposerProps {
   onAdd: (input: AddInput) => void;
   /** Bumped by the setup guide's "Try it": opens the Price field. */
   detailsSignal?: number;
+  /** True while a text field in the composer has focus (the dock hides its bottom bar meanwhile). */
+  onActiveChange?: (active: boolean) => void;
 }
 
 function suggestionsFor(query: string, names: string[]): string[] {
@@ -45,11 +54,12 @@ function suggestionsFor(query: string, names: string[]): string[] {
 }
 
 /**
- * Quick entry (brief 5.4). Row one is the dish, full width. Row two says who it's for (one tap opens the choices),
- * the quantity, and Add. Size, note and price are chips under the dish.
+ * Quick entry (brief 5.4). At rest (empty, nothing focused) it is the dish and one row of "For" + Add. With a text field
+ * focused, or text typed, it also shows the quantity and the size / note / price entry points: chips below on
+ * phones from 360 px, behind one "+ Details" chip under that. Everything added sits below the existing rows.
  * After adding: dish, quantity, size and instructions reset; the recipient stays for the next dish.
  */
-export function Composer({ dishNames, people, names, groups, entries, defaults, disabled, view, onAdd, detailsSignal = 0 }: ComposerProps) {
+export function Composer({ dishNames, people, names, groups, entries, defaults, disabled, view, onAdd, detailsSignal = 0, onActiveChange }: ComposerProps) {
   const id = useId();
   const dishRef = useRef<HTMLInputElement>(null);
   const [dish, setDish] = useState("");
@@ -61,11 +71,53 @@ export function Composer({ dishNames, people, names, groups, entries, defaults, 
     setOpen(false);
   }
   const [field, setField] = useState<DetailField | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [active, setActive] = useState(false);
   const [lastSignal, setLastSignal] = useState(detailsSignal);
   if (detailsSignal !== lastSignal) {
     setLastSignal(detailsSignal);
     setField("price");
+    setDetailsOpen(true);
+    setActive(true);
   }
+  const narrow = useSyncExternalStore(subscribeNarrow, () => matchMedia(NARROW).matches, () => false);
+  const formRef = useRef<HTMLFormElement>(null);
+  // Between a pointer press and its click, focus changes (a tapped button takes focus after the press on touch) must
+  // not collapse the composer: the layout would move under the finger and the click would miss.
+  const pressing = useRef(false);
+  useEffect(() => onActiveChange?.(active), [active, onActiveChange]);
+  useEffect(() => () => onActiveChange?.(false), [onActiveChange]);
+  useEffect(() => {
+    let fallback: ReturnType<typeof setTimeout>;
+    const release = () => {
+      pressing.current = false;
+      clearTimeout(fallback);
+    };
+    const press = () => {
+      pressing.current = true;
+      clearTimeout(fallback);
+      fallback = setTimeout(release, 1000);
+    };
+    const outside = (event: Event) => !formRef.current?.contains(event.target as Node);
+    const clicked = (event: Event) => {
+      release();
+      if (outside(event)) setActive(false);
+    };
+    const focused = (event: Event) => {
+      if (!pressing.current && outside(event)) setActive(false);
+    };
+    document.addEventListener("pointerdown", press, true);
+    document.addEventListener("pointercancel", release, true);
+    document.addEventListener("click", clicked, true);
+    document.addEventListener("focusin", focused);
+    return () => {
+      release();
+      document.removeEventListener("pointerdown", press, true);
+      document.removeEventListener("pointercancel", release, true);
+      document.removeEventListener("click", clicked, true);
+      document.removeEventListener("focusin", focused);
+    };
+  }, []);
   const [recipient, setRecipient] = useState<Recipient>({ kind: "ME" });
   const [typed, setTyped] = useState("");
   const [variant, setVariant] = useState("");
@@ -86,6 +138,9 @@ export function Composer({ dishNames, people, names, groups, entries, defaults, 
     const known = entries.find((e) => normalizeText(e.dishName) === normalizeText(dish));
     return known ? defaults[sharedPriceKey(known.dishId, normalizeText(variant))]?.unitCentavos : undefined;
   }, [dish, variant, entries, defaults]);
+  const detailsCount = [variant, instructions, priceText].filter((v) => v.trim()).length;
+  const expanded = active || dish.trim() !== "" || detailsCount > 0 || quantity > 1;
+  if (!expanded && field) setField(null);
   const sizeSuggestions = useMemo(() => variantSuggestions(dish, entries), [dish, entries]);
 
   function submit(event: React.FormEvent) {
@@ -103,6 +158,7 @@ export function Composer({ dishNames, people, names, groups, entries, defaults, 
     }
     if (!parsedPrice.ok) {
       setField("price");
+      setDetailsOpen(true);
       setError(`Price: ${parsedPrice.message}`);
       requestAnimationFrame(() => document.getElementById(`${id}-price`)?.focus());
       return;
@@ -119,6 +175,7 @@ export function Composer({ dishNames, people, names, groups, entries, defaults, 
     setInstructions("");
     setPriceText("");
     setField(null);
+    setDetailsOpen(false);
     setError("");
     // Close the panel after adding: an open panel plus the composer covered most of a small screen (density review).
     setOpen(false);
@@ -128,7 +185,20 @@ export function Composer({ dishNames, people, names, groups, entries, defaults, 
   const ForIcon = current.kind === "GROUP" || current.kind === "NEW_GROUP" || current.kind === "TABLE" ? UsersRound : UserRound;
 
   return (
-    <form onSubmit={submit} noValidate className="rounded-[1.4rem] bg-ticket p-2 shadow-ticket ring-[1.5px] ring-rule" aria-label="Add a dish">
+    <form
+      ref={formRef}
+      onSubmit={submit}
+      noValidate
+      className="rounded-[1.4rem] bg-ticket p-2 shadow-ticket ring-[1.5px] ring-rule"
+      aria-label="Add a dish"
+      onFocus={(event) => {
+        if (isTextField(event.target)) setActive(true);
+        else if (!pressing.current) setActive(false);
+      }}
+      onBlur={(event) => {
+        if (!pressing.current && !event.currentTarget.contains(event.relatedTarget)) setActive(false);
+      }}
+    >
       {suggestions.length > 0 ? (
         <div className="flex flex-wrap gap-1.5 px-1 pb-2" aria-label="Dishes already in this order" data-ph-mask="">
           {suggestions.map((name) => (
@@ -191,6 +261,7 @@ export function Composer({ dishNames, people, names, groups, entries, defaults, 
             setDish(e.target.value);
             setError("");
           }}
+          onKeyDown={(e) => e.key === "Escape" && e.currentTarget.blur()}
           maxLength={60}
           autoComplete="off"
           enterKeyHint="done"
@@ -234,28 +305,6 @@ export function Composer({ dishNames, people, names, groups, entries, defaults, 
         </div>
       ) : null}
 
-      <DetailFields
-        id={id}
-        open={field}
-        onOpen={setField}
-        variant={variant}
-        onVariant={setVariant}
-        instructions={instructions}
-        onInstructions={setInstructions}
-        suggestions={sizeSuggestions}
-        price={{
-          text: priceText,
-          onChange: (text) => {
-            setPriceText(text);
-            if (error.startsWith("Price:")) setError("");
-          },
-          parsed: parsedPrice,
-          quantity,
-          tablePrice,
-        }}
-      />
-
-      {/* Under 360 px "For …" takes its own row so every label stays visible (no icon-only Add). */}
       <div className="mt-1.5 flex flex-wrap items-center gap-1">
         <button
           type="button"
@@ -266,7 +315,7 @@ export function Composer({ dishNames, people, names, groups, entries, defaults, 
           aria-expanded={open}
           aria-controls={open ? `${id}-panel` : undefined}
           data-tour="for"
-          className={cn("inline-flex min-h-11 min-w-0 flex-1 cursor-pointer max-[359px]:basis-full items-center gap-1.5 rounded-full px-3 text-left hover:bg-ink/6", open && "bg-ink/8")}
+          className={cn("inline-flex min-h-11 min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-full px-3 text-left hover:bg-ink/6", open && "bg-ink/8")}
         >
           <ForIcon className="size-4 shrink-0 text-ink-soft" aria-hidden />
           <span className="shrink-0 text-sm text-ink-soft">For</span>
@@ -274,16 +323,53 @@ export function Composer({ dishNames, people, names, groups, entries, defaults, 
           <ChevronDown className={cn("size-4 shrink-0 text-ink-soft transition-transform duration-200", open && "rotate-180")} aria-hidden />
           <span className="sr-only">. Change who it&rsquo;s for</span>
         </button>
-        <Stepper value={quantity} label="this dish" onChange={setQuantity} />
+        {expanded && !narrow ? <Stepper value={quantity} label="this dish" onChange={setQuantity} /> : null}
         <button
           type="submit"
           disabled={disabled}
-          className="inline-flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center gap-1 rounded-full bg-tomato font-semibold text-on-tomato transition-[background-color,transform] duration-100 ease-out hover:bg-tomato/90 active:scale-[0.97] disabled:opacity-45 max-[359px]:ml-auto pr-4 pl-3"
+          className="inline-flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center gap-1 rounded-full bg-tomato font-semibold text-on-tomato transition-[background-color,transform] duration-100 ease-out hover:bg-tomato/90 active:scale-[0.97] disabled:opacity-45 pr-4 pl-3"
         >
           <Plus className="size-5" aria-hidden />
           <span>Add</span>
         </button>
+        {expanded && narrow ? (
+          <div className="flex basis-full items-center justify-between gap-1">
+            <button
+              type="button"
+              aria-expanded={detailsOpen}
+              aria-label={detailsCount > 0 ? `Details, ${detailsCount} added` : "Details"}
+              onClick={() => setDetailsOpen((v) => !v)}
+              className={cn("inline-flex min-h-11 cursor-pointer items-center rounded-full border-[1.5px] border-input px-3.5 text-sm font-semibold text-ink-soft hover:text-ink", detailsOpen && "bg-ink/8 text-ink")}
+            >
+              {detailsCount > 0 ? `Details · ${detailsCount}` : "+ Details"}
+            </button>
+            <Stepper value={quantity} label="this dish" onChange={setQuantity} />
+          </div>
+        ) : null}
       </div>
+
+      {expanded && (!narrow || detailsOpen) ? (
+        <DetailFields
+          id={id}
+          open={field}
+          onOpen={setField}
+          variant={variant}
+          onVariant={setVariant}
+          instructions={instructions}
+          onInstructions={setInstructions}
+          suggestions={sizeSuggestions}
+          price={{
+            text: priceText,
+            onChange: (text) => {
+              setPriceText(text);
+              if (error.startsWith("Price:")) setError("");
+            },
+            parsed: parsedPrice,
+            quantity,
+            tablePrice,
+          }}
+        />
+      ) : null}
       <p id={`${id}-error`} role="alert" className={cn("px-3 text-sm text-bad", error ? "pt-1.5 pb-0.5" : "sr-only")}>
         {error}
       </p>

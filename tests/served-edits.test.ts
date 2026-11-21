@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { trackerLines } from "@/lib/serving";
+import { groupServed, trackerLines } from "@/lib/serving";
 import { applyTap, settle, type ServedEdit } from "@/hooks/use-served-edits";
 
 const edit = (over: Partial<ServedEdit> = {}): ServedEdit => ({ unsent: 0, sending: 0, key: null, failed: null, committedRevision: null, ...over });
@@ -37,5 +37,27 @@ describe("tracker order", () => {
       expect(round.lines.map((l) => l.label)).toEqual(["Gyoza", "Katsu"]);
       expect(round.lines[0].people).toBe("Rafa ×1 · Kovie ×1");
     }
+  });
+});
+
+describe("served grouping", () => {
+  const line = (key: string, expected: number, shown: number, history = false) => ({ key, label: key, people: "", expected, served: shown, shown, cancelledSince: 0, history });
+  const tracker = {
+    rounds: [
+      { roundId: "r1", number: 1, lines: [line("a", 2, 2), line("b", 3, 1), line("old", 1, 1, true)] },
+      { roundId: "r2", number: 2, lines: [line("c", 1, 0), line("d", 4, 4)] },
+    ],
+    expected: 0,
+    served: 0,
+  };
+
+  it("puts zero and partial first and fully served after, each in round then creation order", () => {
+    const { waiting, done } = groupServed(tracker);
+    expect(waiting.map((r) => r.line.key)).toEqual(["b", "c"]);
+    expect(done.map((r) => [r.number, r.line.key])).toEqual([[1, "a"], [1, "old"], [2, "d"]]);
+  });
+
+  it("keeps history rows in the fully served group", () => {
+    expect(groupServed(tracker).done.some((r) => r.line.history)).toBe(true);
   });
 });

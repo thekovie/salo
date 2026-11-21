@@ -13,6 +13,8 @@ export async function addDish(page: Page, name: string, quantity = 1) {
   for (let i = 1; i < quantity; i++) await page.getByRole("button", { name: "One more this dish" }).click();
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(dish).toHaveValue("");
+  // Focus returns to the Dish after Add, which hides the bottom bar; Escape is the keyboard way back to it.
+  await dish.press("Escape");
 }
 
 const CHIP: Record<string, string> = { "A person": "+ Someone else", "A group": "+ New group" };
@@ -31,7 +33,12 @@ const DETAIL_CHIP = { Size: "Size", Note: "Note", Price: "₱ Price" } as const;
 export async function openDetail(page: Page | Locator, which: keyof typeof DETAIL_CHIP) {
   // Closed chips read "+ Size"; the open one reads "Size" with a close icon.
   const open = page.getByRole("button", { name: DETAIL_CHIP[which], exact: true, expanded: true });
-  if ((await open.count()) === 0) await page.getByRole("button", { name: `+ ${DETAIL_CHIP[which]}`, exact: true }).click();
+  const closed = page.getByRole("button", { name: `+ ${DETAIL_CHIP[which]}`, exact: true });
+  // Under 360 px the chips sit behind "+ Details"; the composer shows neither until focus is in it.
+  const toggle = page.getByRole("button", { name: /^Details(, \d+ added)?$/ });
+  if ((await toggle.count()) === 0 && (await closed.count()) === 0 && (await open.count()) === 0) await page.getByRole("textbox", { name: "Dish" }).focus();
+  if ((await toggle.count()) > 0 && (await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+  if ((await open.count()) === 0) await closed.click();
 }
 
 export async function inviteCode(page: Page): Promise<string> {
