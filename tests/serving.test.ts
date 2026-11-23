@@ -10,7 +10,7 @@ import { NON_TICKET_EVENTS } from "@/server/orders/settlement";
 import { correctionBatchSchema, servingSchema } from "@/server/orders/validation";
 import { getSnapshot } from "@/server/sessions/snapshot";
 import { resetDb, testDb } from "./helpers/db";
-import { add, addGuest, key, newSession } from "./helpers/session";
+import { add, addGuest, key, newSession, storedServed } from "./helpers/session";
 
 const db = testDb();
 beforeEach(() => resetDb(db));
@@ -24,7 +24,10 @@ const confirm = async (a: Actor) => {
 };
 const open = (a: Actor) => run(a, (tx, s) => openRound(tx, s, a));
 const batch = (a: Actor, body: Record<string, unknown>) => run(a, (tx, s) => recordCorrections(tx, s, a, correctionBatchSchema.parse(body)));
-const serve = (a: Actor, roundId: string, lineKey: string, delta: number, idem = key()) => run(a, (tx, s) => updateServed(tx, s, a, servingSchema.parse({ roundId, lineKey, delta })), idem, "serving.update");
+const serve = async (a: Actor, roundId: string, lineKey: string, delta: number, idem = key(), seen?: number) => {
+  const expectedServed = seen ?? (await storedServed(db, a.sessionId, roundId, lineKey));
+  return run(a, (tx, s) => updateServed(tx, s, a, servingSchema.parse({ roundId, lineKey, delta, expectedServed })), idem, "serving.update");
+};
 
 async function table() {
   const { host, sessionId } = await newSession(db);
@@ -62,11 +65,11 @@ describe("food tracker", () => {
     expect((await serve(host, roundId, line, -2)).result.served).toBe(3);
   });
 
-  it("racing deltas add up and never pass expected", async () => {
+  it("racing taps that all saw the same count land once, never past expected", async () => {
     const { host, roundId } = await table();
     const { key: line } = await katsu(host);
-    await Promise.all([serve(host, roundId, line, 2), serve(host, roundId, line, 2), serve(host, roundId, line, 2)]);
-    expect((await katsu(host)).served).toBe(5);
+    await Promise.all([serve(host, roundId, line, 2, key(), 0), serve(host, roundId, line, 2, key(), 0), serve(host, roundId, line, 2, key(), 0)]);
+    expect((await katsu(host)).served).toBe(2);
   });
 
   it("an idempotent retry counts once", async () => {
@@ -111,7 +114,7 @@ describe("food tracker", () => {
     expect(await katsu(host)).toMatchObject({ expected: 5, shown: 5, cancelledSince: 0 });
     await confirm(host);
     expect(await katsu(host)).toMatchObject({ expected: 3, served: 5, shown: 3, cancelledSince: 2 });
-    expect((await serve(host, roundId, line, -1)).result.served).toBe(2);
+    expect((await serve(host, roundId, line, -1, key(), 3)).result.served).toBe(2);
   });
 
   it("a told replacement is its own line starting at 0", async () => {

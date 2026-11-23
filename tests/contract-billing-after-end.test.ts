@@ -349,7 +349,7 @@ describe("D1: ordering and serving stay refused on a closed order", () => {
     const add = await call(ENTRIES_POST, "POST", t.host, t.sessionId, {}, { dishName: "Late dish", quantity: 1, attribution: { type: "TABLE" } });
     const round = await call(ROUNDS_POST, "POST", t.host, t.sessionId, {}, {});
     const ready = await call(READINESS, "PUT", t.host, t.sessionId, {}, { ready: true });
-    const served = await call(SERVING, "POST", t.host, t.sessionId, {}, { roundId: t.snap.rounds[0].id, lineKey: "x", delta: 1 });
+    const served = await call(SERVING, "POST", t.host, t.sessionId, {}, { roundId: t.snap.rounds[0].id, lineKey: "x", delta: 1, expectedServed: 0 });
     for (const r of [add, round, ready, served]) expect([r.status, r.body.error?.code]).toEqual([409, "SESSION_CLOSED"]);
     expect(await state(t.sessionId)).toBe(before);
     expect((await getSnapshot(db, t.host.actor)).entries.map((e) => e.dishName)).not.toContain("Late dish");

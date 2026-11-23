@@ -17,9 +17,9 @@ function e(dish: string, quantity: number, attribution: Attribution, extra: Part
 const price = (unitCentavos: number | null, billTo: EntrySettlement["billTo"] = null): EntrySettlement => ({ unitCentavos, billTo, revision: 1 });
 
 const people = [
-  { id: "h", displayName: "Host", role: "HOST" as const },
-  { id: "ana", displayName: "Ana", role: "GUEST" as const },
-  { id: "jd", displayName: "JD", role: "GUEST" as const },
+  { id: "h", displayName: "Host", role: "HOST" as const, cohost: false },
+  { id: "ana", displayName: "Ana", role: "GUEST" as const, cohost: false },
+  { id: "jd", displayName: "JD", role: "GUEST" as const, cohost: false },
 ];
 
 function input(entries: SnapshotEntry[], over: Partial<KkbInput> = {}): KkbInput {
@@ -78,7 +78,7 @@ describe("buildKkb food subtotals", () => {
   });
 
   it("the person a dish is for pays, not the person who typed it; same names stay distinct", () => {
-    const people2 = [...people, { id: "ana2", displayName: "Ana", role: "GUEST" as const }];
+    const people2 = [...people, { id: "ana2", displayName: "Ana", role: "GUEST" as const, cohost: false }];
     const forAna = e("Katsu", 1, me("ana"), { submittedBy: "h" });
     const forAna2 = e("Ramen", 1, me("ana2"), { submittedBy: "ana2" });
     const kkb = buildKkb(withPrices(input([forAna, forAna2], { participants: people2 }), { [forAna.id]: price(100), [forAna2.id]: price(200) }), "h");

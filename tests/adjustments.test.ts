@@ -11,9 +11,9 @@ function entry(dish: string, quantity: number, who: string): SnapshotEntry {
   return { id: `e${n}`, batchId: `b${n}`, roundId: "r1", dishId: `d-${dish}`, dishName: dish, quantity, variant: null, instructions: null, createdAt: `2026-11-08T12:00:${String(n).padStart(2, "0")}Z`, revision: 1, submittedBy: "h", attribution: mine(who) };
 }
 const people = [
-  { id: "h", displayName: "Host", role: "HOST" as const },
-  { id: "ana", displayName: "Ana", role: "GUEST" as const },
-  { id: "jd", displayName: "JD", role: "GUEST" as const },
+  { id: "h", displayName: "Host", role: "HOST" as const, cohost: false },
+  { id: "ana", displayName: "Ana", role: "GUEST" as const, cohost: false },
+  { id: "jd", displayName: "JD", role: "GUEST" as const, cohost: false },
 ];
 
 /** Host 100.00, Ana 300.00, JD 600.00 of food: 1,000.00 in all. */

@@ -34,3 +34,20 @@ describe("unavailable", () => {
     expect(can(guest, "dish.unavailable")).toBe(false);
   });
 });
+
+describe("co-host", () => {
+  const cohost = { role: "GUEST" as const, participantId: "c", cohost: true };
+
+  it("may update serving and nothing else the host alone may do", () => {
+    expect(can(cohost, "serving.update")).toBe(true);
+    for (const action of ["entry.editAny", "session.rename", "round.confirm", "round.open", "session.close", "claim.approve", "participant.remove", "price.editAny", "price.default", "dish.unavailable", "billTo.set", "serviceCharge.set", "receipt.set", "adjustment.set", "participant.renameSelf", "cohost.set"] as const) {
+      expect(can(cohost, action), action).toBe(false);
+    }
+  });
+
+  it("is a plain guest otherwise, and a guest without the mark cannot serve", () => {
+    expect(can(cohost, "entry.add")).toBe(true);
+    expect(can(guest, "serving.update")).toBe(false);
+    expect(can(host, "cohost.set")).toBe(true);
+  });
+});

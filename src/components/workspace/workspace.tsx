@@ -19,7 +19,7 @@ import { withViewTransition } from "@/lib/view-transition";
 import { Ticker } from "@/components/motion/ticker";
 import { LocalTime } from "@/components/ui/local-time";
 import { cn } from "@/lib/utils";
-import { canEditEntry } from "@/lib/permissions";
+import { can, canEditEntry } from "@/lib/permissions";
 import { byGroup, readinessSummary } from "@/lib/views";
 import { Composer } from "./composer";
 import { GroupsView } from "./groups-view";
@@ -225,12 +225,17 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
   }, [justConfirmed]);
   const ticket = liveTicket({ roundNumber: round.number, title: snapshot.session.title, ticket: consolidate(roundEntries), corrections: snapshot.corrections, roundId: round.id, confirmed: confirmedIds(snapshot.rounds) });
   const tracker = useMemo(() => trackerLines(snapshot), [snapshot]);
-  const served = useServedEdits(snapshot.session.id, refresh, snapshot.session.revision);
+  const canServe = can(snapshot.me, "serving.update") && sessionOpen;
+  const served = useServedEdits(snapshot.session.id, refresh, snapshot.session.revision, canServe);
   const [changeRequest, setChangeRequest] = useState<{ roundId: string; lineKey: string } | null>(null);
   const servedSection = anyConfirmed ? (
     <ServedSection
       tracker={tracker}
-      canEdit={isHost && sessionOpen}
+      canEdit={canServe}
+      canChange={isHost && sessionOpen}
+      me={snapshot.me}
+      people={snapshot.participants}
+      onOpenPeople={() => setView("people")}
       edits={served.edits}
       bump={served.bump}
       retry={served.retry}
@@ -685,6 +690,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
               onRemoveDuplicate={(entry) => actions.remove(entry)}
               roundNumber={round.number}
               onRemoveGuest={isHost && sessionOpen ? removeGuest : undefined}
+              onSetCohost={isHost && sessionOpen ? async (participantId, name, cohost) => Boolean(await mutate({ kind: "setCohost", participantId, name, cohost })) : undefined}
               onSummary={hasSummary ? () => openSummary("button") : undefined}
             />
           ) : (

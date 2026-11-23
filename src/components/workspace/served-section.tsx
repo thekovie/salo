@@ -6,15 +6,22 @@ import { Button } from "@/components/ui/button";
 import { useRowFocusFallback } from "@/hooks/use-row-focus-fallback";
 import type { ServedEdit } from "@/hooks/use-served-edits";
 import { focusIsLost } from "@/lib/focus";
+import type { SessionSnapshot } from "@/lib/snapshot";
 import { groupServed, type ServedRow, type Tracker } from "@/lib/serving";
 import { Stepper } from "./stepper";
 
 interface ServedSectionProps {
   tracker: Tracker;
-  /** The host while the order is open; everyone else (and an ended order) only reads. */
+  /** The host and co-hosts while the order is open; everyone else (and an ended order) only reads. */
   canEdit: boolean;
+  /** Host only, order open: corrections (Change…). */
+  canChange: boolean;
+  /** The co-host sees a note; the host sees a hint while nobody is a co-host yet. */
+  me: SessionSnapshot["me"];
+  people: SessionSnapshot["participants"];
+  onOpenPeople: () => void;
   edits: Record<string, ServedEdit>;
-  bump: (roundId: string, lineKey: string, delta: number, immediately?: boolean) => void;
+  bump: (roundId: string, lineKey: string, delta: number, seen: number, immediately?: boolean) => void;
   retry: (roundId: string, lineKey: string) => void;
   /** Host: open the correction sheet on this line. */
   onChange: (roundId: string, lineKey: string) => void;
@@ -25,14 +32,16 @@ const COLLAPSE_ABOVE = 5;
 
 const rowKey = (row: ServedRow) => `${row.roundId}|${row.line.key}`;
 
-/** Food tracker (F06): what has arrived per round and dish. Waiting food first with the host's steppers, fully served below. */
-export function ServedSection({ tracker, canEdit, edits, bump, retry, onChange }: ServedSectionProps) {
+/** Food tracker (F06): what has arrived per round and dish. Waiting food first with steppers for the host and co-hosts, fully served below. */
+export function ServedSection({ tracker, canEdit, canChange, me, people, onOpenPeople, edits, bump, retry, onChange }: ServedSectionProps) {
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const [doneOpen, setDoneOpen] = useState<boolean | null>(null);
   const followKey = useRef<string | null>(null);
 
   const { waiting, done } = groupServed(tracker);
   const rows = [...waiting, ...done];
+  // The count the row stood on in the snapshot, plus a batch already sent: what the server will compare.
+  const seenOf = (row: ServedRow) => row.line.shown + (edits[rowKey(row)]?.sending ?? 0);
   const shownOf = (row: ServedRow) => {
     const e = edits[rowKey(row)];
     return Math.max(0, Math.min(row.line.expected, row.line.shown + (e?.sending ?? 0) + (e?.unsent ?? 0)));
@@ -74,10 +83,10 @@ export function ServedSection({ tracker, canEdit, edits, bump, retry, onChange }
       </p>
     ) : null;
   const stepper = (row: ServedRow) => (
-    <Stepper value={shownOf(row)} min={0} max={row.line.expected} label={`${row.line.label} served`} onChange={(next) => bump(row.roundId, row.line.key, next - shownOf(row))} />
+    <Stepper value={shownOf(row)} min={0} max={row.line.expected} label={`${row.line.label} served`} onChange={(next) => bump(row.roundId, row.line.key, next - shownOf(row), seenOf(row))} />
   );
   const changeButton = (row: ServedRow) =>
-    row.line.expected > 0 ? (
+    canChange && row.line.expected > 0 ? (
       <Button variant="outline" onClick={() => onChange(row.roundId, row.line.key)}>
         Change…<span className="sr-only"> {row.line.label}, round {row.number}</span>
       </Button>
@@ -105,7 +114,7 @@ export function ServedSection({ tracker, canEdit, edits, bump, retry, onChange }
         {canEdit ? (
           <div className="mt-1 flex flex-wrap gap-2">
             {!isDone ? (
-              <Button variant="outline" onClick={() => bump(row.roundId, line.key, line.expected - shown, true)}>
+              <Button variant="outline" onClick={() => bump(row.roundId, line.key, line.expected - shown, seenOf(row), true)}>
                 <Check className="size-5" aria-hidden /> All served<span className="sr-only">: {line.label}</span>
               </Button>
             ) : null}
@@ -172,6 +181,7 @@ export function ServedSection({ tracker, canEdit, edits, bump, retry, onChange }
       <h2 id="served-h" tabIndex={-1} className="text-lg">
         Served
       </h2>
+      {me.cohost && canEdit ? <p className="mt-1 text-sm text-ink-soft">You’re a co-host: you can mark food as served.</p> : null}
       <p role="status" aria-live="polite" className="mt-0.5 text-ink-soft" data-testid="served-summary">
         {left === 0 ? `All ${expected} served. Kain na!` : `${served} of ${expected} served · ${left} waiting`}
       </p>
@@ -203,6 +213,11 @@ export function ServedSection({ tracker, canEdit, edits, bump, retry, onChange }
           </details>
         ) : null}
       </div>
+      {canChange && !people.some((p) => p.cohost) && people.some((p) => p.role === "GUEST") ? (
+        <button type="button" onClick={onOpenPeople} className="mt-3 min-h-11 w-full cursor-pointer text-left text-sm text-ink-soft hover:text-ink">
+          Busy table? Make a guest a co-host so they can help. →
+        </button>
+      ) : null}
     </section>
   );
 }

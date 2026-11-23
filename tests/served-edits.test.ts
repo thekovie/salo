@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { groupServed, trackerLines } from "@/lib/serving";
 import { applyTap, settle, type ServedEdit } from "@/hooks/use-served-edits";
 
-const edit = (over: Partial<ServedEdit> = {}): ServedEdit => ({ unsent: 0, sending: 0, key: null, failed: null, committedRevision: null, ...over });
+const edit = (over: Partial<ServedEdit> = {}): ServedEdit => ({ unsent: 0, sending: 0, key: null, failed: null, committedRevision: null, seen: 0, expected: 0, ...over });
 
 describe("served taps", () => {
   it("stops counting a sent delta once the snapshot holds the revision the POST returned", () => {
@@ -17,10 +17,29 @@ describe("served taps", () => {
   });
 
   it("drops an edit that nets to zero, but not one that is in flight or failed", () => {
-    expect(applyTap(edit({ unsent: 1 }), -1)).toBeNull();
-    expect(applyTap(undefined, 0)).toBeNull();
-    expect(applyTap(edit({ sending: 2, key: "k" }), 0)).toMatchObject({ sending: 2 });
-    expect(applyTap(edit({ failed: "no", sending: 1, key: "k" }), 1)).toMatchObject({ unsent: 1, failed: "no" });
+    expect(applyTap(edit({ unsent: 1 }), -1, 0)).toBeNull();
+    expect(applyTap(undefined, 0, 0)).toBeNull();
+    expect(applyTap(edit({ sending: 2, key: "k" }), 0, 0)).toMatchObject({ sending: 2 });
+    expect(applyTap(edit({ failed: "no", sending: 1, key: "k" }), 1, 0)).toMatchObject({ unsent: 1, failed: "no" });
+  });
+});
+
+describe("served precondition", () => {
+  it("takes the seen count from the first unsent tap of a batch and keeps it for the rest", () => {
+    const first = applyTap(undefined, 1, 3)!;
+    expect(first.seen).toBe(3);
+    expect(applyTap(first, 1, 4)).toMatchObject({ unsent: 2, seen: 3 });
+  });
+
+  it("starts a new seen count when a batch is sent and the next tap lands", () => {
+    const inFlight = edit({ sending: 1, key: "k", expected: 3, seen: 3 });
+    expect(applyTap(inFlight, 1, 4)).toMatchObject({ unsent: 1, seen: 4, expected: 3 });
+  });
+
+  it("stops counting a batch the server did not apply once the snapshot holds the revision it returned", () => {
+    const refused = edit({ sending: 1, key: "k", committedRevision: 12 });
+    expect(settle(refused, 11).sending).toBe(1);
+    expect(settle(refused, 12).sending).toBe(0);
   });
 });
 

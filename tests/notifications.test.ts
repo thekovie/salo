@@ -29,7 +29,7 @@ import { correctionBatchSchema, entrySettlementSchema, servingSchema, sharedPric
 import { joinSession } from "@/server/sessions/join";
 import { getSnapshot } from "@/server/sessions/snapshot";
 import { resetDb, testDb } from "./helpers/db";
-import { add, addGuest, key, newSession } from "./helpers/session";
+import { add, addGuest, key, newSession, storedServed } from "./helpers/session";
 
 const db = testDb();
 beforeEach(async () => {
@@ -219,7 +219,10 @@ describe("recipients, the actor and dedup", () => {
     await confirm(host);
     const snap = await getSnapshot(db, host);
     const line = trackerLines(snap).rounds[0].lines.find((l) => l.label === "Katsu")!;
-    const serve = (delta: number) => run(host, (tx, s) => updateServed(tx, s, host, servingSchema.parse({ roundId: snap.rounds[0].id, lineKey: line.key, delta })), "serving.update");
+    const serve = async (delta: number) => {
+      const expectedServed = await storedServed(db, host.sessionId, snap.rounds[0].id, line.key);
+      return run(host, (tx, s) => updateServed(tx, s, host, servingSchema.parse({ roundId: snap.rounds[0].id, lineKey: line.key, delta, expectedServed })), "serving.update");
+    };
     await serve(1);
     expect(await types(ana)).toEqual(["round.confirmed"]);
     await serve(1);

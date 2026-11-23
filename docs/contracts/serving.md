@@ -1,11 +1,11 @@
 # Golden contract: `POST /api/sessions/:id/serving` (food tracker served counts)
 
-Sources: **P** = docs/plans/salo-v1-3.md (A15, A16, D9, D10, D16, Pinned details "Served counts", NON_TICKET_EVENTS, Permissions, Tests), **A** = docs/api.md (route row and shared conventions), **S** = docs/security.md, **D** = docs/data-model.md, **R** = docs/realtime.md, **B** = the testing brief.
-Suite: `pnpm vitest run tests/contract-serving.test.ts` (52 scenarios, real Postgres `salo_test`, real route handler, faked cookie jar). HTTP wiring: `node scripts/contract/serving-http.mjs` (needs a dev server on :3000; creates only its own orders; ends with the limiter, so run it on its own).
-Body: `{ roundId: uuid, lineKey: string (1..600), delta: int, delta != 0 }`. Success: `200 { data: { result: { served, revision }, revision, replayed } }` (`result.revision` is the served row's own revision, `revision` the session's). Failure: `{ error: { code, message } }` (A).
+Sources: **P** = docs/plans/salo-v1-3.md and docs/plans/salo-v1-4.md slice 3 (A15, A16, D9, D10, D16, Pinned details "Served counts", NON_TICKET_EVENTS, Permissions, Tests), **A** = docs/api.md (route row and shared conventions), **S** = docs/security.md, **D** = docs/data-model.md, **R** = docs/realtime.md, **B** = the testing brief.
+Suite: `pnpm vitest run tests/contract-serving.test.ts` (59 scenarios, real Postgres `salo_test`, real route handler, faked cookie jar). HTTP wiring: `node scripts/contract/serving-http.mjs` (needs a dev server on :3000; creates only its own orders; ends with the limiter, so run it on its own).
+Body: `{ roundId: uuid, lineKey: string (1..600), expectedServed: int >= 0, delta: int, delta != 0 }`. Success: `200 { data: { result: { served, revision, applied }, revision, replayed } }` (`result.revision` is the served row's own revision, `revision` the session's). Failure: `{ error: { code, message } }` (A).
 Line key (D, P D9/D16): a preparation = `JSON.stringify([dishId, normalizedSize, normalizedNotes])`, or after a told swap `to:<normalized replacement text>`. A line lives in its source entry's confirmed round.
 Expected (never stored): sum of `effectiveEntry` quantities of the line's confirmed entries; only corrections told to the waiter (target round CONFIRMED) count (D, P).
-Write rule (A): stored = `clamp(min(served, expected) + delta, 0, expected)`.
+Write rule (A): let `before = min(served, expected)`. If `expectedServed == before`: stored = `clamp(before + delta, 0, expected)`, `applied: true` (also for a clamped no-op). Otherwise nothing is stored, the reply is `{ served: before, revision (the row's, 0 if none), applied: false }`: not a refusal, still `200`, with session revision +1, one `serving.updated` event and the mutation record (a replay returns the same `applied: false`); `served_counts` and notifications are untouched. Who: host or co-host; the role is re-read under the session lock (`runMutation`).
 
 Every refusal row also means: session revision, events, served rows and the snapshot's `servedCounts` are unchanged (asserted by a before/after fingerprint).
 
@@ -50,7 +50,7 @@ Interpretations the spec leaves open (suite accepts either, never a 5xx): unknow
 ## Authorization and tenancy
 | # | Scenario | Expected | Source |
 |---|---|---|---|
-| A01 | Guest (also one with entries on the line), +1 and -1 | 403 FORBIDDEN | A, P Permissions (`serving.update` host only) |
+| A01 | Guest (also one with entries on the line), +1 and -1 | 403 FORBIDDEN | A, P Permissions (`serving.update` host and co-hosts; guests never), slice 3 section of docs/plans/salo-v1-4.md |
 | A02 | No cookie / garbage cookie | 404 NOT_FOUND | A identity |
 | A03 | Other order's host token, both directions | 404 NOT_FOUND; neither order changed | S, A |
 | A04 | Removed guest | 403 or 404 | S |
@@ -69,13 +69,24 @@ Interpretations the spec leaves open (suite accepts either, never a 5xx): unknow
 ## Races and realtime
 | # | Scenario | Expected | Source |
 |---|---|---|---|
-| K01 | 8 parallel +1 on a fresh line (no row yet), expected 5 | all 200 (no PK-conflict 500); answers sorted = 1,2,3,4,5,5,5,5; final 5; one row | P ("served <= expected under concurrency"), B |
-| K02 | 4 parallel +1 | answers 1..4, final 4 | B |
-| K03 | 8 parallel -1 from 5 | all 200; answers 0,0,0,0,1,2,3,4; final 0 | B |
-| K04 | Mixed parallel deltas | all 200, every answer and the final in 0..5; snapshot = DB | B |
+| K01 | 8 parallel +1 that all saw 0 (no row yet) | all 200 (no PK-conflict 500); exactly one applied; every answer 1; one row | P ("served <= expected under concurrency"), B |
+| K02 | 4 parallel +1 with seen 0..3 | final = number applied | B |
+| K03 | 8 parallel -1 from 5, all saw 5 | all 200; one applied; every answer 4; final 4 | B |
+| K04 | Mixed parallel deltas, all saw 0 | all 200, every answer and the final in 0..5; snapshot = DB | B |
 | K05 | Parallel writes on two lines | both land | B |
 | K06 | A write racing the confirm of a told cancellation | both succeed; stored 2 or 5; next -1 -> 1 | P, B |
 | K07 | Committed change | `pg_notify` on `salo_events` within 15 s | R |
+
+## Co-hosts and the count precondition
+| # | Scenario | Expected | Source |
+|---|---|---|---|
+| H01 | Co-host serves | 200 `applied: true`; `served_counts.updated_by` and event payload `actorId` are theirs | S3.1, S3.10 |
+| H02 | Revoked co-host | 403 FORBIDDEN "Only the host and co-hosts can mark food as served."; nothing changes | S3.6 |
+| H03 | Revoked between actor lookup and lock | refused under the lock (403) | S3.6, D20 |
+| H04 | Any other write after the role moved under it | 403 ROLE_CHANGED | D20 |
+| H05 | Stale `expectedServed` | 200 `applied: false` with the current count; row and notifications untouched; session revision +1, one event | S3.7, D3 |
+| H06 | Retry of a stale batch (same key) | replays `applied: false`; applies nothing | S3.9 |
+| H07 | `expectedServed` missing, negative, fractional, string, null | 422 INVALID | D3 |
 
 ## Isolation from ticket, KKB, Items, staleness
 | # | Scenario | Expected | Source |
@@ -100,4 +111,4 @@ Interpretations the spec leaves open (suite accepts either, never a 5xx): unknow
 | M01 | > 120 changes a minute by one participant | 429 RATE_LIMITED after 100..120 successes | A, P |
 
 ## Result
-All 52 vitest scenarios and 22 HTTP checks pass; no bugs claimed.
+All 59 vitest scenarios pass; the HTTP script is updated for `expectedServed` (not rerun here).

@@ -7,7 +7,7 @@ import { hashToken } from "./credentials";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const isUuid = (value: string) => UUID.test(value);
 
-type Identity = Actor & { removedAt: Date | null; removedReason: string | null };
+type Identity = Omit<Actor, "cohost"> & { cohostAt: Date | null; removedAt: Date | null; removedReason: string | null };
 
 /** The participant behind a session cookie, removed or not. Null when the token is missing, unknown, revoked or foreign. */
 async function lookup(db: Db, sessionId: string, token: string | undefined): Promise<Identity | null> {
@@ -20,6 +20,7 @@ async function lookup(db: Db, sessionId: string, token: string | undefined): Pro
       sessionId: participants.sessionId,
       removedAt: participants.removedAt,
       removedReason: participants.removedReason,
+      cohostAt: participants.cohostAt,
     })
     .from(participantCredentials)
     .innerJoin(participants, eq(participants.id, participantCredentials.participantId))
@@ -43,7 +44,7 @@ async function lookup(db: Db, sessionId: string, token: string | undefined): Pro
 export async function resolveActor(db: Db, sessionId: string, token: string | undefined): Promise<Actor | null> {
   const row = await lookup(db, sessionId, token);
   if (!row || row.removedAt) return null;
-  return { participantId: row.participantId, role: row.role, displayName: row.displayName, sessionId: row.sessionId };
+  return { participantId: row.participantId, role: row.role, displayName: row.displayName, sessionId: row.sessionId, cohost: row.cohostAt !== null };
 }
 
 /** For a guest the host removed: the host's reason (possibly null). Undefined for everyone else. */

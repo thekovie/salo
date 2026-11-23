@@ -6,6 +6,7 @@ import { everyone, type SessionSnapshot, type SnapshotEntry } from "@/lib/snapsh
 import { cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/dish-name";
 import { byPerson, findLikelyDuplicates, readinessSummary, type PersonBucket } from "@/lib/views";
+import { CohostToggle } from "./cohost-toggle";
 import { RemoveGuestSheet } from "./remove-guest-sheet";
 
 interface PeopleViewProps {
@@ -16,6 +17,8 @@ interface PeopleViewProps {
   onRemoveDuplicate: (entry: SnapshotEntry) => void;
   /** Host, order open: remove a guest. Resolves true when accepted. */
   onRemoveGuest?: (participantId: string, name: string, reason: string | null) => Promise<boolean>;
+  /** Host, order open: make a guest a co-host or stop that. Resolves true when accepted. */
+  onSetCohost?: (participantId: string, name: string, cohost: boolean) => Promise<boolean>;
   roundNumber: number;
   /** Opens "who ordered what" (once a round is confirmed). */
   onSummary?: () => void;
@@ -73,7 +76,7 @@ function Lines({ bucket, claimable, canClaimEntry, myClaims, onClaim }: { bucket
 }
 
 /** By person (brief 5.3, 5.8): who ordered what, who hasn't ordered, who is ready; guests claim dishes recorded for them. */
-export function PeopleView({ snapshot, entries, canClaim, onClaim, onRemoveDuplicate, onRemoveGuest, roundNumber, onSummary }: PeopleViewProps) {
+export function PeopleView({ snapshot, entries, canClaim, onClaim, onRemoveDuplicate, onRemoveGuest, onSetCohost, roundNumber, onSummary }: PeopleViewProps) {
   // The host usually orders for others; an empty host card is noise. Guests with nothing yet stay visible.
   // Removed guests only show while something is still marked for them.
   const draftOpen = snapshot.rounds.find((r) => r.id === snapshot.activeRoundId)?.status === "DRAFT";
@@ -134,22 +137,24 @@ export function PeopleView({ snapshot, entries, canClaim, onClaim, onRemoveDupli
         const claimable = canClaim && (bucket.kind === "name" || bucket.kind === "unassigned" || isMe) && bucket.entries.some((e) => hostIds.has(e.submittedBy));
         return (
           <section key={bucket.key} className="ticket px-5">
-            <div className="mb-2 flex items-center justify-between gap-3">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
               <h3 className="text-lg">
                 {bucket.title}
                 {isMe ? <span className="ml-1.5 font-sans text-sm text-ink-soft">(you)</span> : null}
                 {bucket.role === "HOST" ? <span className="ml-1.5 font-sans text-sm text-ink-soft">· host</span> : null}
+                {bucket.cohost ? <span className="ml-1.5 whitespace-nowrap font-sans text-sm text-ink-soft">· co-host</span> : null}
                 {bucket.kind === "name" ? <span className="ml-1.5 font-sans text-sm text-ink-soft">· added by the host</span> : null}
               </h3>
-              <div className="flex items-center gap-2">
+              <div className="ml-auto flex shrink-0 items-center gap-2">
                 {bucket.role === "GUEST" && !(bucket.participantId && removedIds.has(bucket.participantId)) ? (
                   <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold", guestReady ? "bg-ok-wash text-ok" : "bg-ink/6 text-ink-soft")}>
                     {guestReady ? <CircleCheck className="size-3.5" aria-hidden /> : <Clock className="size-3.5" aria-hidden />}
                     {guestReady ? "Ready" : "Still choosing"}
                   </span>
                 ) : null}
-                <span className="tally text-sm text-ink-soft">
-                  {bucket.ticket.totalItems} {bucket.ticket.totalItems === 1 ? "item" : "items"}
+                <span className="tally whitespace-nowrap text-sm text-ink-soft">
+                  {bucket.ticket.totalItems}
+                  <span className="max-[375px]:sr-only"> {bucket.ticket.totalItems === 1 ? "item" : "items"}</span>
                 </span>
                 {onRemoveGuest && bucket.role === "GUEST" && bucket.participantId && !removedIds.has(bucket.participantId) ? (
                   <RemoveGuestSheet
@@ -161,6 +166,9 @@ export function PeopleView({ snapshot, entries, canClaim, onClaim, onRemoveDupli
                 ) : null}
               </div>
             </div>
+            {onSetCohost && bucket.role === "GUEST" && bucket.participantId && !removedIds.has(bucket.participantId) ? (
+              <CohostToggle name={bucket.title} isCohost={bucket.cohost} onSet={(cohost) => onSetCohost(bucket.participantId as string, bucket.title, cohost)} />
+            ) : null}
             <Lines bucket={bucket} claimable={claimable} canClaimEntry={(e) => hostIds.has(e.submittedBy) && !e.id.startsWith("pending:")} myClaims={myClaims} onClaim={onClaim} />
             {isMe && forMe ? (
               <div className="tear mt-3 pt-3">

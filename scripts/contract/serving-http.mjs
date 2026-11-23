@@ -41,7 +41,7 @@ let snap = await sync(host);
 const draftRound = snap.activeRoundId;
 const lineKey = JSON.stringify([snap.entries[0].dishId, "", ""]);
 const serve = (o) => call("POST", `/api/sessions/${sid}/serving`, o);
-const b = (over = {}) => ({ roundId: draftRound, lineKey, delta: 1, ...over });
+const b = (over = {}) => ({ roundId: draftRound, lineKey, delta: 1, expectedServed: 0, ...over });
 
 let r = await serve({ cookie: host, body: b() });
 check("draft round -> 409 ROUND_NOT_CONFIRMED", r.status === 409 && r.json?.error?.code === "ROUND_NOT_CONFIRMED", r.text);
@@ -61,6 +61,8 @@ r = await serve({ cookie: cookieOf(other), body: b() });
 check("another order's host cookie -> 404", r.status === 404, r.text);
 r = await serve({ cookie: host, body: b(), idem: null });
 check("no Idempotency-Key -> 400 IDEMPOTENCY_KEY", r.status === 400 && r.json?.error?.code === "IDEMPOTENCY_KEY", r.text);
+r = await serve({ cookie: host, body: b({ expectedServed: undefined }) });
+check("missing expectedServed -> 422", r.status === 422, r.text);
 r = await serve({ cookie: host, body: b({ delta: 0 }) });
 check("delta 0 -> 422", r.status === 422, r.text);
 r = await serve({ cookie: host, body: b({ delta: 1e9 }) });
@@ -73,15 +75,15 @@ check("bad JSON -> 400 BAD_JSON", r.status === 400 && r.json?.error?.code === "B
 r = await serve({ cookie: host, body: b({ roundId: draftRound, delta: 2 }), idem: "http-serve-" + randomUUID() });
 check("host +2 -> 200 served 2", r.status === 200 && r.json?.data?.result?.served === 2 && r.json.data.replayed === false, r.text);
 const idem = randomUUID();
-const first = await serve({ cookie: host, body: b({ delta: 5 }), idem });
-const replay = await serve({ cookie: host, body: b({ delta: 5 }), idem });
+const first = await serve({ cookie: host, body: b({ delta: 5, expectedServed: 2 }), idem });
+const replay = await serve({ cookie: host, body: b({ delta: 5, expectedServed: 2 }), idem });
 check("clamped to expected 3, replay applied once", first.json?.data?.result?.served === 3 && replay.json?.data?.replayed === true && replay.json.data.result.served === 3, first.text + replay.text);
-r = await serve({ cookie: host, body: b({ delta: -99 }) });
+r = await serve({ cookie: host, body: b({ delta: -99, expectedServed: 3 }) });
 check("clamped to 0", r.status === 200 && r.json?.data?.result?.served === 0, r.text);
 const par = await Promise.all(Array.from({ length: 6 }, () => serve({ cookie: host, body: b({ delta: 1 }) })));
-check("6 parallel +1 -> all 200, final 3", par.every((x) => x.status === 200) && (await sync(host)).servedCounts.find((c) => c.lineKey === lineKey)?.served === 3, par.map((x) => x.status).join());
+check("6 parallel +1 that all saw 0 -> all 200, exactly one applied, final 1", par.every((x) => x.status === 200) && par.filter((x) => x.json?.data?.result?.applied).length === 1 && (await sync(host)).servedCounts.find((c) => c.lineKey === lineKey)?.served === 1, par.map((x) => x.status).join());
 const gsnap = await sync(guest);
-check("guest /sync sees servedCounts", gsnap.servedCounts.some((c) => c.lineKey === lineKey && c.served === 3), JSON.stringify(gsnap.servedCounts));
+check("guest /sync sees servedCounts", gsnap.servedCounts.some((c) => c.lineKey === lineKey && c.served === 1), JSON.stringify(gsnap.servedCounts));
 
 let limited = null;
 for (let i = 0; i < 130 && !limited; i++) {

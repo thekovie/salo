@@ -9,7 +9,7 @@ const entry = (id: string, who: string, quantity: number, createdAt: string): Sn
   id, roundId: "r1", batchId: `b${id}`, dishId: "d1", dishName: "Katsu", quantity, variant: "Large", instructions: null, createdAt, revision: 1, submittedBy: who,
   attribution: { type: "INDIVIDUAL", label: null, participantId: who },
 });
-const people = [{ id: "a", displayName: "Ana", role: "HOST" as const }, { id: "b", displayName: "Ben", role: "GUEST" as const }];
+const people = [{ id: "a", displayName: "Ana", role: "HOST" as const, cohost: false }, { id: "b", displayName: "Ben", role: "GUEST" as const, cohost: false }];
 const fix = (id: string, entryId: string, delta: number, groupId: string | null): CorrectionView => ({
   id, sourceEntryId: entryId, sourceRoundNumber: 1, targetRoundId: "r2", dishName: "Katsu", preparation: "Large", type: "QUANTITY", quantityDelta: delta, replacement: null, explanation: null, reason: null, groupId, createdAt: "2026-11-20T10:00:00Z",
 });
