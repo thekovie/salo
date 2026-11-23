@@ -4,10 +4,10 @@ import { anyPrice, EMPTY_SETTLEMENT, type SessionSnapshot } from "@/lib/snapshot
 
 const base: SessionSnapshot = {
   session: { id: "s", title: null, status: "OPEN", revision: 1, joinCode: "ABCDEF", closedAt: null, expiresAt: "2026-12-01T00:00:00Z" },
-  me: { participantId: "h", role: "HOST", displayName: "Host" },
+  me: { participantId: "h", role: "HOST", cohost: false, displayName: "Host" },
   rounds: [{ id: "r1", number: 1, status: "DRAFT", confirmedAt: null }],
   activeRoundId: "r1",
-  participants: [{ id: "h", displayName: "Host", role: "HOST" }],
+  participants: [{ id: "h", displayName: "Host", role: "HOST", cohost: false }],
   removedPeople: [],
   entries: [],
   dishNames: [],
@@ -31,7 +31,7 @@ describe("setup guide checklist", () => {
       ...base,
       session: { ...base.session, title: "Mang Inasal" },
       me: { ...base.me, displayName: "Kovie" },
-      participants: [...base.participants, { id: "g", displayName: "Ana", role: "GUEST" }],
+      participants: [...base.participants, { id: "g", displayName: "Ana", role: "GUEST", cohost: false }],
       rounds: [{ id: "r1", number: 1, status: "CONFIRMED", confirmedAt: "x" }],
       entries: [{ id: "e1", batchId: "b1", roundId: "r1", dishId: "d", dishName: "Sisig", quantity: 1, variant: null, instructions: null, createdAt: "x", revision: 1, submittedBy: "h", attribution: { type: "INDIVIDUAL", label: null, participantId: "h" } }],
       settlement: { entries: { e1: { unitCentavos: 100, billTo: null, revision: 1 } }, corrections: {}, defaults: {}, serviceCharge: { centavos: 0, revision: 1 }, receiptTotal: { centavos: null, revision: 0 }, adjustments: [] },

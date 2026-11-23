@@ -18,6 +18,7 @@ import { POST as UNAVAILABLE } from "@/app/api/sessions/[id]/dishes/[dishId]/una
 import { POST as ENTRY_RESTORE } from "@/app/api/sessions/[id]/entries/[entryId]/restore/route";
 import { DELETE as ENTRY_DELETE } from "@/app/api/sessions/[id]/entries/[entryId]/route";
 import { POST as READ } from "@/app/api/sessions/[id]/notifications/read/route";
+import { PUT as COHOST } from "@/app/api/sessions/[id]/participants/[pid]/cohost/route";
 import { POST as REMOVE } from "@/app/api/sessions/[id]/participants/[pid]/remove/route";
 import { PUT as PRICE } from "@/app/api/sessions/[id]/prices/route";
 import { PUT as READY } from "@/app/api/sessions/[id]/readiness/route";
@@ -26,7 +27,7 @@ import { POST as OPEN_ROUND } from "@/app/api/sessions/[id]/rounds/route";
 import { POST as SERVING } from "@/app/api/sessions/[id]/serving/route";
 import { GET as SYNC } from "@/app/api/sessions/[id]/sync/route";
 import { preparationKey } from "@/lib/consolidate";
-import { notificationText, type NotificationType } from "@/lib/notifications";
+import { notificationTarget, notificationText, type NotificationType } from "@/lib/notifications";
 import type { Actor } from "@/lib/permissions";
 import { proxy } from "@/proxy";
 import { resolveActor } from "@/server/auth/actor";
@@ -157,7 +158,10 @@ const unavailable = (t: Room, dishId: string, body: Record<string, unknown> = {}
 const ready = (t: Room, p: Person, v: boolean) => call(READY, t.sid, p.who, { method: "PUT", path: "/readiness", body: { ready: v } });
 const removeGuest = async (t: Room, p: Person) => ok(await call(REMOVE, t.sid, t.host.who, { path: `/participants/${p.id}/remove`, params: { pid: p.id }, body: {} }));
 const closeOrder = (t: Room, who = t.host.who) => call(CLOSE, t.sid, who, { path: "/close" });
-const serve = (t: Room, roundId: string, lineKey: string, delta: number) => call(SERVING, t.sid, t.host.who, { path: "/serving", body: { roundId, lineKey, delta } });
+const serve = async (t: Room, roundId: string, lineKey: string, delta: number) => {
+  const expectedServed = (await syncOf(t.sid, t.host.who)).servedCounts.find((c) => c.roundId === roundId && c.lineKey === lineKey)?.served ?? 0;
+  return call(SERVING, t.sid, t.host.who, { path: "/serving", body: { roundId, lineKey, delta, expectedServed } });
+};
 const correct = (t: Room, body: Record<string, unknown>) => call(CORRECTION, t.sid, t.host.who, { path: "/corrections", body });
 const setPrice = (t: Room, dishId: string, variant: string | null, unitCentavos: number | null, expectedRevision: number) =>
   call(PRICE, t.sid, t.host.who, { method: "PUT", path: "/prices", body: { dishId, variant, unitCentavos, expectedRevision } });
@@ -398,6 +402,16 @@ describe("notifications: who is told about what", () => {
     await openRound(t);
     expect((await dbTypes(t.sid, t.cy.id)).sort()).toEqual(["round.confirmed", "round.opened"]);
     expect(await countOf(t.sid, dee.who, "round.confirmed")).toBe(1);
+  });
+
+  it("E13 co-host set / revoked -> only that guest, with the host's name; assigning again after a revoke tells again; the same value twice tells once", async () => {
+    const t = await room();
+    for (const cohost of [true, true, false, true]) ok(await call(COHOST, t.sid, t.host.who, { method: "PUT", path: `/participants/${t.ana.id}/cohost`, params: { pid: t.ana.id }, body: { cohost } }));
+    expect((await typesOf(t.sid, t.ana.who)).sort()).toEqual(["participant.cohostRevoked", "participant.cohostSet", "participant.cohostSet"]);
+    for (const p of [t.bea, t.cy, t.host]) expect(await typesOf(t.sid, p.who)).toEqual([]);
+    const set = (await box(t.sid, t.ana.who)).items.find((i) => i.type === "participant.cohostSet")!;
+    expect(notificationText(set)).toContain("made you a co-host");
+    expect(notificationTarget("participant.cohostSet")).toBe("served");
   });
 
   it("E12 a refused or rolled back change leaves no notification (stale confirm, guest marking unavailable, unknown dish)", async () => {

@@ -99,6 +99,7 @@ export type CorrectionBatchInput = z.infer<typeof correctionBatchSchema>;
 export const unavailableSchema = z.object({ replacement: optional(LIMITS.dishName), note: optional(LIMITS.instructions) });
 export type UnavailableInput = z.infer<typeof unavailableSchema>;
 
+export const cohostSchema = z.object({ cohost: z.boolean() });
 export const removeParticipantSchema = z.object({ reason: z.string().trim().max(LIMITS.removalReason, `Keep the reason under ${LIMITS.removalReason} characters.`).nullish() });
 
 /** Whole centavos; null clears (unknown price / service charge not entered). */
@@ -179,6 +180,8 @@ export type RenameMeInput = z.infer<typeof renameMeSchema>;
 export const servingSchema = z.object({
   roundId: z.uuid(),
   lineKey: z.string().min(1).max(600),
+  /** The count the sender saw; a mismatch applies nothing (two people tapping one plate). */
+  expectedServed: z.number().int().min(0).max(999),
   delta: z.number().int().min(-999).max(999).refine((n) => n !== 0, "Nothing to change."),
 });
 export type ServingInput = z.infer<typeof servingSchema>;

@@ -10,8 +10,8 @@ Each slice ships as its own branch and squash PR into `dev` (HANDOFF working rul
 |---|---|---|---|---|
 | 0 | Phase 0 | Audit (`salo-v1-4-audit.md`) + this plan | — | done (decisions answered 2026-11-23) |
 | 1 | F01 + F11 (pricing part) | Price status in What's next, quick-entry Prices sheet, draft persistence, guest "so far" label | none | landed (PR #51) |
-| 2 | F02, F03 | Receipt adjustments, allocation methods A–E, adjusted vs actual totals | 0013 | landed (PR pending) |
-| 3 | F04 (+F12 lock fix) | Co-hosts, `can()` capability map, role re-check under lock, serving precondition | 0014 | not started |
+| 2 | F02, F03 | Receipt adjustments, allocation methods A–E, adjusted vs actual totals | 0013 | landed (PR #52) |
+| 3 | F04 (+F12 lock fix) | Co-hosts, `can()` capability map, role re-check under lock, serving precondition | 0014 | landed (PR pending) |
 | 4 | F05, F06 | Multiple receipts, shared-dish splits | 0015 | not started |
 | 5 | F07 | Payment ledger, derived balances | 0016 | not started |
 | 6 | F08, F09 | My order sheet, host transfer | 0017 | not started |
@@ -220,7 +220,7 @@ M5 guest under 430 (D11 a), 320:
 
 ## Slice 2: receipt adjustments and allocation (F02, F03)
 
-Status: landed (PR pending)
+Status: landed (PR #52)
 
 Research brief (2026-11-23, researcher) cited below; baseline in `.shots/before/` (seed: `.shots/before/seed.mjs`, index `README.md`; slice 1 shots moved to `.shots/v1-4-slice1/`). Pre-existing, seen in baseline: "Show the 2 without a price" overflows the right edge in `kkb-long-names-320` (not this slice's scope unless verify flags it).
 
@@ -462,3 +462,160 @@ M3 Other: under Reason, "Credit? Choose Discount, Other."
 M6 Ended banner (host and guest): `This order has ended. Everyone can still look at the tickets until Nov 30. The host can still fix prices and the bill.`
 
 M5 Dock while unresolved: `[ My share so far · ₱828 ]` / short `[ Share so far ₱828 ]`.
+
+## Slice 3: co-hosts and safe serving (F04, F12 lock fix)
+
+Status: landed (PR pending)
+
+Research brief (2026-11-23, researcher) cited below; baseline in `.shots/before/` (slice 2 shots moved to `.shots/v1-4-slice2/`). D2 (`participants.cohost_at`) and D3 (count precondition) are already decided. Pre-existing, seen in baseline: at 320 long guest names wrap to 3–4 lines and squeeze the Ready chip (chip text wraps) in `people-host-long-names-320`; the "Kain na!" toast covers a row above the dock there. Not this slice's scope unless D17's control makes it worse.
+
+### Ask ledger (slice 3)
+
+Brief F04 quoted from `salo-v1-4-brief.md:382-440`, F12 scenarios from `:762-800`.
+
+| # | Owner's words | Planned change | Status |
+|---|---|---|---|
+| S3.1 | "Introduce an optional **Co-host** role. Co-hosts assist with food tracking but do not receive complete administrative privileges." | `participants.cohost_at`; `can()` grants a co-host `serving.update` only | done |
+| S3.2 | Permission table: co-host "Update serving quantities: Yes", "Undo serving updates: Yes"; "Confirm rounds / Correct confirmed orders / Manage participants / Manage billing adjustments / Assign co-hosts / End session: No" | Co-host gets the stepper and All served; "Change…" (corrections, `round.open`) stays host-only; every other host check unchanged | done |
+| S3.3 | "The host can: Promote guests to co-hosts. Revoke co-host permissions. View which participants are co-hosts." | People tab card: "· co-host" mark (everyone sees it), host control "Make co-host" / "Stop co-host" (D17) | done |
+| S3.4 | "Co-hosts can: Mark portions as served. Update partial-serving quantities. Undo incorrect serving updates. View serving progress." | Same Served section as the host (stepper ±, All served, done rows reopen); undo = stepping down, as today | done |
+| S3.5 | "Implement explicit capability checks such as `serving.update`." / "Enforce permissions in server-side mutations." | `can(actor, "serving.update")` with a `cohost` actor field; server is the authority | done |
+| S3.6 | "Revalidate capabilities on every write." / "Ensure revoked co-hosts cannot continue updating food." / F12 "Host revokes a co-host while an update is pending." | `runMutation` re-reads role + `cohost_at` under the session lock and hands the fresh actor to `apply` (all mutations, not only serving) | done |
+| S3.7 | "Handle simultaneous serving changes atomically." / F12 "Two co-hosts mark the same dish served simultaneously." | D3: request carries `expectedServed`; mismatch applies nothing and returns the current count | done |
+| S3.8 | "Clamp served quantities to valid bounds." | Kept (`serving.ts:36`) | done |
+| S3.9 | "Preserve idempotency on retries." | Unchanged replay path (`mutations.ts:59-75` runs before `apply`), retry keeps key and its original seen count | done |
+| S3.10 | "Record the actor responsible for serving updates when practical." | Already: `served_counts.updated_by` + `mutation_records.actor_id`; add `actorId` to the `serving.updated` event payload. No UI | done |
+| S3.12 | D19 (owner): hint for the host | M4 line in the host's Served section | done |
+| S3.11 | F12 potential events "Co-host assigned. Co-host revoked." / Phase 3 "Realtime status propagation." | Events `participant.cohostSet` / `participant.cohostRevoked` (refetch makes it live); notification to that person per D18 | done |
+
+### Today
+
+- `can()` is a flat host-only set; `serving.update` is in `HOST_ONLY` (`src/lib/permissions.ts:31-36`). Actor resolved before the transaction (`auth/actor.ts:13-46`); routes close over it (`serving/route.ts:11,16`).
+- `runMutation` locks the session and re-checks only `removedAt` (`mutations.ts:51-57`), so a write queued behind a role change lands with the old role (audit F12 gap).
+- Serving: `updateServed` checks `can` (`serving.ts:15`), clamps `before = min(stored, expected)` and applies the delta (`:35-36`); `served_counts.revision` written, never checked (`:37`). Two taps for the same plate both land.
+- Client: `src/hooks/use-served-edits.ts` coalesces taps (300 ms, `:7`), POSTs `{roundId, lineKey, delta}` with a key (`:56-62`), retries same key on Try again / `online` (`:89-93`). Edits are in memory only.
+- UI: `ServedSection canEdit={isHost && sessionOpen}` (`workspace.tsx:233`) gates stepper, All served, done-row reopen and "Change…" together (`served-section.tsx:79-151`).
+- People tab card heading shows "(you)" and "· host" (`people-view.tsx:138-143`); host's right cluster has the Ready pill, item count and a `UserX` icon opening `RemoveGuestSheet` (`:144-162`).
+- Snapshot participants are `{id, displayName, role}`, `me` is `{participantId, role, displayName}` (`sessions/snapshot.ts:73-76`, `lib/snapshot.ts:16,21`). Any SSE event refetches the snapshot (`use-session.ts:292-293`).
+- Latest migration `0013_adjustments`.
+
+### Approach
+
+- **Migration 0014** (`drizzle/0014_cohosts.sql`): `participants.cohost_at timestamptz NULL`; CHECK `cohost_at IS NULL OR (role = 'GUEST' AND removed_at IS NULL)`. Additive; rollback drops the column. `docs/data-model.md` line. (`notifications.type` is plain text, `schema.ts:462`: no CHECK to change.)
+- **Permissions**: `Actor.cohost?: boolean` (optional so test literals compile); `can(actor: Pick<Actor,"role"|"cohost">)` returns true for `serving.update` when `actor.cohost`. New action `cohost.set` in `HOST_ONLY` (brief §6's `participant.cohost.assign/revoke`, adapted to one action). `resolveActor` selects `cohostAt`. Client: `canServe = can(snapshot.me, "serving.update") && sessionOpen`, so the capability map stays the single source; `canEditEntry` (`workspace.tsx:310`) is the only other client caller and needs nothing.
+- **Lock re-check (F12)**: per D20. `runMutation` selects `{removedAt, role, cohostAt}` under the lock and builds `fresh = {...actor, role, cohost}`. Replay still runs first (a replay is an earlier legitimate write).
+- **Assign / revoke**: `PUT /api/sessions/[id]/participants/[pid]/cohost` body `{cohost: boolean}`, modelled on `participants/[pid]/remove/route.ts`; host only, not on closed orders. Target loaded `FOR UPDATE` like `loadGuest` (`people.ts:182-192`) but: host → 409 `NOT_A_GUEST`, removed → 409 `ALREADY_REMOVED` (else the CHECK would 500), unknown → 404. Same value → 200 no-op, same event type, no notification. Key type `participant.cohost:<pid>`. Events `participant.cohostSet` / `participant.cohostRevoked` (payload ids only), both in `NON_TICKET_EVENTS` (`settlement.ts:15`) so the host's pending Confirm stays fresh. `removeParticipant` clears `cohost_at` in the same `UPDATE` as `removed_at` (`people.ts:~208`, required by the CHECK); `restoreParticipant` (`people.ts:226`) leaves it null, so Undo gives a plain guest.
+- **Notifications (D18)**: `NotificationType` (`lib/notifications.ts:3`) gains `participant.cohostSet` / `participant.cohostRevoked`; cases in the exhaustive `notificationText` (`:35-58`); `notificationTarget` cohostSet → `"served"`, cohostRevoked → `"order"`. Recipients `[pid]`; subject carries the host's display name; dedup key `cohost:<pid>:<session.revision+1>` (a re-assign after a revoke must notify again; `notify` is `onConflictDoNothing`). Rows in `docs/contracts/notifications.md` + `tests/contract-notifications.test.ts`.
+- **Client assign / revoke**: per D21. Queued path = new `Op` kind `setCohost {participantId, name, cohost}` in `use-session.ts` (union `:48`, `OP_KINDS` `:87`, `request()` `:137` PUT, `describeOp()` `:183`: "Make {name} a co-host" / "Stop {name}'s co-host role"). Control component `cohost-toggle.tsx` (button + its busy/error text); `workspace.tsx` (794/800 lines) gets only prop plumbing.
+- **Serving precondition (D3)**: `servingSchema` gains required `expectedServed` (int ≥ 0). `updateServed` checks `can(fresh, "serving.update")` and compares `expectedServed` with the clamped `before`. Result shape `{served, revision, applied}` (`revision` = the served row's, 0 if none; `applied: true` also on a clamped no-op, V13). Mismatch → `{served: before, revision, applied: false}`; `served_counts` and notifications untouched; `runMutation` still writes session revision +1, one `serving.updated` event and the mutation record (so a replay returns the same `applied: false`). This is not a refusal; the contract doc says so. Event payload gains `actorId`. Forbidden copy: "Only the host and co-hosts can mark food as served."
+- **Client hook** (`src/hooks/use-served-edits.ts`): `bump` gains a `seen` argument; `ServedSection` passes `row.line.shown + (edit?.sending ?? 0)` (server count the row stood on, counting a batch in flight). The hook stores `seen` on the edit when its first unsent tap lands (`unsent` 0 → non-zero) and sends it as `expectedServed`; later taps in the same 300 ms batch don't change it; a retry keeps key and `seen`; the next batch takes `seen` from its own first tap, never from a response. Response at `data.result.applied` (`ok()` wraps `{result, revision, replayed}`, `http.ts:15`). On `applied: false`: await `refresh()` as on success, then clear `sending`, `unsent`, key; no `failed`, no flash of the stale count. Hook signature `useServedEdits(sessionId, refresh, revision, canServe)`: when `canServe` turns false, or a serving POST returns 403, drop all edits and timers (no stuck "Couldn't save this" row).
+- **UI**:
+  - `workspace.tsx`: `canServe` to `ServedSection` `canEdit`; new prop `canChange = isHost && sessionOpen` gates both `changeButton` call sites (`served-section.tsx:~75,~140`).
+  - People card (M1): "· co-host" after the name for everyone; host control per D17, gated like `onRemoveGuest` (`people-view.tsx:152`: participant bucket, GUEST, not removed).
+  - Co-host: D18 notification + M3 note at the top of their Served section (shown while `me.cohost` and the section renders). Host: M4 quiet line at the bottom of the Served section when the order is open, no co-host and ≥1 active guest; not dismissible; its link calls `onOpenPeople` → `setView("people")`.
+  - Snapshot: `participants[].cohost`, `me.cohost` (boolean; `snapshot.ts:~23` selects `cohostAt`, `me.cohost` from that row, not the actor); `everyone()` (`lib/snapshot.ts:119`) sets `cohost:false` for removed people; `PersonBucket.cohost`. Literals in `tests/overlay.test.ts:24`, `tests/guide.test.ts:7,10` updated.
+- **Copy siblings**: `docs/ux-specification.md:59,78` ("host's steppers" → host and co-hosts); `docs/api.md:46` role column "host or co-host" + new PUT row, `docs/realtime.md:12`, `docs/security.md` role line, `docs/contracts/serving.md` write rule; code comments `served-section.tsx:14,28`, `src/hooks/use-served-edits.ts:34`. `invite-sheet.tsx:122` and `workspace.tsx:217,656` stay true, unchanged.
+
+Rejected: a `COHOST` role value (D2); 409 on precondition mismatch (rolls back cleanly but the client needs a second round trip to learn the count; D3 says the stepper updates from the reply).
+
+### Reuse
+- `RemoveGuestSheet` trigger styling and `onRemoveGuest` gating (`workspace.tsx:687`) for the co-host control; `remove/route.ts` for the route shape.
+- Existing notification center (`notify`, `notifications-drawer.tsx`) for D18; SSE refetch for live updates.
+- `trackerLines` `shown` (`serving.ts:100`) as the seen count; `tests/helpers/session.ts` actor builders extended with a co-host helper.
+
+### Not doing
+- Any co-host capability beyond serving (confirm, corrections, people, billing, End stay host-only).
+- Host transfer (slice 6), co-host cap (bounded by participant limit), persisting serving edits across reload (slice 7 F12), a serving history / "marked by" UI.
+- Analytics events for co-hosts (brief asks none).
+- Guide copy changes (`guide-steps.ts:73` stays; the People control and D18/D19 are the prompts).
+
+### States
+
+| State | After |
+|---|---|
+| Host, People tab, guest | "· co-host" absent; control per D17 "Make co-host" |
+| Host, People tab, co-host | "Jun · co-host"; control "Stop co-host" |
+| Guest / co-host viewing People | "· co-host" mark, no controls |
+| Order ended | Marks stay; no controls (assign/revoke refused on closed orders) |
+| Co-host, Served section, open | M3 note on top; stepper, All served, done rows reopen; no "Change…" |
+| Co-host, order ended / no confirmed round | Read-only / section hidden, as guests today |
+| Plain guest | Unchanged read-only |
+| Two co-hosts tap the same plate | One lands; the other's row snaps to the new count, no error |
+| Revoked while a tap is pending | Write refused under the lock; controls disappear on refetch; no stuck "Couldn't save" row; notification per D18 |
+| Removed co-host, then Undo | Back as plain guest |
+| Assign/revoke saving / failed | Button "Saving…" (queued or waiting, D21) and keeps its place; a refused write shows the error text under the button and re-enables it; tapping again retries (new key) |
+| Host Served section, no co-host, guests present | M4 line "Busy table? Make a guest a co-host so they can help. →"; hidden once anyone is co-host, with no guests, or after End |
+| Tab opened before deploy (no `expectedServed`) | 422, failed row; accepted for this release |
+| Long names, 320 | Heading wraps; control 44 px on its own line under the heading (D17 a) |
+| Widths | 320, 360, 375, 390, 430, 768, 1280; light and dark |
+
+### Decisions
+
+Owner answers 2026-11-23: D17 (a), D18 (b) notification + M3 note, D19 (b) quiet hint line, D20 (a), D21 (a). M3 confirmed as sketched.
+
+- **D17 [decided: (a) own-line button] Where the host makes a co-host.** (a) Text button on its own line under the card heading, host only: "Make co-host" / "Stop co-host" (M1a); (b) replace the `UserX` icon with one "Manage Jun" sheet holding Make co-host + Remove (M1b); (c) a "Co-hosts" list with switches in the Order options sheet (M1c). Recommend (a): the right cluster is already full at 320 (pill + items + remove, `people-view.tsx:144-162`), a labelled button is clearer than a new icon, and it sits beside the "· co-host" mark the brief asks the host to see; (b) adds a tap to Remove; (c) hides it from where people are listed.
+- **D18 [decided: (b) notification + M3 note] How a new co-host finds out.** (a) Notification-center item to that person only: "{Host} made you a co-host. You can mark food as served." / "{Host} stopped your co-host role." (no M3 note); (b) (a) + M3 permanent note above their Served section; (c) M3 note only. Recommend (a): brief §7 lists "Co-host assigned / revoked" events, the notification is the first-use prompt, and a permanent note pushes steppers down at 320 (plan-critic).
+- **D19 [decided: (b) quiet non-dismissible line] Hint for the host in the Served section** (M4). (a) none, the People control is the entry point; (b) one quiet, non-dismissible line when no co-host and ≥1 guest, links to People. Recommend (a): no ask justifies it and it would show on every visit (plan-critic); the memory rule is met by the People control where people are managed.
+- **D20 [decided: (a) serving uses fresh, other writes ROLE_CHANGED guard] Scope of the lock re-check.** (a) `runMutation` passes `fresh` as an optional third `apply` argument; only `updateServed` uses it now; every other write throws 403 `ROLE_CHANGED` when `fresh.role !== actor.role` (covers slice 6's transfer in a few lines); (b) sweep all ~25 `apply` callers to use `fresh`. Recommend (a): same guarantee ("Revalidate capabilities on every write"), no behaviour change elsewhere this slice, ~25 fewer route edits.
+- **D21 [decided: (a) queued like remove] Offline co-host change.** (a) Queued like remove (`use-session.ts:87`), "Saving…" until reconnect, same key retries; (b) direct call that fails fast with "Not saved. Try again". Recommend (a): consistent with remove and ready; an offline host can't reach the server either way, and the server enforces the revoke the moment it lands.
+
+### Assumptions
+- Mobile scope: responsive + native feel (D6 carried); controls 44 px, no hover-only behaviour.
+- Precondition mismatch is a 200 `applied: false`, not 409 (Approach).
+- A tab opened before deploy sends no `expectedServed` and gets 422 (failed row) until reload; accepted.
+- `expectedServed` is required; the only clients are ours and `scripts/contract/serving-http.mjs` (updated).
+- Removing a co-host clears the role; Undo restores a plain guest.
+- No limit on co-hosts.
+- Co-hosts count as guests for readiness ("Ready / Still choosing", `people.ts:33`).
+- Assign/revoke refused on ended orders (no `allowClosed`).
+
+### Done when
+- `timeout 900 pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm e2e` pass (Postgres via `pnpm db:up`).
+- Unit: `tests/permissions.test.ts` co-host matrix (only `serving.update` true); `served-edits` helper: seen count, `applied:false` adoption, drop on revoke.
+- Contract (`tests/contract-serving.test.ts` + `docs/contracts/serving.md`): K01-K05 / V02-V04 / V13 / I02-I03 rewritten for the precondition; new rows: co-host 200, revoked co-host 403, demotion between `requireActor` and lock refused, mismatch returns current count with `served_counts` and notifications untouched (revision +1 and one event, as pinned), retry of a stale batch applies nothing, actorId in payload. New `tests/contract-cohosts.test.ts` + `docs/contracts/cohosts.md`: assign, revoke, idempotent same value, guest 403, target host 409 `NOT_A_GUEST`, removed 409 `ALREADY_REMOVED`, unknown 404, re-assign after revoke notifies again, closed 409, removal clears, events keep Confirm fresh.
+- E2E (`e2e/cohosts.spec.ts`): host makes Jun co-host, Jun sees the note and steppers live, marks one served, host sees it; Liza (guest) still read-only; host revokes, Jun's controls vanish; two co-host tabs tap the same plate, count ends at one; axe light/dark on People and Served. `food-tracker.spec.ts` stays green.
+- Manual: shots of every state above.
+
+### Skills
+- `impeccable` + `.impeccable/surfaces/src-app.md`: Operate surface.
+- `database-migrations`: 0014 (`pnpm db:generate`).
+- `backend-patterns` + `contract-first`: route, contract docs; read `node_modules/next/dist/docs/` per AGENTS.md.
+- `frontend-a11y` / `accessibility`: button names ("Make Jun a co-host"), live status.
+- `mobile-native`: 44 px targets.
+
+### You need to do
+- [ ] After merge, the first app start runs migration 0014 (watch logs).
+
+### Mockups (slice 3, text sketch)
+
+M1a People card, host, 375 (D17 a):
+```
+┌──────────────────────────────────────────────┐
+│ Jun · co-host        [✓ Ready] 3 items  (⊗)  │
+│ [ Stop co-host ]                             │
+│ Sisig ×2 · Halo-halo                         │
+└──────────────────────────────────────────────┘
+┌──────────────────────────────────────────────┐
+│ Liza          [◷ Still choosing] 2 items (⊗) │
+│ [ Make co-host ]                             │
+│ Chicken Inasal ×2                            │
+└──────────────────────────────────────────────┘
+```
+M1b (D17 b): right cluster `[✓ Ready] 3 items (⋯)`; ⋯ opens "Jun" sheet: `[Make co-host]` `[Remove from the order]`.
+M1c (D17 c): Order options sheet section "Co-hosts · can mark food served" with a switch per guest.
+
+M2 People card, guest or co-host viewing: `Jun · co-host   [✓ Ready] 3 items` (no buttons).
+
+M3 Co-host's Served section, 375:
+```
+Served
+You're a co-host: you can mark food as served.
+Sisig                              [ − 1 + ]
+1 of 2 served · 1 waiting
+[ ✓ All served ]
+```
+(no "Change…")
+
+M4 Host's Served section footer (D19 a): `Busy table? Make a guest a co-host so they can help. →`
+
+D18 notifications: "Ana made you a co-host. You can mark food as served." / "Ana stopped your co-host role."

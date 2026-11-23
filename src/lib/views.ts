@@ -10,6 +10,7 @@ export interface PersonBucket {
   title: string;
   participantId: string | null;
   role: Person["role"] | null;
+  cohost: boolean;
   entries: SnapshotEntry[];
   ticket: Consolidated;
 }
@@ -23,7 +24,7 @@ export function byPerson(entries: readonly SnapshotEntry[], people: readonly Per
   const individual = entries.filter((e) => e.attribution.type === "INDIVIDUAL");
   const joined: PersonBucket[] = people.map((p) => {
     const mine = individual.filter((e) => e.attribution.participantId === p.id);
-    return { key: `p:${p.id}`, kind: "participant", title: p.displayName, participantId: p.id, role: p.role, entries: mine, ticket: consolidate(mine) };
+    return { key: `p:${p.id}`, kind: "participant", title: p.displayName, participantId: p.id, role: p.role, cohost: p.cohost, entries: mine, ticket: consolidate(mine) };
   });
   const names = new Map<string, SnapshotEntry[]>();
   for (const e of individual) {
@@ -31,12 +32,12 @@ export function byPerson(entries: readonly SnapshotEntry[], people: readonly Per
     const key = normalizeText(e.attribution.label);
     names.set(key, [...(names.get(key) ?? []), e]);
   }
-  const typed: PersonBucket[] = [...names.entries()].map(([key, list]) => ({ key: `n:${key}`, kind: "name", title: list[0].attribution.label ?? "", participantId: null, role: null, entries: list, ticket: consolidate(list) }));
+  const typed: PersonBucket[] = [...names.entries()].map(([key, list]) => ({ key: `n:${key}`, kind: "name", title: list[0].attribution.label ?? "", participantId: null, role: null, cohost: false, entries: list, ticket: consolidate(list) }));
   const table = entries.filter((e) => e.attribution.type === "TABLE");
   const nobody = entries.filter((e) => e.attribution.type === "UNASSIGNED" || (e.attribution.type === "INDIVIDUAL" && !e.attribution.participantId && !e.attribution.label));
   const extra: PersonBucket[] = [];
-  if (table.length) extra.push({ key: "table", kind: "table", title: "Whole table", participantId: null, role: null, entries: table, ticket: consolidate(table) });
-  if (nobody.length) extra.push({ key: "unassigned", kind: "unassigned", title: "Not assigned", participantId: null, role: null, entries: nobody, ticket: consolidate(nobody) });
+  if (table.length) extra.push({ key: "table", kind: "table", title: "Whole table", participantId: null, role: null, cohost: false, entries: table, ticket: consolidate(table) });
+  if (nobody.length) extra.push({ key: "unassigned", kind: "unassigned", title: "Not assigned", participantId: null, role: null, cohost: false, entries: nobody, ticket: consolidate(nobody) });
   return [...joined, ...typed, ...extra];
 }
 

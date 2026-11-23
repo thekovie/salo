@@ -8,9 +8,9 @@ function e(dish: string, quantity: number, submittedBy: string, attribution: Sna
   return { id: `e${n}`, batchId: `b${n}`, roundId: "r", dishId: `d-${dish}`, dishName: dish, quantity, variant: null, instructions: null, createdAt: `2026-11-06T12:00:${String(n).padStart(2, "0")}Z`, revision: 1, submittedBy, attribution, ...extra };
 }
 const people = [
-  { id: "h", displayName: "Host", role: "HOST" as const },
-  { id: "rafa", displayName: "Rafa", role: "GUEST" as const },
-  { id: "jd", displayName: "JD", role: "GUEST" as const },
+  { id: "h", displayName: "Host", role: "HOST" as const, cohost: false },
+  { id: "rafa", displayName: "Rafa", role: "GUEST" as const, cohost: false },
+  { id: "jd", displayName: "JD", role: "GUEST" as const, cohost: false },
 ];
 const none = { type: "UNASSIGNED" as const, label: null, participantId: null };
 

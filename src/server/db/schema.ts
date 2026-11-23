@@ -83,11 +83,14 @@ export const participants = pgTable(
     removedAt: timestamp("removed_at", { withTimezone: true }),
     /** Optional, shown only to the removed guest. */
     removedReason: text("removed_reason"),
+    /** Set while the host lets this guest help mark food served (F04). Cleared on removal. */
+    cohostAt: timestamp("cohost_at", { withTimezone: true }),
   },
   (t) => [
     index("participants_session_idx").on(t.sessionId),
     check("participants_role_ck", inList("role", ROLES)),
     check("participants_removed_ck", sql`(removed_at IS NULL OR role = 'GUEST') AND (removed_reason IS NULL OR (removed_at IS NOT NULL AND char_length(removed_reason) <= 140))`),
+    check("participants_cohost_ck", sql`cohost_at IS NULL OR (role = 'GUEST' AND removed_at IS NULL)`),
     // Exactly one host per session.
     uniqueIndex("participants_one_host_uq").on(t.sessionId).where(sql`role = 'HOST'`),
   ],

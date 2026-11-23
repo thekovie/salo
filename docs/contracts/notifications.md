@@ -1,7 +1,7 @@
 # Golden contract: notifications (recipient delivery, privacy, `POST /api/sessions/:id/notifications/read`)
 
 Sources: **P** = docs/plans/salo-v1-3.md (A13, A14, D9, D12, Pinned "Notifications", Assumptions on events/recipients and mark-read), **A** = docs/api.md (read route row, shared conventions), **S** = docs/security.md (Notifications), **D** = docs/data-model.md, **R** = docs/realtime.md, **B** = the testing brief.
-Suite: `pnpm vitest run tests/contract-notifications.test.ts` (42 scenarios, real Postgres `salo_test`, real route handlers, faked cookie jar, one raw LISTEN connection for pg_notify).
+Suite: `pnpm vitest run tests/contract-notifications.test.ts` (43 scenarios, real Postgres `salo_test`, real route handlers, faked cookie jar, one raw LISTEN connection for pg_notify).
 Read body: `{ ids: uuid[] (1..50) } | { all: true }`. Success: `200 { data: { marked } }` (A). Failure: `{ error: { code, message } }` (A). Delivery: `GET /sync` returns `notifications: { items: [{ id, type, subject, createdAt, readAt }] (latest 50, newest first), unread }` (A, P).
 Interpretations the spec leaves open (suite accepts either, never a 5xx): `ids` with duplicates, an unknown extra key, the nil uuid, an uppercase uuid (200 or 422); a body over 8 KB is 413 or 422; a removed guest is 403 REMOVED or 404; `null` body is 422 or 400.
 Test-only interpretations, flagged in the scenario name: E03 (each recipient's `subject` numbers are their own), E06b (a table-wide dish with that dish + size makes a price change reach every guest).
@@ -24,6 +24,7 @@ Test-only interpretations, flagged in the scenario name: E03 (each recipient's `
 | E09b | order ended with nothing confirmed | | every guest | P |
 | E10 | routine dish additions, edits, remove/restore, partial ready, by host and guests, all attribution kinds | | no notification rows at all | P, B |
 | E11 | late joiner / removal | Dee joins after events; Cy removed, then another round confirmed and opened | Dee starts `{ items: [], unread: 0 }`; removing Cy writes no row; Cy gets nothing afterwards | P |
+| E13 | co-host set / revoked (D18) | host sets Ana, again (no-op), revokes, sets again | Ana only: `participant.cohostSet` x2 and `participant.cohostRevoked` x1 (target "served" for set); text names the host; not Bea, Cy, host | S3 D18 |
 | E12 | refused or rolled back change | stale confirm (409), guest marks unavailable (403), unknown dish (404) | no notification rows | P (same transaction), A14 |
 
 ## Undo

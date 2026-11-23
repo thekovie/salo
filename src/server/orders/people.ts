@@ -179,13 +179,18 @@ async function openEntriesOf(tx: Tx, sessionId: string, participantId: string, d
     );
 }
 
-async function loadGuest(tx: Tx, sessionId: string, participantId: string) {
+async function loadTarget(tx: Tx, sessionId: string, participantId: string) {
   const [person] = await tx
-    .select({ id: participants.id, role: participants.role, removedAt: participants.removedAt })
+    .select({ id: participants.id, role: participants.role, removedAt: participants.removedAt, cohostAt: participants.cohostAt })
     .from(participants)
     .where(and(eq(participants.id, participantId), eq(participants.sessionId, sessionId)))
     .for("update");
   if (!person) throw new AppError(404, "PERSON_NOT_FOUND", "That person isn’t in this order.");
+  return person;
+}
+
+async function loadGuest(tx: Tx, sessionId: string, participantId: string) {
+  const person = await loadTarget(tx, sessionId, participantId);
   if (person.role === "HOST") throw new AppError(409, "CANNOT_REMOVE_HOST", "The host can’t be removed.");
   return person;
 }
@@ -205,11 +210,25 @@ export async function removeParticipant(tx: Tx, session: SessionRow, actor: Acto
   for (const entry of entries) {
     await tx.update(orderEntries).set({ deletedAt: now, updatedAt: now, revision: entry.revision + 1 }).where(eq(orderEntries.id, entry.id));
   }
-  await tx.update(participants).set({ removedAt: now, removedReason: reason }).where(eq(participants.id, participantId));
+  await tx.update(participants).set({ removedAt: now, removedReason: reason, cohostAt: null }).where(eq(participants.id, participantId));
   await tx.update(entryClaims).set({ status: "REJECTED", resolvedAt: now }).where(and(eq(entryClaims.requestedBy, participantId), eq(entryClaims.status, "PENDING")));
   await tx.delete(participantRoundReadiness).where(eq(participantRoundReadiness.participantId, participantId));
   await tx.delete(orderGroupMembers).where(eq(orderGroupMembers.participantId, participantId));
   return { result: { removedEntries: entries.length }, event: { type: "participant.removed", payload: { participantId } } };
+}
+
+/** The host lets a guest help mark food served, or takes that back. Same value again is a no-op (no second notice). */
+export async function setCohost(tx: Tx, session: SessionRow, actor: Actor, participantId: string, cohost: boolean): Promise<Applied<{ cohost: boolean }>> {
+  if (!can(actor, "cohost.set")) throw forbidden("Only the host can do that.");
+  const person = await loadTarget(tx, session.id, participantId);
+  if (person.role === "HOST") throw new AppError(409, "NOT_A_GUEST", "The host can already mark food as served.");
+  if (person.removedAt) throw new AppError(409, "ALREADY_REMOVED", "They were already removed.");
+  const type = cohost ? "participant.cohostSet" : "participant.cohostRevoked";
+  const event = { type, payload: { participantId } };
+  if ((person.cohostAt !== null) === cohost) return { result: { cohost }, event };
+  await tx.update(participants).set({ cohostAt: cohost ? new Date() : null }).where(eq(participants.id, participantId));
+  await notify(tx, session.id, { type, subject: { host: actor.displayName }, recipients: [participantId], dedupKey: `cohost:${participantId}:${session.revision + 1}`, actorId: actor.participantId });
+  return { result: { cohost }, event };
 }
 
 /** The host's Undo: the guest is back, and the dishes that left with them return if their round is still open. */

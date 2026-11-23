@@ -1,0 +1,2 @@
+ALTER TABLE "participants" ADD COLUMN "cohost_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "participants" ADD CONSTRAINT "participants_cohost_ck" CHECK (cohost_at IS NULL OR (role = 'GUEST' AND removed_at IS NULL));
