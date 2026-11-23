@@ -1,5 +1,5 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { addDish, confirmRound1, inviteCode, joinAsGuest, openDetail, startOrder } from "./support/helpers";
 
 // Slice 8 measurements and 320 px screenshots. Skipped unless MEASURE=1:
@@ -93,7 +93,7 @@ test("dock heights, Served row heights and 320 screenshots", async ({ page, brow
   await served.scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${DIR}/served-320.png` });
   numbers.myShareDock = await dock(page);
-  await page.getByRole("button", { name: /^(My )?share/i }).scrollIntoViewIfNeeded();
+  await page.getByRole("button", { name: /^((My )?share|Enter prices ·)/i }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${DIR}/my-share-dock-320.png` });
 
   // Round 2+: host (My share + Review order) and guest (My share + I'm ready + Ticket), 320 and 375.
@@ -175,4 +175,40 @@ test("follow-ups 22-24: Tab through the empty composer, round-2 docks", async ({
   }
   await writeFile(`${AFTER}/numbers.json`, JSON.stringify(numbers, null, 2));
   console.log(JSON.stringify(numbers));
+});
+
+// D11: the incomplete labels ("Share so far ₱X", "Share · no prices yet") and the host's "Enter prices · n left" stay one row.
+test("incomplete share labels stay on one row at 320 and 360", async ({ page, browser }) => {
+  test.setTimeout(120_000);
+  const guest = await (async () => {
+    await startOrder(page);
+    return joinAsGuest(browser, await inviteCode(page), "JD");
+  })();
+  await addDish(page, "Sisig");
+  await addDish(guest.page, "Iced Tea");
+  await addDish(guest.page, "Sinigang");
+  await expect(page.getByTestId("dish-row").filter({ hasText: "JD" })).toHaveCount(2, { timeout: 15_000 });
+  await confirmRound1(page);
+  const rows: Record<string, unknown> = {};
+  const measure = async (who: string) => {
+    for (const width of [320, 360]) {
+      await page.setViewportSize({ width, height: 640 });
+      await guest.page.setViewportSize({ width, height: 640 });
+      await page.waitForTimeout(400);
+      for (const [name, p] of [["host", page], ["guest", guest.page]] as const) {
+        const b = await bar(p);
+        rows[`${who}_${name}_${width}`] = b;
+        for (const button of b.buttons) expect(button.h, `${who} ${name} ${width}: ${button.text}`).toBeLessThanOrEqual(48);
+      }
+    }
+  };
+  await measure("none");
+  await page.getByRole("button", { name: /Enter prices ·/ }).click();
+  const price = page.getByRole("dialog", { name: "Enter prices" }).getByRole("textbox", { name: "Price each for Iced Tea" });
+  await price.fill("60");
+  await price.press("Enter");
+  await expect(guest.page.getByRole("button", { name: /Share so far ₱60/ })).toBeVisible({ timeout: 15_000 });
+  await page.getByRole("dialog", { name: "Enter prices" }).getByRole("button", { name: "Close" }).click();
+  await measure("sofar");
+  console.log(JSON.stringify(rows));
 });

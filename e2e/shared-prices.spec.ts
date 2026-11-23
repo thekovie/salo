@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { inviteCode, joinAsGuest, startOrder } from "./support/helpers";
+import { inviteCode, joinAsGuest, startOrder, openKkb } from "./support/helpers";
 
 async function addLarge(page: import("@playwright/test").Page, dish: string, price?: string) {
   await page.getByRole("textbox", { name: "Dish" }).fill(dish);
@@ -31,7 +31,7 @@ test("table price: one price for every Chicken Katsu (Large), shown live to the 
   await expect(waiter.getByRole("region", { name: "Round 1, confirmed with the waiter" })).toBeVisible();
   await page.getByRole("button", { name: "Back" }).click();
 
-  await page.getByRole("button", { name: "Enter receipt prices (KKB)" }).click();
+  await openKkb(page);
   const sheet = page.getByRole("dialog", { name: "Who ordered what" });
   const form = sheet.getByRole("form", { name: /Price for Chicken Katsu/ });
 
@@ -79,7 +79,7 @@ test("an untouched Save on a line with its own price changes nothing (not the ta
   await expect(waiter.getByRole("region", { name: "Round 1, confirmed with the waiter" })).toBeVisible();
   await page.getByRole("button", { name: "Back" }).click();
 
-  await page.getByRole("button", { name: "Enter receipt prices (KKB)" }).click();
+  await openKkb(page);
   const sheet = page.getByRole("dialog", { name: "Who ordered what" });
   const form = sheet.getByRole("form", { name: /Price for Chicken Katsu/ });
 

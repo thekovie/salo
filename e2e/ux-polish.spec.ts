@@ -76,7 +76,19 @@ test("My share: one tap opens KKB on your own card, for the guest and the host; 
   await expect(page.getByTestId("dish-row").filter({ hasText: "Iced Tea" })).toBeVisible();
   await expect(page.getByRole("button", { name: /^(My )?share/i })).toHaveCount(0);
   await confirmRound1(page);
+  // The host still has a price to enter, so the host's dock leads there instead of to "My share".
+  await expect(page.getByRole("button", { name: "Enter prices · 1 left", exact: true })).toBeVisible();
 
+  await expect(guest.page.getByRole("button", { name: "Share · no prices yet" })).toBeVisible({ timeout: 15_000 });
+  await guest.page.getByRole("button", { name: "Share · no prices yet" }).click();
+  const guestSheet = guest.page.getByRole("dialog", { name: "Who ordered what" });
+  await expect(guestSheet.getByRole("region", { name: /your share/ })).toBeFocused({ timeout: 15_000 });
+  await guestSheet.getByRole("button", { name: "Add price, Iced Tea" }).click();
+  await guestSheet.getByRole("form", { name: "Price for Iced Tea" }).getByLabel("Price each (₱)").fill("60");
+  await guestSheet.getByRole("form", { name: "Price for Iced Tea" }).getByRole("button", { name: "Save" }).click();
+  await guest.page.keyboard.press("Escape");
+  await expect(guest.page.getByRole("button", { name: "Share ₱60", exact: true })).toBeVisible({ timeout: 15_000 });
+  // Nothing is missing any more: the host's dock is "My share" again.
   // Under 430 px the visible short label is the whole accessible name (WCAG 2.5.3).
   const hostShare = page.getByRole("button", { name: "Share ₱240", exact: true });
   await expect(hostShare).toBeVisible();
@@ -89,16 +101,6 @@ test("My share: one tap opens KKB on your own card, for the guest and the host; 
   await expect(sheet.getByRole("tab", { name: "KKB" })).toHaveAttribute("aria-selected", "true");
   await expect(sheet.getByRole("region", { name: /your share/ })).toBeFocused({ timeout: 15_000 });
   await page.keyboard.press("Escape");
-
-  await expect(guest.page.getByRole("button", { name: "Share · no prices yet" })).toBeVisible({ timeout: 15_000 });
-  await guest.page.getByRole("button", { name: "Share · no prices yet" }).click();
-  const guestSheet = guest.page.getByRole("dialog", { name: "Who ordered what" });
-  await expect(guestSheet.getByRole("region", { name: /your share/ })).toBeFocused({ timeout: 15_000 });
-  await guestSheet.getByRole("button", { name: "Add price, Iced Tea" }).click();
-  await guestSheet.getByRole("form", { name: "Price for Iced Tea" }).getByLabel("Price each (₱)").fill("60");
-  await guestSheet.getByRole("form", { name: "Price for Iced Tea" }).getByRole("button", { name: "Save" }).click();
-  await guest.page.keyboard.press("Escape");
-  await expect(guest.page.getByRole("button", { name: "Share ₱60", exact: true })).toBeVisible({ timeout: 15_000 });
   await expect(guest.page.getByRole("button", { name: /Ticket/ })).toBeVisible();
   const dockAxe = await new AxeBuilder({ page: guest.page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
   expect(dockAxe.violations).toEqual([]);

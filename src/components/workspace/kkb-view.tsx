@@ -4,13 +4,13 @@ import { Check, CircleAlert, CircleCheck, Copy, Pencil, Share2 } from "lucide-re
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { normalizeText } from "@/lib/dish-name";
-import { confirmedIds, effectiveEntry } from "@/lib/effective-order";
 import { track } from "@/lib/analytics";
-import { buildKkb, kkbText, priceCompleteness, type Kkb, type KkbLine, type KkbSection } from "@/lib/kkb";
+import { buildKkb, kkbText, priceCompleteness, tableLines, type Kkb, type KkbLine, type KkbSection } from "@/lib/kkb";
 import { formatPeso } from "@/lib/money";
 import type { SessionSnapshot } from "@/lib/snapshot";
 import { cn } from "@/lib/utils";
 import { HostNamePrompt } from "./host-name-prompt";
+import { PricesSheet } from "./prices-sheet";
 import { PriceEditor, type Payer, type TablePrice } from "./price-editor";
 import { ReceiptCheckBlock } from "./receipt-check-block";
 import { ServiceChargeBlock } from "./service-charge-block";
@@ -40,6 +40,7 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
   const isOpen = snapshot.session.status === "OPEN";
   const kkb = useMemo(() => buildKkb(snapshot, meId), [snapshot, meId]);
   const [editing, setEditing] = useState<string | null>(null);
+  const [pricesOpen, setPricesOpen] = useState(false);
   const [copy, setCopy] = useState<"idle" | "copied" | "error">("idle");
   // Which cards start open is decided once, so a card doesn't snap shut while the host is pricing it.
   const [startOpen] = useState(() => new Set(kkb.sections.filter((s) => s.shared || (isHost && (s.unpricedUnits > 0 || s.drafts.some((l) => l.unitCentavos == null)))).map((s) => s.key)));
@@ -55,18 +56,13 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
     return <p className="mt-6 rounded-2xl bg-paper px-4 py-6 text-center text-ink-soft">Nothing ordered yet. Prices show up here once there are dishes.</p>;
   }
 
-  const confirmedRounds = confirmedIds(snapshot.rounds);
+  const allLines = tableLines(snapshot);
   /** The table price a line could set: its dish + size, and how many lines would follow it (replacements never do). */
   const tableFor = (line: KkbLine): TablePrice | null => {
     const entry = snapshot.entries.find((e) => e.id === line.entryId);
     if (!entry || line.correctionId || !line.tableKey) return null;
     const size = normalizeText(entry.variant ?? "");
-    const followers = snapshot.entries.filter((e) => {
-      if (e.dishId !== entry.dishId || normalizeText(e.variant ?? "") !== size) return false;
-      if (e.id !== entry.id && snapshot.settlement.entries[e.id]?.unitCentavos != null) return false;
-      const now = effectiveEntry(e, snapshot.corrections, confirmedRounds);
-      return now.quantity > 0 && !now.replacementId;
-    });
+    const followers = allLines.filter(({ entry: e }) => e.dishId === entry.dishId && normalizeText(e.variant ?? "") === size && (e.id === entry.id || snapshot.settlement.entries[e.id]?.unitCentavos == null));
     const live = snapshot.settlement.defaults[line.tableKey];
     return { dishId: entry.dishId, variant: entry.variant, label: entry.variant ? `${entry.dishName} (${entry.variant})` : entry.dishName, lines: followers.length, live: { unitCentavos: live?.unitCentavos ?? null, revision: live?.revision ?? 0 } };
   };
@@ -119,7 +115,7 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
 
   return (
     <div className="mt-4 space-y-4" data-ph-mask="">
-      <StatusStrip kkb={kkb} />
+      <StatusStrip kkb={kkb} onEnterPrices={isHost && isOpen ? () => setPricesOpen(true) : undefined} />
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="outline" onClick={() => void copySummary()}>
           {copy === "copied" ? <Check className="size-5" aria-hidden /> : <Copy className="size-5" aria-hidden />}
@@ -166,6 +162,7 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
 
       <ServiceChargeBlock kkb={kkb} live={snapshot.settlement.serviceCharge} sessionId={snapshot.session.id} refresh={refresh} canEdit={isHost && isOpen} isHost={isHost} />
       <ReceiptCheckBlock kkb={kkb} live={snapshot.settlement.receiptTotal} sessionId={snapshot.session.id} refresh={refresh} canEdit={isHost && isOpen} />
+      {isHost && isOpen ? <PricesSheet open={pricesOpen} onOpenChange={setPricesOpen} snapshot={snapshot} refresh={refresh} /> : null}
     </div>
   );
 }
@@ -180,28 +177,39 @@ function showFirstUnpriced(key: string) {
   target?.focus();
 }
 
-function Completeness({ kkb }: { kkb: Kkb }) {
+function Completeness({ kkb, onEnterPrices }: { kkb: Kkb; onEnterPrices?: () => void }) {
   const { total, priced, first } = priceCompleteness(kkb);
   if (total === 0) return null;
-  if (!first) return <p className="text-sm font-semibold text-ink">All {total === 1 ? "1 dish" : `${total} dishes`} priced</p>;
+  const link = "min-h-11 cursor-pointer font-semibold text-tomato-ink underline underline-offset-2";
+  const prices = onEnterPrices ? (
+    <span className="whitespace-nowrap">
+      {" · "}
+      <button type="button" onClick={onEnterPrices} className={link}>
+        {first ? "Enter prices" : "Edit prices"}
+      </button>
+    </span>
+  ) : null;
   const missing = total - priced;
   return (
-    <p className="text-sm text-ink">
-      <span className="font-semibold">
-        {priced} of {total} dishes priced
-      </span>
-      {" · "}
-      <button type="button" onClick={() => showFirstUnpriced(lineKey(kkb.sections.find((x) => x.key === first.sectionKey)!, first.line, false))} className="min-h-11 cursor-pointer font-semibold text-tomato-ink underline underline-offset-2">
-        Show the {missing === 1 ? "1 without a price" : `${missing} without a price`}
-      </button>
+    <p id="kkb-completeness" tabIndex={-1} className="text-sm text-ink outline-none">
+      <span className="font-semibold whitespace-nowrap">{first ? `${priced} of ${total} dishes priced` : `All ${total === 1 ? "1 dish" : `${total} dishes`} priced`}</span>
+      {first ? (
+        <span className="whitespace-nowrap">
+          {" · "}
+          <button type="button" onClick={() => showFirstUnpriced(lineKey(kkb.sections.find((x) => x.key === first.sectionKey)!, first.line, false))} className={link}>
+            Show the {missing === 1 ? "1 without a price" : `${missing} without a price`}
+          </button>
+        </span>
+      ) : null}
+      {prices}
     </p>
   );
 }
 
-function StatusStrip({ kkb }: { kkb: Kkb }) {
+function StatusStrip({ kkb, onEnterPrices }: { kkb: Kkb; onEnterPrices?: () => void }) {
   return (
     <div className="space-y-2">
-      <Completeness kkb={kkb} />
+      <Completeness kkb={kkb} onEnterPrices={onEnterPrices} />
       <ChargeStrip kkb={kkb} />
     </div>
   );

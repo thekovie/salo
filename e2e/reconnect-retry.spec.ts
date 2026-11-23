@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { addDish, confirmRound1, startOrder } from "./support/helpers";
+import { addDish, confirmRound1, startOrder, openKkb } from "./support/helpers";
 
 test("a served tap and a KKB price made offline are sent on reconnect, without Try again (follow-up 21)", async ({ page, context }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -16,7 +16,7 @@ test("a served tap and a KKB price made offline are sent on reconnect, without T
   await page.reload();
   await expect(page.getByTestId("served-section").getByRole("listitem").filter({ hasText: "Sisig" })).toContainText("1 of 3 served");
 
-  await page.getByRole("button", { name: "Enter receipt prices (KKB)" }).click();
+  await openKkb(page);
   const sheet = page.getByRole("dialog", { name: "Who ordered what" });
   await sheet.getByRole("button", { name: "Add price, Sisig" }).click();
   const form = sheet.getByRole("form", { name: "Price for Sisig" });

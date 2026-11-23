@@ -9,7 +9,7 @@ import { consolidate } from "@/lib/consolidate";
 import { arrivalsBetween, type Arrival } from "@/lib/arrivals";
 import { setAnalyticsContext, track } from "@/lib/analytics";
 import { anyPrice, everyone, type SessionSnapshot } from "@/lib/snapshot";
-import { buildKkb, myShareLabel, shortShareLabel } from "@/lib/kkb";
+import { buildKkb, myShareLabel, priceRows, pricesLeft, shortShareLabel } from "@/lib/kkb";
 import { normalizeText } from "@/lib/dish-name";
 import { confirmedIds } from "@/lib/effective-order";
 import { notificationTarget, type NotificationTarget, type NotificationView } from "@/lib/notifications";
@@ -36,6 +36,8 @@ import { NotificationBell, NotificationsDrawer } from "./notifications-drawer";
 import { ConnectionPill } from "./connection-pill";
 import { OrderOptionsSheet } from "./order-options-sheet";
 import { SummarySheet, type SummaryTab } from "./summary-sheet";
+import { PricesSheet } from "./prices-sheet";
+import { enterPricesLabel, PriceStatusRow } from "./price-status";
 import { HostNamePrompt } from "./host-name-prompt";
 import { EditDishSheet } from "./edit-dish-sheet";
 import { Guide } from "@/components/onboarding/guide";
@@ -137,6 +139,11 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
     setFocusMine(true);
   };
   const myShare = useMemo(() => (anyConfirmed ? myShareLabel(buildKkb(snapshot, snapshot.me.participantId)) : null), [anyConfirmed, snapshot]);
+  const [pricesOpen, setPricesOpen] = useState(false);
+  const hostPricing = isHost && sessionOpen && anyConfirmed;
+  const priceCount = useMemo(() => (hostPricing ? priceRows(snapshot) : []), [hostPricing, snapshot]);
+  const left = pricesLeft(priceCount);
+  const shareLabel = left > 0 ? enterPricesLabel(left) : myShare;
   const [updatesOpen, setUpdatesOpen] = useState(false);
   const updatesTarget = useRef<NotificationTarget | null>(null);
   function openUpdate(item: NotificationView) {
@@ -503,6 +510,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
           focusMine={focusMine}
         />
       ) : null}
+      {hostPricing ? <PricesSheet open={pricesOpen} onOpenChange={setPricesOpen} snapshot={snapshot} refresh={refresh} /> : null}
       {isHost && sessionOpen ? (
         <OrderOptionsSheet
           open={optionsOpen}
@@ -623,7 +631,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
                     ref={bringIntoView}
                     className="scroll-mb-48 rounded-2xl bg-paper p-4"
                   >
-                    <h2 id="what-next" className="text-lg">
+                    <h2 id="what-next" tabIndex={-1} className="text-lg outline-none">
                       What&rsquo;s next?
                     </h2>
                     <p className="mt-0.5 text-sm text-ink-soft">Ordering more later? Start another round. All done eating? End the order to see who ordered what.</p>
@@ -635,9 +643,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
                         <CircleCheck className="size-5" aria-hidden /> End the order
                       </Button>
                     </div>
-                    <Button variant="ghost" className="mt-2 w-full" onClick={() => openSummary("button", "kkb")}>
-                      <ReceiptText className="size-5" aria-hidden /> Enter receipt prices (KKB)
-                    </Button>
+                    {priceCount.length > 0 ? <PriceStatusRow left={left} onEnter={() => setPricesOpen(true)} /> : null}
                   </section>
                 ) : (
                   <p className="text-center text-ink-soft">The host confirmed round {round.number} with the waiter. The host can add another round or end the order when everyone’s done.</p>
@@ -699,11 +705,11 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
             </div>
             {/* Under 360 px the count keeps its own line and the buttons share the rows below it. */}
             <div className="flex flex-wrap gap-2 max-[359px]:basis-full max-[359px]:*:flex-1 max-[359px]:*:justify-center">
-            {myShare ? (
-              <Button variant="outline" data-tour="my-share" onClick={openMyShare} className="max-[429px]:px-3">
+            {shareLabel ? (
+              <Button variant="outline" data-tour="my-share" onClick={left > 0 ? () => setPricesOpen(true) : openMyShare} className="max-[429px]:px-3">
                 <Coins className="size-5 max-[429px]:hidden" aria-hidden />
-                <span className="max-[429px]:hidden">{myShare}</span>
-                <span className="min-[430px]:hidden">{shortShareLabel(myShare)}</span>
+                <span className="max-[429px]:hidden">{shareLabel}</span>
+                <span className="min-[430px]:hidden">{shortShareLabel(shareLabel)}</span>
               </Button>
             ) : null}
             {isOpen && isHost ? (

@@ -24,7 +24,7 @@ export function focusWhenFree(candidates: () => Iterable<Element | null | undefi
   const attempt = () => {
     const active = document.activeElement;
     const list = [...candidates()];
-    const held = !active || active === document.body || active.closest("[role=dialog], dialog") !== null || list.includes(active);
+    const held = !active || active === document.body || active.closest('[role=dialog][data-state="closed"], dialog:not([open])') !== null || list.includes(active);
     if (!held || Date.now() > deadline) return;
     focusFirst(list);
     setTimeout(attempt, 50);
