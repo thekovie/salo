@@ -16,6 +16,7 @@ const ROWS = [
   ["Cloudflare Turnstile", "Security (on challenges.cloudflare.com)", "Tells people from bots when you start an order; may keep short-lived data in its own frame.", "Minutes"],
   ["theme", "Preference (localStorage)", "Your light or dark choice.", "Until you clear it"],
   ["salo:tour:host / salo:tour:guest", "Preference (localStorage)", "Remembers that you've seen the first-time tour offer.", "Until you clear it"],
+  ["salo:prices:<order>", "Essential (sessionStorage)", "Keeps prices the host typed but hasn't saved yet, so closing the prices sheet or losing signal doesn't lose them.", "Until you close the tab, or the price is saved"],
   ["salo:removed-reload:…", "Essential (sessionStorage)", "Stops the page reloading in a loop if the host removed you from an order.", "Until you close the tab"],
 ] as const;
 

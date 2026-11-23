@@ -359,5 +359,74 @@ export function myShareLabel(kkb: Kkb): string | null {
   return `My share${mine.status === "complete" ? "" : " so far"} · ${formatPesoShort(mine.pricedCentavos)}`;
 }
 
-/** The same label under 430 px: "Share ₱1,240" (also the accessible name there, WCAG 2.5.3). */
-export const shortShareLabel = (full: string): string => full.replace(/^My share(?: so far)? · (?=₱)/, "Share ").replace(/^My share/, "Share");
+/** The same label under 430 px: "Share ₱1,240" / "Share so far ₱325" (also the accessible name there, WCAG 2.5.3). */
+export const shortShareLabel = (full: string): string => full.replace(/^My share( so far)? · (?=₱)/, "Share$1 ").replace(/^My share/, "Share");
+
+/** One row of the Prices sheet: a dish + size (its table price) or one replacement dish (its own price). */
+export interface PriceRow {
+  /** Stable across saves: the table price key, or `c:<correctionId>`. */
+  key: string;
+  label: string;
+  quantity: number;
+  /** Lines the row covers, and how many of those have a price of their own (table rows only). */
+  lines: number;
+  own: number;
+  /** Portions covered by a price of their own, to set against `quantity` ("2 of 3"). */
+  ownQuantity: number;
+  dishId: string | null;
+  variant: string | null;
+  correctionId: string | null;
+  /** The table price (or the replacement's price) now, and its revision. */
+  unitCentavos: number | null;
+  revision: number;
+  needsPrice: boolean;
+}
+
+/** Entries really ordered (after confirmed cancellations) and not swapped, across all rounds: what a table price covers. */
+export function tableLines(input: KkbInput) {
+  const confirmedRounds = confirmedIds(input.rounds);
+  return input.entries.flatMap((entry) => {
+    const now = effectiveEntry(entry, input.corrections, confirmedRounds);
+    return now.quantity > 0 && !now.replacementId ? [{ entry, quantity: now.quantity, confirmed: confirmedRounds.has(entry.roundId) }] : [];
+  });
+}
+
+/**
+ * The Prices sheet's rows from confirmed rounds: one per dish + size, one per replacement. Unpriced rows first, then by
+ * first appearance (round, then ticket order). A row needs a price when there is no table price and some line has none of its own.
+ */
+export function priceRows(input: KkbInput): PriceRow[] {
+  const confirmedRounds = confirmedIds(input.rounds);
+  const roundNumber = new Map(input.rounds.map((r) => [r.id, r.number]));
+  const ordered = input.entries.map((entry, i) => ({ entry, i })).sort((a, b) => (roundNumber.get(a.entry.roundId) ?? 0) - (roundNumber.get(b.entry.roundId) ?? 0) || a.i - b.i);
+  const rows = new Map<string, PriceRow>();
+  for (const { entry } of ordered) {
+    if (!confirmedRounds.has(entry.roundId)) continue;
+    const now = effectiveEntry(entry, input.corrections, confirmedRounds);
+    if (now.quantity <= 0) continue;
+    if (now.replacementId) {
+      const price = input.settlement.corrections[now.replacementId];
+      const label = `${now.replacement} (replaces ${dishLabel(entry)})`;
+      rows.set(`c:${now.replacementId}`, { key: `c:${now.replacementId}`, label, quantity: now.quantity, lines: 1, own: 0, ownQuantity: 0, dishId: null, variant: null, correctionId: now.replacementId, unitCentavos: price?.unitCentavos ?? null, revision: price?.revision ?? 0, needsPrice: price?.unitCentavos == null });
+      continue;
+    }
+    const key = sharedPriceKey(entry.dishId, normalizeText(entry.variant ?? ""));
+    const own = input.settlement.entries[entry.id]?.unitCentavos != null ? 1 : 0;
+    const row = rows.get(key);
+    if (row) {
+      row.quantity += now.quantity;
+      row.lines += 1;
+      row.own += own;
+      row.ownQuantity += own * now.quantity;
+      continue;
+    }
+    const table = input.settlement.defaults[key];
+    const label = entry.variant ? `${entry.dishName} (${entry.variant})` : entry.dishName;
+    rows.set(key, { key, label, quantity: now.quantity, lines: 1, own, ownQuantity: own * now.quantity, dishId: entry.dishId, variant: entry.variant, correctionId: null, unitCentavos: table?.unitCentavos ?? null, revision: table?.revision ?? 0, needsPrice: false });
+  }
+  const list = [...rows.values()].map((r) => (r.correctionId ? r : { ...r, needsPrice: r.unitCentavos == null && r.own < r.lines }));
+  return [...list.filter((r) => r.needsPrice), ...list.filter((r) => !r.needsPrice)];
+}
+
+/** "n prices left": the rows still needing a price. */
+export const pricesLeft = (rows: readonly PriceRow[]) => rows.filter((r) => r.needsPrice).length;

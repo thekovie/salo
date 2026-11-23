@@ -72,3 +72,12 @@ export async function confirmRound1(page: Page) {
   await expect(waiter.getByRole("region", { name: "Round 1, confirmed with the waiter" })).toBeVisible({ timeout: 15_000 });
   await page.getByRole("button", { name: "Back" }).click();
 }
+
+/** Opens "Who ordered what" on its KKB tab through People (the dock now leads the host to the Prices sheet). */
+export async function openKkb(page: Page) {
+  await page.getByRole("tab", { name: /People/ }).click();
+  await page.getByRole("button", { name: "Who ordered what" }).click();
+  const sheet = page.getByRole("dialog", { name: "Who ordered what" });
+  await sheet.getByRole("tab", { name: "KKB" }).click();
+  await expect(sheet.getByRole("tab", { name: "KKB" })).toHaveAttribute("aria-selected", "true");
+}
