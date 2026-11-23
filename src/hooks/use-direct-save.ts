@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, newKey } from "@/lib/api-client";
 
 export type DirectSaveState =
@@ -50,4 +50,18 @@ export function useDirectSave(refresh: () => Promise<unknown>) {
 
   const reset = useCallback(() => setState({ kind: "idle" }), []);
   return { state, save, reset };
+}
+
+/** Runs `retry` when the browser comes back online while `waiting` (a save that failed for lack of a connection). */
+export function useRetryOnReconnect(waiting: boolean, retry: () => void) {
+  const latest = useRef(retry);
+  useEffect(() => {
+    latest.current = retry;
+  });
+  useEffect(() => {
+    if (!waiting) return;
+    const onOnline = () => latest.current();
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [waiting]);
 }

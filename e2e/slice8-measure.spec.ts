@@ -93,7 +93,7 @@ test("dock heights, Served row heights and 320 screenshots", async ({ page, brow
   await served.scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${DIR}/served-320.png` });
   numbers.myShareDock = await dock(page);
-  await page.getByRole("button", { name: /^My share/ }).scrollIntoViewIfNeeded();
+  await page.getByRole("button", { name: /^(My )?share/i }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${DIR}/my-share-dock-320.png` });
 
   // Round 2+: host (My share + Review order) and guest (My share + I'm ready + Ticket), 320 and 375.

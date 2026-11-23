@@ -702,10 +702,8 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
             {myShare ? (
               <Button variant="outline" data-tour="my-share" onClick={openMyShare} className="max-[429px]:px-3">
                 <Coins className="size-5 max-[429px]:hidden" aria-hidden />
-                <span className="max-[429px]:sr-only">{myShare}</span>
-                <span className="min-[430px]:hidden" aria-hidden>
-                  {shortShareLabel(myShare)}
-                </span>
+                <span className="max-[429px]:hidden">{myShare}</span>
+                <span className="min-[430px]:hidden">{shortShareLabel(myShare)}</span>
               </Button>
             ) : null}
             {isOpen && isHost ? (
