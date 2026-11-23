@@ -12,6 +12,6 @@ export async function PUT(request: Request, { params }: Params) {
     const actor = await requireActor((await params).id);
     const key = idempotencyKey(request);
     const input = await readJson(request, receiptTotalSchema);
-    return ok(await runMutation(getDb(), actor, { idempotencyKey: key, type: "session.receiptTotal" }, (tx, s) => setReceiptTotal(tx, s, actor, input)));
+    return ok(await runMutation(getDb(), actor, { idempotencyKey: key, allowClosed: true, type: "session.receiptTotal" }, (tx, s) => setReceiptTotal(tx, s, actor, input)));
   });
 }

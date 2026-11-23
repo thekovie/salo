@@ -6,6 +6,7 @@ import { entryClaims, orderBatches, orderEntries, orderGroupMembers, orderGroups
 import { AppError, forbidden } from "@/server/errors";
 import { notify } from "@/server/notifications";
 import type { Applied, SessionRow } from "@/server/mutations";
+import { adoptLabelShares } from "./adjustments";
 import { LIMITS } from "./validation";
 
 async function draftRoundId(tx: Tx, sessionId: string): Promise<string> {
@@ -88,7 +89,7 @@ export async function setGroupMembers(tx: Tx, session: SessionRow, actor: Actor,
 /** The batch with its owner and round, scoped to the session. */
 async function loadBatch(tx: Tx, sessionId: string, batchId: string) {
   const [batch] = await tx
-    .select({ id: orderBatches.id, roundId: orderBatches.roundId, submittedBy: orderBatches.submittedBy, roundStatus: rounds.status, attributionType: orderBatches.attributionType, attributedParticipantId: orderBatches.attributedParticipantId })
+    .select({ id: orderBatches.id, roundId: orderBatches.roundId, submittedBy: orderBatches.submittedBy, roundStatus: rounds.status, attributionType: orderBatches.attributionType, attributedParticipantId: orderBatches.attributedParticipantId, collectiveLabel: orderBatches.collectiveLabel })
     .from(orderBatches)
     .innerJoin(rounds, eq(rounds.id, orderBatches.roundId))
     .where(and(eq(orderBatches.id, batchId), eq(orderBatches.sessionId, sessionId)));
@@ -155,6 +156,7 @@ export async function resolveClaim(tx: Tx, session: SessionRow, actor: Actor, cl
       .set({ status: "REJECTED", resolvedAt: new Date() })
       .where(and(eq(entryClaims.batchId, claim.batchId), eq(entryClaims.status, "PENDING")));
     await resetReadiness(tx, batch.roundId, [claim.requestedBy, batch.attributedParticipantId]);
+    if (batch.collectiveLabel) await adoptLabelShares(tx, session.id, batch.collectiveLabel, claim.requestedBy);
   }
   await tx.update(entryClaims).set({ status, resolvedAt: new Date() }).where(eq(entryClaims.id, claimId));
   return { result: { claimId, status }, event: { type: "attribution.changed", payload: { claimId, batchId: claim.batchId, status } } };

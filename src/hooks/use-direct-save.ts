@@ -22,7 +22,7 @@ export function useDirectSave(refresh: () => Promise<unknown>) {
   const attempt = useRef<{ signature: string; key: string } | null>(null);
 
   const save = useCallback(
-    async (path: string, method: "PUT" | "PATCH", body: unknown): Promise<boolean> => {
+    async (path: string, method: "PUT" | "PATCH" | "DELETE", body: unknown): Promise<boolean> => {
       const signature = `${method} ${path} ${JSON.stringify(body)}`;
       if (attempt.current?.signature !== signature) attempt.current = { signature, key: newKey() };
       setState({ kind: "saving" });

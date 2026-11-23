@@ -48,7 +48,7 @@ Every refusal row also means: session revision, events, table prices and line pr
 | # | Scenario | Expected | Source |
 |---|---|---|---|
 | T23 | Dish of another session, or random uuid; set and clear | refused (404/422); other order's price untouched | B |
-| T24 | Closed order | 409 SESSION_CLOSED; price stays | B, A |
+| T24 | Cancelled order (nothing confirmed) | 409 SESSION_CLOSED; price stays. An ended order with a confirmed round still takes the host's price | B, A |
 | T25 | Direct SQL: foreign-session dish, price 10,000,000 / -1, revision -1 | rejected by DB (trigger/CHECK) | D |
 | T26 | Delete session | `shared_prices` rows cascade away | P Tests (cascade per new table), D |
 

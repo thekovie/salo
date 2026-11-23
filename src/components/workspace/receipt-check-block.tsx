@@ -13,7 +13,7 @@ interface ReceiptCheckBlockProps {
   live: SettlementView["receiptTotal"];
   sessionId: string;
   refresh: () => Promise<unknown>;
-  /** Host, order still open. */
+  /** Host. */
   canEdit: boolean;
 }
 
@@ -30,6 +30,7 @@ function difference(kkb: Kkb, receipt: number): Difference {
   const r = reconcile(kkb, receipt);
   if (r.state === "incomplete") return { ok: false, lines: [`${dishes(r.unpriced)} no price yet${hasPending(kkb) ? " and a change is waiting for the waiter" : ""}, so this can't match.`] };
   if (r.state === "pending") return { ok: false, lines: ["A change is still waiting for the waiter, so this may not match yet."] };
+  if (r.state === "waiting") return { ok: false, lines: ["A shared dish has no payer yet, so discounts and extras aren’t counted. This may not match yet."] };
   if (r.state === "matches") return { ok: true, lines: ["Matches the receipt."] };
   const advice =
     r.state === "more"
@@ -59,6 +60,9 @@ function DifferenceChip({ kkb, receipt }: { kkb: Kkb; receipt: number }) {
 export function ReceiptCheckBlock({ kkb, live, sessionId, refresh, canEdit }: ReceiptCheckBlockProps) {
   const id = useId();
   const { charge } = kkb;
+  const adjusted = kkb.adjustments.length > 0;
+  const anyWaiting = kkb.adjustments.some((a) => a.state === "waiting");
+  const net = kkb.adjustedTotal - saloTotal(kkb);
   const chip = live.centavos == null ? null : <DifferenceChip kkb={kkb} receipt={live.centavos} />;
   const row = (label: string, value: React.ReactNode, strong = false) => (
     <div className={cn("flex items-baseline justify-between gap-3", strong && "border-t-[1.5px] border-dashed border-rule pt-1")}>
@@ -76,6 +80,8 @@ export function ReceiptCheckBlock({ kkb, live, sessionId, refresh, canEdit }: Re
         {row("Food in Salo", formatPeso(kkb.foodCentavos))}
         {row("Service charge", charge.state === "unset" ? <span className="font-sans text-sm text-ink-soft">not entered</span> : charge.state === "none" ? formatPeso(0) : formatPeso(charge.centavos))}
         {row("Salo total", formatPeso(saloTotal(kkb)), true)}
+        {adjusted ? row("Discounts and extras", anyWaiting ? <span className="font-sans text-sm text-ink-soft">waiting for prices</span> : `${net < 0 ? "−" : net > 0 ? "+" : ""}${formatPeso(Math.abs(net))}`) : null}
+        {adjusted && !anyWaiting ? row("Adjusted total", formatPeso(kkb.adjustedTotal), true) : null}
         {canEdit ? null : row("Receipt total", live.centavos == null ? <span className="font-sans text-sm text-ink-soft">not entered</span> : formatPeso(live.centavos))}
       </dl>
       {canEdit ? (

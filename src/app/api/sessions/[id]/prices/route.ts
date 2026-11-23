@@ -15,6 +15,6 @@ export async function PUT(request: Request, { params }: Params) {
     const key = idempotencyKey(request);
     const input = await readJson(request, sharedPriceSchema);
     const type = `price.default:${input.dishId}|${normalizeText(input.variant ?? "")}`;
-    return ok(await runMutation(getDb(), actor, { idempotencyKey: key, type }, (tx, s) => setSharedPrice(tx, s, actor, input)));
+    return ok(await runMutation(getDb(), actor, { idempotencyKey: key, type, allowClosed: true }, (tx, s) => setSharedPrice(tx, s, actor, input)));
   });
 }

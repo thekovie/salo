@@ -73,13 +73,20 @@ describe("PUT /receipt-total", () => {
     expect(row.receiptTotalRevision).toBe(1);
   });
 
-  it("an ended order is refused, and out-of-range amounts are 422", async () => {
+  it("an ended order still takes the host's total, and out-of-range amounts are 422", async () => {
     const t = await setup();
     expect((await put(t.sessionId, t.who.host, { expectedRevision: 0, centavos: -1 })).status).toBe(422);
     expect((await put(t.sessionId, t.who.host, { expectedRevision: 0, centavos: 100_000_000 })).status).toBe(422);
     await add(db, t.host, { dishName: "Katsu", quantity: 1 });
     const snap = await getSnapshot(db, t.host);
     await runMutation(db, t.host, { idempotencyKey: key(), type: "t" }, (tx, s) => confirmRound(tx, s, t.host, snap.activeRoundId, snap.session.revision));
+    await runMutation(db, t.host, { idempotencyKey: key(), type: "t" }, (tx, s) => closeSession(tx, s, t.host));
+    const res = await put(t.sessionId, t.who.host, { expectedRevision: 0, centavos: 100 });
+    expect(res.status).toBe(200);
+  });
+
+  it("a cancelled order (nothing confirmed) is refused", async () => {
+    const t = await setup();
     await runMutation(db, t.host, { idempotencyKey: key(), type: "t" }, (tx, s) => closeSession(tx, s, t.host));
     const res = await put(t.sessionId, t.who.host, { expectedRevision: 0, centavos: 100 });
     expect(res.status).toBe(409);

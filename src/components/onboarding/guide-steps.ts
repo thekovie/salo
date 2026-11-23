@@ -97,7 +97,7 @@ export const HOST_GUIDE: readonly GuideStep[] = [
   {
     id: "done",
     title: "You’re all set",
-    body: "End the order from Options when everyone’s done: tickets and KKB stay readable for 7 days. The bell at the top keeps your updates: confirmations, changes and served food. Open this guide again any time from Options → How Salo works.",
+    body: "End the order from Options when everyone’s done: tickets and KKB stay readable for 7 days, and you can still fix prices and the bill. The bell at the top keeps your updates: confirmations, changes and served food. Open this guide again any time from Options → How Salo works.",
     scene: "done",
     action: null,
     label: "",
