@@ -65,9 +65,30 @@ export interface SettlementView {
   serviceCharge: { centavos: number | null; revision: number };
   /** The receipt's printed total, for comparison only. null = not entered. */
   receiptTotal: { centavos: number | null; revision: number };
+  /** Discounts and extra charges, oldest first. Only what the host typed; shares are computed (`lib/adjustments.ts`). */
+  adjustments: SnapshotAdjustment[];
 }
 
-export const EMPTY_SETTLEMENT: SettlementView = { entries: {}, corrections: {}, defaults: {}, serviceCharge: { centavos: null, revision: 0 }, receiptTotal: { centavos: null, revision: 0 } };
+export const ADJUSTMENT_CATEGORIES = ["senior", "pwd", "privilege", "promo", "other"] as const;
+export const ADJUSTMENT_METHODS = ["proportional", "equal", "individual", "manual", "unallocated"] as const;
+export type AdjustmentCategory = (typeof ADJUSTMENT_CATEGORIES)[number];
+export type AdjustmentMethod = (typeof ADJUSTMENT_METHODS)[number];
+
+export interface SnapshotAdjustment {
+  id: string;
+  direction: "discount" | "charge";
+  category: AdjustmentCategory;
+  note: string | null;
+  /** Exactly one of amount and percent (basis points) is set. */
+  amountCentavos: number | null;
+  percentBps: number | null;
+  method: AdjustmentMethod;
+  /** The people it applies to: a participant or a typed name. Amount only for "manual". */
+  shares: { participantId: string | null; label: string | null; amountCentavos: number | null }[];
+  revision: number;
+}
+
+export const EMPTY_SETTLEMENT: SettlementView = { entries: {}, corrections: {}, defaults: {}, serviceCharge: { centavos: null, revision: 0 }, receiptTotal: { centavos: null, revision: 0 }, adjustments: [] };
 
 /** Any price anywhere: a line's, a replacement's or a table price. */
 export const anyPrice = (s: Pick<SessionSnapshot, "settlement">) =>

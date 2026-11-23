@@ -140,7 +140,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
   };
   const myShare = useMemo(() => (anyConfirmed ? myShareLabel(buildKkb(snapshot, snapshot.me.participantId)) : null), [anyConfirmed, snapshot]);
   const [pricesOpen, setPricesOpen] = useState(false);
-  const hostPricing = isHost && sessionOpen && anyConfirmed;
+  const hostPricing = isHost && anyConfirmed;
   const priceCount = useMemo(() => (hostPricing ? priceRows(snapshot) : []), [hostPricing, snapshot]);
   const left = pricesLeft(priceCount);
   const shareLabel = left > 0 ? enterPricesLabel(left) : myShare;
@@ -563,8 +563,15 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
             <Lock className="mt-0.5 size-5 shrink-0" aria-hidden />
             <div className="min-w-0 flex-1">
               <p>
-                {ended === "cancelled" ? "This order was cancelled. Nothing was sent to the waiter." : "This order has ended. Nothing can be changed."} Everything is
-                deleted on <LocalTime iso={snapshot.session.expiresAt} style="date" />.
+                {ended === "cancelled" ? (
+                  <>
+                    This order was cancelled. Nothing was sent to the waiter. Everything is deleted on <LocalTime iso={snapshot.session.expiresAt} style="date" />.
+                  </>
+                ) : (
+                  <>
+                    This order has ended. Everyone can still look at the tickets until <LocalTime iso={snapshot.session.expiresAt} style="date" />. The host can still fix prices and the bill.
+                  </>
+                )}
               </p>
               {ended === "ended" ? (
                 <Button variant="outline" className="mt-3" onClick={openMyShare}>

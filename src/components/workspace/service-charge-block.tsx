@@ -11,7 +11,7 @@ interface ServiceChargeBlockProps {
   live: SettlementView["serviceCharge"];
   sessionId: string;
   refresh: () => Promise<unknown>;
-  /** Host, order still open. */
+  /** Host. */
   canEdit: boolean;
   isHost: boolean;
 }

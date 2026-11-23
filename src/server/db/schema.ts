@@ -13,6 +13,7 @@ import {
   uuid,
   bigint,
 } from "drizzle-orm/pg-core";
+import { ADJUSTMENT_CATEGORIES, ADJUSTMENT_METHODS } from "../../lib/snapshot";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 const id = () => uuid("id").primaryKey().defaultRandom();
@@ -28,6 +29,7 @@ export const ATTRIBUTION_TYPES = ["INDIVIDUAL", "GROUP", "TABLE", "UNASSIGNED"] 
 export const CLAIM_STATUSES = ["PENDING", "APPROVED", "REJECTED"] as const;
 export const CORRECTION_TYPES = ["QUANTITY", "REPLACE", "CANCEL"] as const;
 export const CORRECTION_REASONS = ["UNAVAILABLE"] as const;
+export const ADJUSTMENT_DIRECTIONS = ["discount", "charge"] as const;
 
 const inList = (column: string, values: readonly string[]) =>
   sql.raw(`${column} IN (${values.map((v) => `'${v}'`).join(", ")})`);
@@ -469,5 +471,62 @@ export const notifications = pgTable(
   (t) => [
     uniqueIndex("notifications_dedup_uq").on(t.sessionId, t.recipientId, t.dedupKey),
     index("notifications_recipient_idx").on(t.recipientId, t.createdAt),
+  ],
+);
+
+/**
+ * A receipt adjustment (KKB): a discount or extra charge, in centavos or basis points. Only what the host typed is
+ * stored; each person's share is computed (`lib/adjustments.ts`). `id` is client-generated so create is idempotent.
+ */
+export const adjustments = pgTable(
+  "adjustments",
+  {
+    id: uuid("id").primaryKey(),
+    sessionId: sessionRef(),
+    direction: text("direction", { enum: ADJUSTMENT_DIRECTIONS }).notNull(),
+    category: text("category", { enum: ADJUSTMENT_CATEGORIES }).notNull(),
+    note: text("note"),
+    amountCentavos: integer("amount_centavos"),
+    percentBps: integer("percent_bps"),
+    method: text("method", { enum: ADJUSTMENT_METHODS }).notNull(),
+    revision: integer("revision").notNull().default(1),
+    createdAt: createdAt(),
+    updatedBy: uuid("updated_by").references(() => participants.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("adjustments_session_idx").on(t.sessionId),
+    check("adjustments_direction_ck", inList("direction", ADJUSTMENT_DIRECTIONS)),
+    check("adjustments_category_ck", inList("category", ADJUSTMENT_CATEGORIES)),
+    check("adjustments_method_ck", inList("method", ADJUSTMENT_METHODS)),
+    check("adjustments_note_ck", sql`char_length(note) BETWEEN 1 AND 40`),
+    check("adjustments_one_amount_ck", sql`num_nonnulls(amount_centavos, percent_bps) = 1`),
+    check("adjustments_amount_ck", sql`amount_centavos BETWEEN 1 AND 99999999`),
+    check("adjustments_percent_ck", sql`percent_bps BETWEEN 1 AND 10000`),
+    check("adjustments_percent_method_ck", sql`percent_bps IS NULL OR method IN ('proportional', 'equal', 'individual')`),
+    check("adjustments_revision_ck", sql`revision >= 1`),
+  ],
+);
+
+/** The people an adjustment is split between: a participant or a typed name (same keys as Bill to). Amount only for "manual". */
+export const adjustmentShares = pgTable(
+  "adjustment_shares",
+  {
+    id: id(),
+    adjustmentId: uuid("adjustment_id")
+      .notNull()
+      .references(() => adjustments.id, { onDelete: "cascade" }),
+    sessionId: sessionRef(),
+    // No cascade: participants are soft-removed, so a removed person's share stays (and is flagged).
+    participantId: uuid("participant_id").references(() => participants.id),
+    billToLabel: text("bill_to_label"),
+    amountCentavos: integer("amount_centavos"),
+  },
+  (t) => [
+    index("adjustment_shares_adjustment_idx").on(t.adjustmentId),
+    index("adjustment_shares_session_idx").on(t.sessionId),
+    check("adjustment_shares_one_who_ck", sql`num_nonnulls(participant_id, bill_to_label) = 1`),
+    check("adjustment_shares_label_ck", sql`char_length(bill_to_label) BETWEEN 1 AND 40`),
+    check("adjustment_shares_amount_ck", sql`amount_centavos BETWEEN 0 AND 99999999`),
   ],
 );

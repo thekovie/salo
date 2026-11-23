@@ -16,6 +16,6 @@ export async function PUT(request: Request, { params }: Params) {
     const actor = await requireActor(id);
     const key = idempotencyKey(request);
     const input = await readJson(request, entrySettlementSchema);
-    return ok(await runMutation(getDb(), actor, { idempotencyKey: key, type: `entry.settle:${entryId}` }, (tx, s) => setEntrySettlement(tx, s, actor, entryId, input)));
+    return ok(await runMutation(getDb(), actor, { idempotencyKey: key, allowClosed: true, type: `entry.settle:${entryId}` }, (tx, s) => setEntrySettlement(tx, s, actor, entryId, input)));
   });
 }

@@ -404,7 +404,7 @@ describe("PUT /prices: dish, entry and session scoping", () => {
     expect(await rowCount(a.sessionId)).toBe(0);
   });
 
-  it("T24 a closed order is refused SESSION_CLOSED; the price stays as it was", async () => {
+  it("T24 a cancelled order (nothing confirmed) is refused SESSION_CLOSED; the price stays as it was", async () => {
     const { host, sessionId, hostWho } = await setup();
     const d = await dish(host, "Katsu");
     await put(sessionId, hostWho, body(d.dishId, null, 100, 0));

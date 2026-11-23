@@ -501,13 +501,13 @@ describe("PUT /receipt-total: who may set it", () => {
 
 // ---------- order state ----------
 describe("PUT /receipt-total: order state", () => {
-  it("C03 a closed order refuses it (409 SESSION_CLOSED), set or clear; the value stays", async () => {
+  it("C03 an ended order (a round was confirmed) still lets the host set or clear it; the host fixes the bill after End", async () => {
     const t = await basic();
     await put(t.sessionId, t.hostWho, body(2000, 0));
     await run(t.host, (tx, s) => closeSession(tx, s, t.host));
-    await expectRefused(t, t.hostWho, body(3000, 1), 409, "SESSION_CLOSED");
-    await expectRefused(t, t.hostWho, body(null, 1), 409, "SESSION_CLOSED");
-    expect(await receiptRow(t.sessionId)).toEqual({ c: 2000, r: 1 });
+    expect((await put(t.sessionId, t.hostWho, body(3000, 1))).status).toBe(200);
+    expect((await put(t.sessionId, t.hostWho, body(null, 2))).status).toBe(200);
+    expect(await receiptRow(t.sessionId)).toEqual({ c: null, r: 3 });
   });
 
   it("C04 a closed order still shows the last value to host and guest", async () => {

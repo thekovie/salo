@@ -12,6 +12,6 @@ export async function PUT(request: Request, { params }: Params) {
     const actor = await requireActor((await params).id);
     const key = idempotencyKey(request);
     const input = await readJson(request, serviceChargeSchema);
-    return ok(await runMutation(getDb(), actor, { idempotencyKey: key, type: "session.serviceCharge" }, (tx, s) => setServiceCharge(tx, s, actor, input)));
+    return ok(await runMutation(getDb(), actor, { idempotencyKey: key, allowClosed: true, type: "session.serviceCharge" }, (tx, s) => setServiceCharge(tx, s, actor, input)));
   });
 }

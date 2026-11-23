@@ -76,8 +76,11 @@ export function PricesSheet({ open, onOpenChange, snapshot, refresh }: PricesShe
 
 function SheetBody({ snapshot, refresh }: { snapshot: SessionSnapshot; refresh: () => Promise<unknown> }) {
   const rows = useMemo(() => priceRows(snapshot), [snapshot]);
-  // Layout is frozen at open so a row doesn't jump away the moment it is priced; reopening re-sorts.
-  const [frozen] = useState(() => rows.map((r) => ({ key: r.key, needs: r.needsPrice })));
+  // Layout is frozen when a row is first seen (at open, or when it arrives later) so it doesn't jump away the moment
+  // it is priced; reopening re-sorts.
+  const [frozen, setFrozen] = useState(() => rows.map((r) => ({ key: r.key, needs: r.needsPrice })));
+  const arrived = rows.filter((r) => !frozen.some((f) => f.key === r.key));
+  if (arrived.length) setFrozen([...frozen, ...arrived.map((r) => ({ key: r.key, needs: r.needsPrice }))]);
   const rank = (key: string) => {
     const i = frozen.findIndex((f) => f.key === key);
     return i < 0 ? frozen.length : i;

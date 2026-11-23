@@ -24,10 +24,11 @@ export type Action =
   | "billTo.set"
   | "serviceCharge.set"
   | "receipt.set"
+  | "adjustment.set"
   | "participant.renameSelf"
   | "serving.update";
 
-const HOST_ONLY: ReadonlySet<Action> = new Set(["entry.editAny", "session.rename", "round.confirm", "round.open", "session.close", "claim.approve", "participant.remove", "price.editAny", "price.default", "dish.unavailable", "billTo.set", "serviceCharge.set", "receipt.set", "participant.renameSelf", "serving.update"]);
+const HOST_ONLY: ReadonlySet<Action> = new Set(["entry.editAny", "session.rename", "round.confirm", "round.open", "session.close", "claim.approve", "participant.remove", "price.editAny", "price.default", "dish.unavailable", "billTo.set", "serviceCharge.set", "receipt.set", "adjustment.set", "participant.renameSelf", "serving.update"]);
 
 /** Role × action (brief 4). Roles come from the server-side credential, never from a request body. */
 export function can(actor: Pick<Actor, "role">, action: Action): boolean {

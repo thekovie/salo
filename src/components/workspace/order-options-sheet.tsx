@@ -86,7 +86,7 @@ function OptionsBody({ onOpenChange, title, anyConfirmed, unsentRound, waitingIt
           <div className="mt-2 space-y-2 text-ink-soft">
             <p>Nobody can add or change anything after this, and the invite stops working.</p>
             {anyConfirmed ? (
-              <p>Everyone can still look at the tickets for 7 days. Then the order is deleted.</p>
+              <p>Everyone can still look at the tickets for 7 days, then the order is deleted. The host can still fix prices and the bill.</p>
             ) : (
               <p>Nothing was sent to the waiter. Everyone sees it was cancelled, and it’s deleted tomorrow.</p>
             )}
@@ -176,7 +176,7 @@ function OptionsBody({ onOpenChange, title, anyConfirmed, unsentRound, waitingIt
       <div className="mt-4 border-t-[1.5px] border-dashed border-rule pt-5">
         <p className="font-semibold">{anyConfirmed ? "All done?" : "Not ordering after all?"}</p>
         <p className="mt-0.5 text-sm text-ink-soft">
-          {anyConfirmed ? "End the order when the table is finished. Everyone can still read the tickets for a week." : "Cancel the order. Nothing has been sent to the waiter yet."}
+          {anyConfirmed ? "End the order when the table is finished. Everyone can still read the tickets for a week. You can still fix prices and the bill." : "Cancel the order. Nothing has been sent to the waiter yet."}
         </p>
         <Button variant="danger" className="mt-3 w-full" onClick={() => setStep("confirm")}>
           {verb} order

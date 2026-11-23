@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { normalizeText } from "@/lib/dish-name";
+import { ADJUSTMENT_CATEGORIES, ADJUSTMENT_METHODS } from "@/lib/snapshot";
 import { MAX_SERVICE_CHARGE_CENTAVOS, MAX_UNIT_PRICE_CENTAVOS } from "@/lib/money";
 
 export const LIMITS = {
@@ -16,6 +18,7 @@ export const LIMITS = {
   roundsPerSession: 30,
   correctionsPerSession: 100,
   participantsPerSession: 30,
+  adjustmentsPerSession: 20,
   /** The host's optional note to a guest they remove. */
   removalReason: 140,
 } as const;
@@ -136,6 +139,39 @@ export type ServiceChargeInput = z.infer<typeof serviceChargeSchema>;
 
 export const receiptTotalSchema = z.object({ expectedRevision: z.number().int().min(0), centavos: centavos(MAX_SERVICE_CHARGE_CENTAVOS) });
 export type ReceiptTotalInput = z.infer<typeof receiptTotalSchema>;
+
+const adjustmentShareSchema = z
+  .object({ participantId: z.uuid().optional(), billToLabel: text(LIMITS.label).min(1, "Type the person's name.").optional(), amountCentavos: z.number().int().min(0).max(MAX_SERVICE_CHARGE_CENTAVOS).optional() })
+  .refine((v) => (v.participantId === undefined) !== (v.billToLabel === undefined), "Name one person.");
+
+/** A receipt discount or extra charge. Percent is only for methods where the people (and so the basis) are known. */
+export const adjustmentSchema = z
+  .object({
+    /** 0 creates (the id comes from the URL, so a retry never duplicates). */
+    expectedRevision: z.number().int().min(0),
+    direction: z.enum(["discount", "charge"]),
+    category: z.enum(ADJUSTMENT_CATEGORIES),
+    note: optional(LIMITS.label),
+    amountCentavos: z.number().int("Use whole centavos.").min(1, "Enter an amount.").max(MAX_SERVICE_CHARGE_CENTAVOS, "That amount is too large.").optional(),
+    percentBps: z.number().int().min(1, "Enter a percent.").max(10000, "That's more than 100%.").optional(),
+    method: z.enum(ADJUSTMENT_METHODS),
+    shares: z.array(adjustmentShareSchema).max(LIMITS.participantsPerSession),
+  })
+  .superRefine((v, ctx) => {
+    const fail = (message: string) => ctx.addIssue({ code: "custom", message });
+    if ((v.amountCentavos === undefined) === (v.percentBps === undefined)) return fail("Enter an amount or a percent.");
+    if (v.percentBps !== undefined && (v.method === "manual" || v.method === "unallocated")) return fail("A percent needs to know who it applies to.");
+    const keys = v.shares.map((s) => s.participantId ?? normalizeText(s.billToLabel ?? ""));
+    if (new Set(keys).size !== keys.length) return fail("Each person can be listed once.");
+    if (v.method === "unallocated" && v.shares.length > 0) return fail("Nobody is picked yet.");
+    if (v.method === "individual" && v.shares.length !== 1) return fail("Pick one person.");
+    if ((v.method === "proportional" || v.method === "equal" || v.method === "manual") && v.shares.length === 0) return fail("Pick at least one person.");
+    const manual = v.method === "manual";
+    if (v.shares.some((s) => (s.amountCentavos !== undefined) !== manual)) return fail(manual ? "Give each person an amount." : "Amounts are only for exact amounts.");
+    if (manual && v.shares.reduce((sum, s) => sum + (s.amountCentavos ?? 0), 0) !== v.amountCentavos) return fail("The amounts must add up to the total.");
+  });
+export type AdjustmentInput = z.infer<typeof adjustmentSchema>;
+export const removeAdjustmentSchema = z.object({ expectedRevision: z.number().int().min(1) });
 
 export const renameMeSchema = z.object({ displayName: text(LIMITS.label).min(1, "Type your name so the table knows whose order is whose.") });
 export type RenameMeInput = z.infer<typeof renameMeSchema>;

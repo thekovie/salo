@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { HostNamePrompt } from "./host-name-prompt";
 import { PricesSheet } from "./prices-sheet";
 import { PriceEditor, type Payer, type TablePrice } from "./price-editor";
+import { AdjustmentsBlock } from "./adjustments-block";
 import { ReceiptCheckBlock } from "./receipt-check-block";
 import { ServiceChargeBlock } from "./service-charge-block";
 
@@ -47,7 +48,7 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
   const payers: Payer[] = useMemo(
     () => [
       ...snapshot.participants.map((p) => ({ key: `p:${p.id}`, title: p.id === meId ? `${p.displayName} (you)` : p.displayName, participantId: p.id, label: null })),
-      ...kkb.sections.filter((s) => s.kind === "name").map((s) => ({ key: `n:${s.title.toLowerCase()}`, title: s.title, participantId: null, label: s.title })),
+      ...kkb.sections.filter((s) => s.kind === "name").map((s) => ({ key: `n:${normalizeText(s.title)}`, title: s.title, participantId: null, label: s.title })),
     ],
     [snapshot.participants, kkb.sections, meId],
   );
@@ -72,9 +73,9 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
     const live = line.correctionId
       ? { unitCentavos: snapshot.settlement.corrections[line.correctionId]?.unitCentavos ?? null, billTo: null, revision: snapshot.settlement.corrections[line.correctionId]?.revision ?? 0 }
       : (snapshot.settlement.entries[line.entryId] ?? { unitCentavos: null, billTo: null, revision: 0 });
-    const canPrice = isOpen && (line.correctionId ? isHost : isHost || line.submittedBy === meId);
+    const canPrice = line.correctionId ? isHost : isHost || (isOpen && line.submittedBy === meId);
     const table = isHost && canPrice ? tableFor(line) : null;
-    const canBillTo = isOpen && isHost && line.billable && !line.correctionId && !draft;
+    const canBillTo = isHost && line.billable && !line.correctionId && !draft;
     return {
       rowKey: key,
       line,
@@ -115,7 +116,7 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
 
   return (
     <div className="mt-4 space-y-4" data-ph-mask="">
-      <StatusStrip kkb={kkb} onEnterPrices={isHost && isOpen ? () => setPricesOpen(true) : undefined} />
+      <StatusStrip kkb={kkb} onEnterPrices={isHost ? () => setPricesOpen(true) : undefined} />
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="outline" onClick={() => void copySummary()}>
           {copy === "copied" ? <Check className="size-5" aria-hidden /> : <Copy className="size-5" aria-hidden />}
@@ -160,9 +161,10 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
         </section>
       ) : null}
 
-      <ServiceChargeBlock kkb={kkb} live={snapshot.settlement.serviceCharge} sessionId={snapshot.session.id} refresh={refresh} canEdit={isHost && isOpen} isHost={isHost} />
-      <ReceiptCheckBlock kkb={kkb} live={snapshot.settlement.receiptTotal} sessionId={snapshot.session.id} refresh={refresh} canEdit={isHost && isOpen} />
-      {isHost && isOpen ? <PricesSheet open={pricesOpen} onOpenChange={setPricesOpen} snapshot={snapshot} refresh={refresh} /> : null}
+      <ServiceChargeBlock kkb={kkb} live={snapshot.settlement.serviceCharge} sessionId={snapshot.session.id} refresh={refresh} canEdit={isHost} isHost={isHost} />
+      <AdjustmentsBlock kkb={kkb} snapshot={snapshot} refresh={refresh} isHost={isHost} />
+      <ReceiptCheckBlock kkb={kkb} live={snapshot.settlement.receiptTotal} sessionId={snapshot.session.id} refresh={refresh} canEdit={isHost} />
+      {isHost ? <PricesSheet open={pricesOpen} onOpenChange={setPricesOpen} snapshot={snapshot} refresh={refresh} /> : null}
     </div>
   );
 }
@@ -323,14 +325,22 @@ function Footer({ section }: { section: KkbSection }) {
         </dt>
         {section.status !== "none" ? <dd className="tally text-ink">{formatPeso(section.pricedCentavos)}</dd> : null}
       </div>
-      {section.serviceCentavos != null && section.totalCentavos != null ? (
+      {section.totalCentavos != null && (section.serviceCentavos != null || section.adjustments.length > 0) ? (
         <>
-          <div className="flex items-baseline justify-between gap-3">
-            <dt className="text-sm text-ink-soft">Service charge</dt>
-            <dd className="tally text-ink">{formatPeso(section.serviceCentavos)}</dd>
-          </div>
+          {section.serviceCentavos != null ? (
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-sm text-ink-soft">Service charge</dt>
+              <dd className="tally text-ink">{formatPeso(section.serviceCentavos)}</dd>
+            </div>
+          ) : null}
+          {section.adjustments.map((a) => (
+            <div key={a.id} className="flex items-baseline justify-between gap-3">
+              <dt className="text-sm text-ink-soft">{a.label}</dt>
+              <dd className="tally text-ink">{a.centavos < 0 ? "−" : "+"}{formatPeso(Math.abs(a.centavos))}</dd>
+            </div>
+          ))}
           <div className="flex items-baseline justify-between gap-3 pt-1">
-            <dt className="font-semibold">Total with service charge</dt>
+            <dt className="font-semibold">{section.adjustments.length > 0 ? "Total" : "Total with service charge"}</dt>
             <dd className="tally text-2xl text-ink">{formatPeso(section.totalCentavos)}</dd>
           </div>
         </>
