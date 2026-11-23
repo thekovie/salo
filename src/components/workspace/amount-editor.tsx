@@ -1,9 +1,9 @@
 "use client";
 
 import { LoaderCircle } from "lucide-react";
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { useDirectSave } from "@/hooks/use-direct-save";
+import { useDirectSave, useRetryOnReconnect } from "@/hooks/use-direct-save";
 import { formatPeso, MAX_SERVICE_CHARGE_CENTAVOS, parsePeso, toPesoInput } from "@/lib/money";
 
 interface AmountEditorProps {
@@ -24,6 +24,8 @@ interface AmountEditorProps {
 export function AmountEditor({ label, hint, path, live, refresh, children }: AmountEditorProps) {
   const id = useId();
   const { state, save } = useDirectSave(refresh);
+  const lastClear = useRef(false);
+  useRetryOnReconnect(state.kind === "error" && state.retryable, () => void submit(undefined, lastClear.current));
   const [base, setBase] = useState(live);
   const [text, setText] = useState(toPesoInput(live.centavos));
   const [error, setError] = useState("");
@@ -36,8 +38,9 @@ export function AmountEditor({ label, hint, path, live, refresh, children }: Amo
     setText(toPesoInput(live.centavos));
   }
 
-  async function submit(event: React.FormEvent, clear = false) {
-    event.preventDefault();
+  async function submit(event?: React.FormEvent, clear = false) {
+    event?.preventDefault();
+    lastClear.current = clear;
     const next = clear ? ({ ok: true, centavos: null } as const) : parsed;
     if (!next.ok) return setError(next.message);
     setError("");
@@ -107,7 +110,7 @@ export function AmountEditor({ label, hint, path, live, refresh, children }: Amo
             <div role="alert" className="flex flex-wrap items-center gap-2 rounded-xl bg-bad-wash px-3 py-2 text-sm text-bad">
               <span className="flex-1">{error || (state.kind === "error" ? `Not saved. ${state.message}` : "")}</span>
               {state.kind === "error" && state.retryable && !error ? (
-                <button type="submit" className="min-h-11 cursor-pointer rounded-full border-[1.5px] border-bad px-3 font-semibold hover:bg-bad/10">
+                <button type="button" onClick={(e) => void submit(e, lastClear.current)} className="min-h-11 cursor-pointer rounded-full border-[1.5px] border-bad px-3 font-semibold hover:bg-bad/10">
                   Try again
                 </button>
               ) : null}

@@ -87,6 +87,12 @@ export function useServedEdits(sessionId: string, refresh: () => Promise<unknown
   const retry = useCallback((roundId: string, lineKey: string) => void send(idOf(roundId, lineKey)), [send]);
 
   useEffect(() => {
+    const resend = () => Object.keys(edits.current).forEach((id) => edits.current[id]?.failed && void send(id));
+    window.addEventListener("online", resend);
+    return () => window.removeEventListener("online", resend);
+  }, [send]);
+
+  useEffect(() => {
     const pending = timers.current;
     return () => pending.forEach(clearTimeout);
   }, []);
