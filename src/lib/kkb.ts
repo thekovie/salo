@@ -4,6 +4,7 @@ import { isPlain, preparationKey, preparationLabel } from "./consolidate";
 import { normalizeText } from "./dish-name";
 import { confirmedIds, effectiveEntry } from "./effective-order";
 import { formatPeso, formatPesoShort } from "./money";
+import { bucketOfPerson, splitLine, splitPayersOf } from "./splits";
 import { everyone, sharedPriceKey, type SessionSnapshot, type SnapshotEntry } from "./snapshot";
 
 /**
@@ -39,6 +40,10 @@ export interface KkbLine {
   /** The table price for this dish + size, when one is set (even if the line has its own). */
   tableCentavos: number | null;
   hasTable: boolean;
+  /** Equal split between this many people: on a payer's card their share, in the shared section the listed (uncounted) dish. */
+  splitWays: number | null;
+  /** On a split payer's card: the whole line's subtotal, of which `subtotalCentavos` is their share. */
+  splitOfCentavos: number | null;
   /** Revision of the price being shown (entry's or replacement's), 0 when never set. */
   priceRevision: number;
 }
@@ -91,7 +96,7 @@ export interface Kkb {
 
 const KIND_ORDER: Record<KkbSectionKind, number> = { participant: 0, name: 1, group: 2, table: 3, unassigned: 4 };
 
-interface Bucket {
+export interface Bucket {
   key: string;
   kind: KkbSectionKind;
   title: string;
@@ -116,6 +121,13 @@ export function buildKkb(input: KkbInput, meId: string): Kkb {
     if (!line) continue;
     const origin = bucketOf(entry, nameOf);
     const billTo = isShared(origin.kind) ? payerOfBillTo(input, entry, nameOf) : null;
+    const split = !billTo && isShared(origin.kind) ? splitPayersOf(input, entry.id, nameOf) : [];
+    if (split.length > 1) {
+      const { copies, listed } = splitLine(line, split, origin.title);
+      for (const c of copies) (confirmed ? bucket(c.payer).lines : bucket(c.payer).drafts).push(c.line);
+      (confirmed ? bucket(origin).lines : bucket(origin).drafts).push(listed);
+      continue;
+    }
     if (!billTo) {
       const target = bucket(origin);
       (confirmed ? target.lines : target.drafts).push({ ...line, billable: isShared(origin.kind) });
@@ -148,10 +160,7 @@ function bucketOf(entry: SnapshotEntry, nameOf: (id: string) => string): Bucket 
 }
 
 function payerOfBillTo(input: KkbInput, entry: SnapshotEntry, nameOf: (id: string) => string): Bucket | null {
-  const billTo = input.settlement.entries[entry.id]?.billTo;
-  if (billTo?.participantId) return { key: `p:${billTo.participantId}`, kind: "participant", title: nameOf(billTo.participantId), participantId: billTo.participantId };
-  if (billTo?.label) return { key: `n:${normalizeText(billTo.label)}`, kind: "name", title: billTo.label, participantId: null };
-  return null;
+  return bucketOfPerson(input.settlement.entries[entry.id]?.billTo, nameOf);
 }
 
 function dishLabel(entry: SnapshotEntry) {
@@ -181,6 +190,8 @@ function line(entry: SnapshotEntry, quantity: number, unit: number | null, price
     pendingChange: false,
     billedFrom: null,
     billedTo: null,
+    splitWays: null,
+    splitOfCentavos: null,
     billable: false,
     submittedBy: entry.submittedBy,
     priceRevision,
@@ -238,14 +249,26 @@ function toSection(b: Bucket & { lines: KkbLine[]; drafts: KkbLine[] }, meId: st
   };
 }
 
+/** Sums counted lines once per entry: a split dish sits on several cards but is one dish. */
+function countOnce(sections: KkbSection[], pick: (l: KkbLine) => boolean, amount: (l: KkbLine) => number): number {
+  const seen = new Set<string>();
+  let sum = 0;
+  for (const l of sections.flatMap((s) => s.lines)) {
+    if (l.billedTo || !pick(l) || seen.has(l.entryId)) continue;
+    seen.add(l.entryId);
+    sum += amount(l);
+  }
+  return sum;
+}
+
 /** What stops a bill-wide amount (service charge, adjustments) from being split yet. */
 function billBlockers(sections: KkbSection[]): KkbBlocker[] {
   const blockers: KkbBlocker[] = [];
   const unpriced = sections.filter((s) => s.unpricedUnits > 0);
-  if (unpriced.length) blockers.push({ kind: "unpriced", units: unpriced.reduce((sum, s) => sum + s.unpricedUnits, 0), where: unpriced.map((s) => s.title) });
+  if (unpriced.length) blockers.push({ kind: "unpriced", units: countOnce(sections, (l) => l.unitCentavos == null, (l) => l.quantity), where: unpriced.map((s) => s.title) });
   const unbilled = sections.filter((s) => s.shared).flatMap((s) => s.lines.filter((l) => !l.billedTo).map((l) => l.label));
   if (unbilled.length) blockers.push({ kind: "unbilled", dishes: unbilled });
-  const pending = sections.reduce((sum, s) => sum + s.pendingChanges, 0);
+  const pending = countOnce(sections, (l) => l.pendingChange, () => 1);
   if (pending) blockers.push({ kind: "pending", count: pending });
   return blockers;
 }
@@ -346,7 +369,8 @@ export function kkbText(kkb: Kkb, title: string, dateLabel: string): string {
 
   for (const a of kkb.adjustments.filter((x) => x.state === "unallocated")) out.push("", `Not assigned: ${a.cardLabel} ${a.direction === "discount" ? "−" : "+"}${formatPeso(a.amountCentavos ?? 0)}`);
 
-  const open = kkb.sections.flatMap((s) => s.lines.filter((l) => !l.billedTo && (l.unitCentavos == null || s.shared)).map((l) => ({ s, l })));
+  // An unpriced split dish is listed once, under its shared section, not once per payer.
+  const open = kkb.sections.flatMap((s) => s.lines.filter((l) => (l.splitWays ? !!l.billedTo && l.unitCentavos == null : !l.billedTo && (l.unitCentavos == null || s.shared))).map((l) => ({ s, l })));
   if (open.length > 0) {
     out.push("", "Not yet settled:");
     for (const { s, l } of open) out.push(`  ${l.label} ×${l.quantity} (${s.title})${l.unitCentavos == null ? ", no price" : ""}`);

@@ -2,9 +2,10 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { normalizeText, tidyText } from "@/lib/dish-name";
 import { can, canEditPrice, type Actor } from "@/lib/permissions";
 import type { Tx } from "@/server/db/client";
-import { correctionSettlements, dishes, entrySettlements, orderBatches, orderCorrections, orderEntries, participants, rounds, sessions, sharedPrices } from "@/server/db/schema";
+import { correctionSettlements, dishes, entryPayers, entrySettlements, orderBatches, orderCorrections, orderEntries, participants, rounds, sessions, sharedPrices } from "@/server/db/schema";
 import { AppError, closed, forbidden } from "@/server/errors";
 import { audienceOfEntries, notify, withMembers } from "@/server/notifications";
+import { keyOfRow, resolvePeople } from "./person-refs";
 import type { Applied, SessionRow } from "@/server/mutations";
 import type { CorrectionPriceInput, EntrySettlementInput, RenameMeInput, ReceiptTotalInput, ServiceChargeInput, SharedPriceInput } from "./validation";
 
@@ -12,10 +13,10 @@ import type { CorrectionPriceInput, EntrySettlementInput, RenameMeInput, Receipt
  * Changes that never touch what the waiter is told (prices, the receipt's service charge, a person's name). Confirming
  * a round still passes when only these happened since the host looked (owner decision, KKB brief §6).
  */
-export const NON_TICKET_EVENTS = ["entry.settled", "correction.priced", "session.serviceCharge", "session.receiptTotal", "participant.renamed", "adjustment.set", "adjustment.removed", "price.defaultSet", "dish.unavailableTold", "serving.updated", "participant.cohostSet", "participant.cohostRevoked"] as const;
+export const NON_TICKET_EVENTS = ["entry.settled", "correction.priced", "session.serviceCharge", "session.receiptTotal", "receipt.set", "receipt.removed", "participant.renamed", "adjustment.set", "adjustment.removed", "price.defaultSet", "dish.unavailableTold", "serving.updated", "participant.cohostSet", "participant.cohostRevoked"] as const;
 
 /** Length is checked again after tidying: NFKC can expand a few characters into many (DB CHECK is 1–40). */
-function tidyName(raw: string, message: string): string {
+export function tidyName(raw: string, message: string): string {
   const name = tidyText(raw);
   if (!name || name.length > 40) throw new AppError(422, "INVALID", message);
   return name;
@@ -42,7 +43,7 @@ export async function setEntrySettlement(tx: Tx, session: SessionRow, actor: Act
   if (entry.deletedAt) throw new AppError(409, "ENTRY_REMOVED", "That dish was removed. Undo the removal first.");
   if (input.unitPriceCentavos !== undefined && !canEditPrice(actor, entry)) throw forbidden("Only the host or the person who added this dish can price it.");
   if (input.unitPriceCentavos !== undefined && session.status === "CLOSED" && !can(actor, "price.editAny")) throw forbidden("Only the host can change prices after the order has ended.");
-  if (input.billTo !== undefined) {
+  if (input.billTo !== undefined || input.splitAmong !== undefined) {
     if (!can(actor, "billTo.set")) throw forbidden("Only the host can choose who pays for a shared dish.");
     const individual = entry.attributionType === "INDIVIDUAL" && (entry.attributedParticipantId || entry.collectiveLabel);
     if (individual) throw new AppError(422, "INVALID", "This dish is already for one person.");
@@ -54,11 +55,12 @@ export async function setEntrySettlement(tx: Tx, session: SessionRow, actor: Act
 
   const [current] = await tx.select().from(entrySettlements).where(eq(entrySettlements.entryId, entryId)).for("update");
   if ((current?.revision ?? 0) !== input.expectedRevision) throw conflict("this price");
+  const payers = input.splitAmong ? await resolvePeople(tx, session.id, input.splitAmong, new Set((await tx.select().from(entryPayers).where(eq(entryPayers.entryId, entryId))).map(keyOfRow))) : null;
   const billTo =
-    input.billTo === undefined
-      ? {}
-      : input.billTo === null
-        ? { billToParticipantId: null, billToLabel: null }
+    payers || input.billTo === null
+      ? { billToParticipantId: null, billToLabel: null }
+      : input.billTo === undefined
+        ? {}
         : "participantId" in input.billTo
           ? { billToParticipantId: input.billTo.participantId, billToLabel: null }
           : { billToParticipantId: null, billToLabel: tidyName(input.billTo.label, "Keep the name under 40 characters.") };
@@ -69,6 +71,9 @@ export async function setEntrySettlement(tx: Tx, session: SessionRow, actor: Act
   } else {
     await tx.insert(entrySettlements).values({ entryId, sessionId: session.id, ...price, ...billTo, revision, updatedBy: actor.participantId });
   }
+  // One mode at a time: a one-person Bill to (or clearing it) drops the split, a split clears Bill to.
+  if (payers || input.billTo !== undefined) await tx.delete(entryPayers).where(eq(entryPayers.entryId, entryId));
+  if (payers) await tx.insert(entryPayers).values(payers.map((p) => ({ entryId, sessionId: session.id, ...p })));
   // Prices never reset "I'm ready": they don't change what anyone ordered.
   return { result: { entryId, revision }, event: { type: "entry.settled", payload: { entryId } } };
 }

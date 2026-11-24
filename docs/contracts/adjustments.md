@@ -106,7 +106,7 @@ Interpretations the spec leaves open (suite accepts either): a removed guest get
 | D05 | Delete the order | adjustments and shares cascade | D |
 
 ## Billing after End (D1), `tests/contract-billing-after-end.test.ts`
-Routes: `PUT /prices`, `PUT /service-charge`, `PUT /receipt-total` (E01-E05 run for each), `PUT /entries/:id/settlement`, `PUT /corrections/:id/price`.
+Routes: `PUT /prices`, `PUT /service-charge`, `PUT /receipt-total`, `PUT /receipts/:id` (E01-E05 run for each), `PUT /entries/:id/settlement`, `PUT /corrections/:id/price`.
 | # | Scenario | Expected | Source |
 |---|---|---|---|
 | E01 | Ended order: host write; guest write | 200 applied, status CLOSED, closing date unchanged; guest 403, state unchanged | P D1 |

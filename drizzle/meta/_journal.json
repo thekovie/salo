@@ -106,6 +106,13 @@
       "when": 1795443020105,
       "tag": "0014_cohosts",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1795479273337,
+      "tag": "0015_receipts_splits",
+      "breakpoints": true
     }
   ]
 }

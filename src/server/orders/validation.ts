@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { normalizeText } from "@/lib/dish-name";
 import { ADJUSTMENT_CATEGORIES, ADJUSTMENT_METHODS } from "@/lib/snapshot";
+import { MAX_EXTRA_RECEIPTS } from "@/lib/receipts";
 import { MAX_SERVICE_CHARGE_CENTAVOS, MAX_UNIT_PRICE_CENTAVOS } from "@/lib/money";
 
 export const LIMITS = {
@@ -19,6 +20,7 @@ export const LIMITS = {
   correctionsPerSession: 100,
   participantsPerSession: 30,
   adjustmentsPerSession: 20,
+  receiptsPerSession: MAX_EXTRA_RECEIPTS,
   /** The host's optional note to a guest they remove. */
   removalReason: 140,
 } as const;
@@ -105,15 +107,21 @@ export const removeParticipantSchema = z.object({ reason: z.string().trim().max(
 /** Whole centavos; null clears (unknown price / service charge not entered). */
 const centavos = (max: number) => z.number().int("Use whole centavos.").min(0, "Can't be negative.").max(max, "That amount is too large.").nullable();
 
+/** A person by id or by typed name (same keys as Bill to). */
+const personRef = z.union([z.object({ participantId: z.uuid() }), z.object({ label: text(LIMITS.label).min(1, "Type the person's name.") })]);
+
 export const entrySettlementSchema = z
   .object({
     /** The settlement row's revision the person saw; 0 when nothing was set yet. */
     expectedRevision: z.number().int().min(0),
     unitPriceCentavos: centavos(MAX_UNIT_PRICE_CENTAVOS).optional(),
     /** Host only, shared or unassigned dishes only: who pays for the whole dish. null clears. */
-    billTo: z.union([z.object({ participantId: z.uuid() }), z.object({ label: text(LIMITS.label).min(1, "Type the person's name.") }), z.null()]).optional(),
+    billTo: personRef.nullable().optional(),
+    /** Host only: split the whole dish equally between these people (2 or more). Exclusive with billTo. */
+    splitAmong: z.array(personRef).min(2, "Pick at least 2 people.").max(LIMITS.participantsPerSession).optional(),
   })
-  .refine((v) => v.unitPriceCentavos !== undefined || v.billTo !== undefined, "Nothing to change.");
+  .refine((v) => v.billTo === undefined || v.splitAmong === undefined, "Choose one person or a split, not both.")
+  .refine((v) => v.unitPriceCentavos !== undefined || v.billTo !== undefined || v.splitAmong !== undefined, "Nothing to change.");
 export type EntrySettlementInput = z.infer<typeof entrySettlementSchema>;
 
 export const correctionPriceSchema = z.object({ expectedRevision: z.number().int().min(0), unitPriceCentavos: centavos(MAX_UNIT_PRICE_CENTAVOS) });
@@ -140,6 +148,16 @@ export type ServiceChargeInput = z.infer<typeof serviceChargeSchema>;
 
 export const receiptTotalSchema = z.object({ expectedRevision: z.number().int().min(0), centavos: centavos(MAX_SERVICE_CHARGE_CENTAVOS) });
 export type ReceiptTotalInput = z.infer<typeof receiptTotalSchema>;
+
+export const receiptSchema = z.object({
+  /** 0 creates (the id comes from the URL, so a retry never duplicates). */
+  expectedRevision: z.number().int().min(0),
+  label: optional(LIMITS.label),
+  totalCentavos: centavos(MAX_SERVICE_CHARGE_CENTAVOS),
+  people: z.array(personRef).min(1, "Pick at least one person.").max(LIMITS.participantsPerSession),
+});
+export type ReceiptInput = z.infer<typeof receiptSchema>;
+export const removeReceiptSchema = z.object({ expectedRevision: z.number().int().min(1) });
 
 const adjustmentShareSchema = z
   .object({ participantId: z.uuid().optional(), billToLabel: text(LIMITS.label).min(1, "Type the person's name.").optional(), amountCentavos: z.number().int().min(0).max(MAX_SERVICE_CHARGE_CENTAVOS).optional() })

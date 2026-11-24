@@ -20,7 +20,7 @@ PostgreSQL, defined in `src/server/db/schema.ts`; migrations in `drizzle/` (appl
 | `entry_claims` | A guest asking the host to hand over an entry recorded for them. |
 | `mutation_records` | Idempotency: (session, actor, key) unique; retries return the stored result. |
 | `session_events` | Durable, ordered event log (unique per session + revision) used for real-time replay. |
-| `entry_settlements` | KKB, per source entry: `unit_price_centavos` (null = unknown, 0–9,999,999), optional host-chosen payer for a shared or unassigned dish (`bill_to_participant_id` or `bill_to_label`, at most one), own `revision`. Separate from `order_entries` so prices can change after a round is confirmed without touching frozen order data. |
+| `entry_settlements` | KKB, per source entry: `unit_price_centavos` (null = unknown, 0–9,999,999), optional host-chosen payer for a shared or unassigned dish (`bill_to_participant_id` or `bill_to_label`, at most one), own `revision`. A shared dish can instead be split equally: its people live in `entry_payers` (exclusive with the bill-to columns). Separate from `order_entries` so prices can change after a round is confirmed without touching frozen order data. |
 | `served_counts` | Food tracker (F06), keyed by session + round + `line_key`: `served` (raw count, ≥ 0), own `revision`, `updated_by`. A line is a preparation (`preparationKey`: dish, normalized size, notes) or, after a told swap, the replacement (`to:<normalized text>`), per round. Expected quantity is never stored: it is the sum of `effectiveEntry` quantities of the line's confirmed entries, so served can exceed it after a told cancellation (shown as `min(served, expected)`). Cascades from session and round. Independent from KKB. |
 | `shared_prices` | KKB table price, keyed by session + dish + `variant_key` (normalized size, `''` for none; notes ignored): `unit_centavos` (0–9,999,999), own `revision`, `updated_by`. Host sets it; clearing sets `unit_centavos` to null and keeps the row, so its revision keeps counting up. A line's own price overrides it; replacements never inherit it. |
 | `correction_settlements` | KKB: price each for a replacement correction ("Change it to …"), host only, own `revision`. |
@@ -72,3 +72,9 @@ PostgreSQL, defined in `src/server/db/schema.ts`; migrations in `drizzle/` (appl
 - **Consolidated quantity** = sum of active (not removed) entry quantities per preparation; the dish total is the sum of its preparations.
 - **Order**: dishes in the order first added; within a dish the plain preparation first, then others as they first appeared.
 - Editing never happens on a consolidated line: steppers act on one source entry, so nobody's entry changes because of someone else's (brief 6.4).
+
+## Receipts and splits (`0015_receipts_splits`)
+
+- `entry_payers`: who splits a shared dish (`entry_id` cascade, `participant_id` or `bill_to_label`, exactly one; unique per entry by person and by lower-cased label). A split stores only who: each share is derived from the price in `buildKkb`, so it follows price and quantity changes.
+- `receipts`: an extra receipt (`label` up to 40, `total_centavos` null or 0..99,999,999, `revision`, `updated_by` same order via trigger). `receipt_people`: who it covers; unique per order by person and by lower-cased label, so one person is on at most one extra receipt. The main receipt stays on `sessions.receipt_total_*`.
+- Triggers keep `entry_payers`, `receipt_people` and `receipts.updated_by` inside the same order. Expected amounts per receipt are derived (covered cards plus their adjustments); nothing is stored or split.

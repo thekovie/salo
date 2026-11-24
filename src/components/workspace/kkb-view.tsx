@@ -1,8 +1,9 @@
 "use client";
 
 import { Check, CircleAlert, CircleCheck, Copy, Pencil, Share2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { personKey } from "@/lib/adjustments";
 import { normalizeText } from "@/lib/dish-name";
 import { track } from "@/lib/analytics";
 import { buildKkb, kkbText, priceCompleteness, tableLines, type Kkb, type KkbLine, type KkbSection } from "@/lib/kkb";
@@ -70,19 +71,22 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
 
   const lineProps = (section: KkbSection, line: KkbLine, draft: boolean): LineProps => {
     const key = lineKey(section, line, draft);
-    const live = line.correctionId
-      ? { unitCentavos: snapshot.settlement.corrections[line.correctionId]?.unitCentavos ?? null, billTo: null, revision: snapshot.settlement.corrections[line.correctionId]?.revision ?? 0 }
-      : (snapshot.settlement.entries[line.entryId] ?? { unitCentavos: null, billTo: null, revision: 0 });
+    const entry = snapshot.settlement.entries[line.entryId] ?? { unitCentavos: null, billTo: null, revision: 0 };
+    const live = line.correctionId ? { unitCentavos: snapshot.settlement.corrections[line.correctionId]?.unitCentavos ?? null, revision: snapshot.settlement.corrections[line.correctionId]?.revision ?? 0 } : entry;
+    const leftPayers: Payer[] = (entry.splitAmong ?? []).flatMap((p) => {
+      const k = personKey(p);
+      return payers.some((x) => x.key === k) ? [] : [{ key: k, title: kkb.sections.find((s) => s.key === k)?.title ?? p.label ?? "Someone", participantId: p.participantId, label: p.label }];
+    });
     const canPrice = line.correctionId ? isHost : isHost || (isOpen && line.submittedBy === meId);
     const table = isHost && canPrice ? tableFor(line) : null;
-    const canBillTo = isHost && line.billable && !line.correctionId && !draft;
+    const canBillTo = isHost && line.billable && !draft;
     return {
       rowKey: key,
       line,
       editing: editing === key,
       canEdit: canPrice || canBillTo,
       onEdit: () => setEditing(key),
-      editor: <PriceEditor key={key} line={line} sessionId={snapshot.session.id} refresh={refresh} canPrice={canPrice} canBillTo={canBillTo} payers={payers} table={table} live={live} onDone={() => setEditing((open) => (open === key ? null : open))} />,
+      editor: <PriceEditor key={key} line={line} sessionId={snapshot.session.id} refresh={refresh} canPrice={canPrice} canBillTo={canBillTo} payers={payers} table={table} live={live} bill={entry} leftPayers={leftPayers} onDone={() => setEditing((open) => (open === key ? null : open))} />,
     };
   };
 
@@ -163,7 +167,7 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
 
       <ServiceChargeBlock kkb={kkb} live={snapshot.settlement.serviceCharge} sessionId={snapshot.session.id} refresh={refresh} canEdit={isHost} isHost={isHost} />
       <AdjustmentsBlock kkb={kkb} snapshot={snapshot} refresh={refresh} isHost={isHost} />
-      <ReceiptCheckBlock kkb={kkb} live={snapshot.settlement.receiptTotal} sessionId={snapshot.session.id} refresh={refresh} canEdit={isHost} />
+      <ReceiptCheckBlock kkb={kkb} live={snapshot.settlement.receiptTotal} sessionId={snapshot.session.id} refresh={refresh} canEdit={isHost} snapshot={snapshot} />
       {isHost ? <PricesSheet open={pricesOpen} onOpenChange={setPricesOpen} snapshot={snapshot} refresh={refresh} /> : null}
     </div>
   );
@@ -376,7 +380,14 @@ function Lines({ section, lineProps, draftRound }: { section: KkbSection; linePr
 }
 
 function LineRow({ rowKey, line, editing, canEdit, onEdit, editor }: LineProps) {
-  const tags = [line.pendingChange ? "Change pending with the waiter" : null, line.billedFrom ? `from ${line.billedFrom}` : null, line.billedTo ? `Billed to ${line.billedTo}` : null].filter(Boolean);
+  const split = line.splitWays ? `split ${line.splitWays} ways` : null;
+  // Short tags never break inside; the names tag may, for long names.
+  const tags = [
+    line.pendingChange ? { text: "Change pending with the waiter", keep: false } : null,
+    split && line.billedFrom ? { text: split, keep: true } : null,
+    line.billedFrom ? { text: `from ${line.billedFrom}`, keep: true } : null,
+    line.billedTo ? { text: split ? `Split ${line.splitWays} ways: ${line.billedTo}` : `Billed to ${line.billedTo}`, keep: false } : null,
+  ].filter((t) => t !== null);
   const amount = line.subtotalCentavos != null ? formatPeso(line.subtotalCentavos) : null;
   const action = amount ?? (line.billable && line.unitCentavos != null ? "Bill to…" : "Add price");
   return (
@@ -387,9 +398,18 @@ function LineRow({ rowKey, line, editing, canEdit, onEdit, editor }: LineProps) 
             {line.label} <span className="tally text-tomato-ink">×{line.quantity}</span>
           </p>
           <p className="text-xs">
-            {line.unitCentavos != null ? <span className="tally">{formatPeso(line.unitCentavos)} each</span> : "No price yet"}
-            {line.priceSource === "table" ? " · table price" : line.priceSource === "line" && line.hasTable ? " · this line only" : ""}
-            {tags.length ? ` · ${tags.join(" · ")}` : ""}
+            {line.splitOfCentavos != null ? (
+              <span className="whitespace-nowrap">
+                <span className="tally">{formatPeso(line.subtotalCentavos ?? 0)}</span> of <span className="tally">{formatPeso(line.splitOfCentavos)}</span>
+              </span>
+            ) : line.unitCentavos != null ? <span className="tally">{formatPeso(line.unitCentavos)} each</span> : "No price yet"}
+            {line.splitOfCentavos != null ? "" : line.priceSource === "table" ? " · table price" : line.priceSource === "line" && line.hasTable ? " · this line only" : ""}
+            {tags.map((t) => (
+              <Fragment key={t.text}>
+                {" · "}
+                <span className={t.keep ? "whitespace-nowrap" : undefined}>{t.text}</span>
+              </Fragment>
+            ))}
           </p>
         </div>
         {canEdit && !editing ? (
