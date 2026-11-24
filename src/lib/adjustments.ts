@@ -48,7 +48,7 @@ export const percentLabel = (bps: number) => `${Number((bps / 100).toFixed(2))}%
 
 const possessive = (name: string) => `${name}’s`;
 
-function names(list: string[]) {
+export function names(list: string[]) {
   return list.length <= 3 ? list.join(", ") : `${list.slice(0, 2).join(", ")} and ${list.length - 2} more`;
 }
 

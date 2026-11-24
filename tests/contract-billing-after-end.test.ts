@@ -17,6 +17,7 @@ import { POST as ENTRIES_POST } from "@/app/api/sessions/[id]/entries/route";
 import { PUT as ENTRY_SETTLEMENT } from "@/app/api/sessions/[id]/entries/[entryId]/settlement/route";
 import { PUT as PRICES } from "@/app/api/sessions/[id]/prices/route";
 import { PUT as READINESS } from "@/app/api/sessions/[id]/readiness/route";
+import { PUT as RECEIPT_EXTRA } from "@/app/api/sessions/[id]/receipts/[receiptId]/route";
 import { PUT as RECEIPT } from "@/app/api/sessions/[id]/receipt-total/route";
 import { POST as ROUNDS_POST } from "@/app/api/sessions/[id]/rounds/route";
 import { PUT as SERVICE_CHARGE } from "@/app/api/sessions/[id]/service-charge/route";
@@ -123,6 +124,7 @@ const routes: Route[] = [
   { name: "PUT /prices", hostOnly403: true, call: (t, w, i) => call(PRICES, "PUT", w, t.sessionId, {}, { dishId: t.dishId, variant: null, unitCentavos: 15000, expectedRevision: 0 }, i) },
   { name: "PUT /service-charge", hostOnly403: true, call: (t, w, i) => call(SERVICE_CHARGE, "PUT", w, t.sessionId, {}, { expectedRevision: 0, centavos: 1000 }, i) },
   { name: "PUT /receipt-total", hostOnly403: true, call: (t, w, i) => call(RECEIPT, "PUT", w, t.sessionId, {}, { expectedRevision: 0, centavos: 160000 }, i) },
+  { name: "PUT /receipts/:id", hostOnly403: true, call: (t, w, i) => call(RECEIPT_EXTRA, "PUT", w, t.sessionId, { receiptId: "00000000-0000-4000-8000-000000000042" }, { expectedRevision: 0, label: null, totalCentavos: 1000, people: [{ label: "Lola" }] }, i) },
 ];
 
 describe("D1: an ended order (a round was confirmed) still takes the host's billing writes", () => {

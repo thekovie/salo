@@ -3,6 +3,9 @@ import type { NotificationsView } from "./notifications";
 import type { CorrectionView, TicketSnapshot } from "./ticket";
 
 /** Everything a client needs to draw a session, at one revision. Sent by GET /sync and the initial page render. */
+/** A person by id or by typed name (Bill to, splits, receipts, adjustment shares). */
+export type PersonRef = { participantId: string | null; label: string | null };
+
 export interface SessionSnapshot {
   session: {
     id: string;
@@ -50,7 +53,9 @@ export interface EntrySettlement {
   /** Price each in centavos; null = unknown. */
   unitCentavos: number | null;
   /** Host's settlement-only payer for a shared or unassigned dish. */
-  billTo: { participantId: string | null; label: string | null } | null;
+  billTo: PersonRef | null;
+  /** Host's equal split of a shared dish between 2 or more people; omitted when there is none. Exclusive with billTo. */
+  splitAmong?: PersonRef[];
   /** 0 when nothing was ever set. */
   revision: number;
 }
@@ -67,6 +72,17 @@ export interface SettlementView {
   receiptTotal: { centavos: number | null; revision: number };
   /** Discounts and extra charges, oldest first. Only what the host typed; shares are computed (`lib/adjustments.ts`). */
   adjustments: SnapshotAdjustment[];
+  /** Extra receipts (the main one is `receiptTotal`), oldest first. */
+  receipts: SnapshotReceipt[];
+}
+
+export interface SnapshotReceipt {
+  id: string;
+  label: string | null;
+  totalCentavos: number | null;
+  /** The people this receipt covers: a participant or a typed name. */
+  people: PersonRef[];
+  revision: number;
 }
 
 export const ADJUSTMENT_CATEGORIES = ["senior", "pwd", "privilege", "promo", "other"] as const;
@@ -84,11 +100,11 @@ export interface SnapshotAdjustment {
   percentBps: number | null;
   method: AdjustmentMethod;
   /** The people it applies to: a participant or a typed name. Amount only for "manual". */
-  shares: { participantId: string | null; label: string | null; amountCentavos: number | null }[];
+  shares: (PersonRef & { amountCentavos: number | null })[];
   revision: number;
 }
 
-export const EMPTY_SETTLEMENT: SettlementView = { entries: {}, corrections: {}, defaults: {}, serviceCharge: { centavos: null, revision: 0 }, receiptTotal: { centavos: null, revision: 0 }, adjustments: [] };
+export const EMPTY_SETTLEMENT: SettlementView = { entries: {}, corrections: {}, defaults: {}, serviceCharge: { centavos: null, revision: 0 }, receiptTotal: { centavos: null, revision: 0 }, adjustments: [], receipts: [] };
 
 /** Any price anywhere: a line's, a replacement's or a table price. */
 export const anyPrice = (s: Pick<SessionSnapshot, "settlement">) =>

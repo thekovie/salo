@@ -2,7 +2,7 @@ import { and, count, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { normalizeText, tidyText } from "@/lib/dish-name";
 import { can, type Actor } from "@/lib/permissions";
 import type { Tx } from "@/server/db/client";
-import { adjustments, adjustmentShares, entrySettlements, orderBatches, orderEntries, participants } from "@/server/db/schema";
+import { adjustments, adjustmentShares, entryPayers, entrySettlements, orderBatches, orderEntries, participants, receiptPeople } from "@/server/db/schema";
 import { AppError, forbidden } from "@/server/errors";
 import type { Applied, SessionRow } from "@/server/mutations";
 import { assertBillable, conflict } from "./settlement";
@@ -93,13 +93,15 @@ async function labelHasFood(tx: Tx, sessionId: string, key: string): Promise<boo
     .innerJoin(orderEntries, eq(orderEntries.batchId, orderBatches.id))
     .where(and(eq(orderBatches.sessionId, sessionId), eq(orderBatches.attributionType, "INDIVIDUAL"), isNull(orderBatches.attributedParticipantId), isNotNull(orderBatches.collectiveLabel), isNull(orderEntries.deletedAt)));
   const billed = await tx.selectDistinct({ label: entrySettlements.billToLabel }).from(entrySettlements).where(and(eq(entrySettlements.sessionId, sessionId), isNotNull(entrySettlements.billToLabel)));
-  return [...ordered, ...billed].some((r) => normalizeText(r.label ?? "") === key);
+  const split = await tx.selectDistinct({ label: entryPayers.billToLabel }).from(entryPayers).where(and(eq(entryPayers.sessionId, sessionId), isNotNull(entryPayers.billToLabel)));
+  return [...ordered, ...billed, ...split].some((r) => normalizeText(r.label ?? "") === key);
 }
 
 // A claim moves one draft batch only: while the typed name still has food, its shares stay on that card.
 export async function adoptLabelShares(tx: Tx, sessionId: string, typedName: string, participantId: string): Promise<void> {
   const key = normalizeText(typedName);
   if (await labelHasFood(tx, sessionId, key)) return;
+  await adoptReceiptLabel(tx, sessionId, key, participantId);
   const rows = await tx.select().from(adjustmentShares).where(and(eq(adjustmentShares.sessionId, sessionId), isNotNull(adjustmentShares.billToLabel)));
   for (const row of rows.filter((r) => normalizeText(r.billToLabel ?? "") === key)) {
     const [twin] = await tx.select().from(adjustmentShares).where(and(eq(adjustmentShares.adjustmentId, row.adjustmentId), eq(adjustmentShares.participantId, participantId)));
@@ -110,4 +112,14 @@ export async function adoptLabelShares(tx: Tx, sessionId: string, typedName: str
     if (row.amountCentavos !== null) await tx.update(adjustmentShares).set({ amountCentavos: (twin.amountCentavos ?? 0) + row.amountCentavos }).where(eq(adjustmentShares.id, twin.id));
     await tx.delete(adjustmentShares).where(eq(adjustmentShares.id, row.id));
   }
+}
+
+/** A typed name on an extra receipt becomes the claimant; if the claimant is already on one, the name's row just goes (one receipt per person). */
+async function adoptReceiptLabel(tx: Tx, sessionId: string, key: string, participantId: string): Promise<void> {
+  const rows = await tx.select().from(receiptPeople).where(and(eq(receiptPeople.sessionId, sessionId), isNotNull(receiptPeople.billToLabel)));
+  const row = rows.find((r) => normalizeText(r.billToLabel ?? "") === key);
+  if (!row) return;
+  const [onOne] = await tx.select({ id: receiptPeople.id }).from(receiptPeople).where(and(eq(receiptPeople.sessionId, sessionId), eq(receiptPeople.participantId, participantId)));
+  if (onOne) await tx.delete(receiptPeople).where(eq(receiptPeople.id, row.id));
+  else await tx.update(receiptPeople).set({ participantId, billToLabel: null }).where(eq(receiptPeople.id, row.id));
 }

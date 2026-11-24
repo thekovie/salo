@@ -533,3 +533,68 @@ export const adjustmentShares = pgTable(
     check("adjustment_shares_amount_ck", sql`amount_centavos BETWEEN 0 AND 99999999`),
   ],
 );
+
+/** Who shares one shared dish equally (KKB split). Rows exist only for a split (2 or more people); shares are computed. */
+export const entryPayers = pgTable(
+  "entry_payers",
+  {
+    id: id(),
+    entryId: uuid("entry_id")
+      .notNull()
+      .references(() => orderEntries.id, { onDelete: "cascade" }),
+    sessionId: sessionRef(),
+    // No cascade: participants are soft-removed, so a removed payer keeps their share.
+    participantId: uuid("participant_id").references(() => participants.id),
+    billToLabel: text("bill_to_label"),
+  },
+  (t) => [
+    index("entry_payers_entry_idx").on(t.entryId),
+    index("entry_payers_session_idx").on(t.sessionId),
+    uniqueIndex("entry_payers_entry_person_uq").on(t.entryId, t.participantId),
+    uniqueIndex("entry_payers_entry_label_uq").on(t.entryId, sql`lower(${t.billToLabel})`),
+    check("entry_payers_one_who_ck", sql`num_nonnulls(participant_id, bill_to_label) = 1`),
+    check("entry_payers_label_ck", sql`char_length(bill_to_label) BETWEEN 1 AND 40`),
+  ],
+);
+
+/** An extra restaurant receipt (KKB): a label, its printed total and the people it covers. The main receipt stays on `sessions`. */
+export const receipts = pgTable(
+  "receipts",
+  {
+    id: uuid("id").primaryKey(),
+    sessionId: sessionRef(),
+    label: text("label"),
+    totalCentavos: integer("total_centavos"),
+    revision: integer("revision").notNull().default(1),
+    createdAt: createdAt(),
+    updatedBy: uuid("updated_by").references(() => participants.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("receipts_session_idx").on(t.sessionId),
+    check("receipts_label_ck", sql`char_length(label) BETWEEN 1 AND 40`),
+    check("receipts_total_ck", sql`total_centavos BETWEEN 0 AND 99999999`),
+    check("receipts_revision_ck", sql`revision >= 1`),
+  ],
+);
+
+/** The people an extra receipt covers. A person sits on one extra receipt at most; everyone else is on the main receipt. */
+export const receiptPeople = pgTable(
+  "receipt_people",
+  {
+    id: id(),
+    receiptId: uuid("receipt_id")
+      .notNull()
+      .references(() => receipts.id, { onDelete: "cascade" }),
+    sessionId: sessionRef(),
+    participantId: uuid("participant_id").references(() => participants.id),
+    billToLabel: text("bill_to_label"),
+  },
+  (t) => [
+    index("receipt_people_receipt_idx").on(t.receiptId),
+    uniqueIndex("receipt_people_session_person_uq").on(t.sessionId, t.participantId),
+    uniqueIndex("receipt_people_session_label_uq").on(t.sessionId, sql`lower(${t.billToLabel})`),
+    check("receipt_people_one_who_ck", sql`num_nonnulls(participant_id, bill_to_label) = 1`),
+    check("receipt_people_label_ck", sql`char_length(bill_to_label) BETWEEN 1 AND 40`),
+  ],
+);

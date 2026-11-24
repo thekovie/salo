@@ -11,8 +11,8 @@ Each slice ships as its own branch and squash PR into `dev` (HANDOFF working rul
 | 0 | Phase 0 | Audit (`salo-v1-4-audit.md`) + this plan | — | done (decisions answered 2026-11-23) |
 | 1 | F01 + F11 (pricing part) | Price status in What's next, quick-entry Prices sheet, draft persistence, guest "so far" label | none | landed (PR #51) |
 | 2 | F02, F03 | Receipt adjustments, allocation methods A–E, adjusted vs actual totals | 0013 | landed (PR #52) |
-| 3 | F04 (+F12 lock fix) | Co-hosts, `can()` capability map, role re-check under lock, serving precondition | 0014 | landed (PR pending) |
-| 4 | F05, F06 | Multiple receipts, shared-dish splits | 0015 | not started |
+| 3 | F04 (+F12 lock fix) | Co-hosts, `can()` capability map, role re-check under lock, serving precondition | 0014 | landed (PR #53) |
+| 4 | F05, F06 | Multiple receipts, shared-dish splits | 0015 | landed (PR pending) |
 | 5 | F07 | Payment ledger, derived balances | 0016 | not started |
 | 6 | F08, F09 | My order sheet, host transfer | 0017 | not started |
 | 7 | F10, F12 | Manifest `id`/`scope`, invite continuity copy, reliability fixes + tests | — | not started |
@@ -39,8 +39,8 @@ Each slice ships as its own branch and squash PR into `dev` (HANDOFF working rul
 | L13 | F02 "Receipt Discounts and Adjustments" incl. "The restaurant's final receipt is authoritative… must not subtract that discount again" | Adjusted total and receipt total shown separately; discrepancy never forced to zero | 2 | planned (slice 2 section) |
 | L14 | F03 "Proportional / Equal / Individual / Manual / Unallocated" | Allocation methods over `allocate` | 2 | planned (slice 2 section) |
 | L15 | F04 "Introduce an optional **Co-host** role" | Co-host flag (D2), serving capability, lock re-check | 3 | not started |
-| L16 | F05 "Allow one dining session to record multiple restaurant receipts." | `receipts` | 4 | not started |
-| L17 | F06 "Allow the host to allocate a shared item's cost among selected participants." | Split payers | 4 | not started |
+| L16 | F05 "Allow one dining session to record multiple restaurant receipts." | `receipts` | 4 | planned (slice 4 section) |
+| L17 | F06 "Allow the host to allocate a shared item's cost among selected participants." | Split payers | 4 | planned (slice 4 section) |
 | L18 | F07 "Introduce optional settlement tracking" | Payments ledger | 5 | not started |
 | L19 | F08 "Provide a convenient **My order** review" | My order sheet | 6 | not started |
 | L20 | F09 "Introduce an explicit host-transfer workflow." | Atomic transfer | 6 | not started |
@@ -465,7 +465,7 @@ M5 Dock while unresolved: `[ My share so far · ₱828 ]` / short `[ Share so fa
 
 ## Slice 3: co-hosts and safe serving (F04, F12 lock fix)
 
-Status: landed (PR pending)
+Status: landed (PR #53)
 
 Research brief (2026-11-23, researcher) cited below; baseline in `.shots/before/` (slice 2 shots moved to `.shots/v1-4-slice2/`). D2 (`participants.cohost_at`) and D3 (count precondition) are already decided. Pre-existing, seen in baseline: at 320 long guest names wrap to 3–4 lines and squeeze the Ready chip (chip text wraps) in `people-host-long-names-320`; the "Kain na!" toast covers a row above the dock there. Not this slice's scope unless D17's control makes it worse.
 
@@ -619,3 +619,215 @@ Sisig                              [ − 1 + ]
 M4 Host's Served section footer (D19 a): `Busy table? Make a guest a co-host so they can help. →`
 
 D18 notifications: "Ana made you a co-host. You can mark food as served." / "Ana stopped your co-host role."
+
+## Slice 4: multiple receipts and shared-dish splits (F05, F06)
+
+Status: landed (PR pending)
+
+Research brief (2026-11-24, researcher) cited below; baseline in `.shots/before/` (seed `.shots/before/seed.mjs`, index `README.md`; slice 3 shots moved to `.shots/v1-4-slice3/`). Pre-existing, seen in baseline: on a payer's card the tag "table price · from Whole table" wraps to two lines at 375 (`kkb-shared-billed-375`); at 320 long names make each Bill to chip wrap to 2 lines and "Billed to Maria Concepcion dela Cruz-Villanueva" runs 4 lines (`kkb-long-names-320`); the session header title button is 25 px next to 44 px buttons (geometry finding in every shot). Not this slice's scope unless the new UI makes them worse.
+
+### Ask ledger (slice 4)
+
+Brief F05 and F06 quoted from `salo-v1-4-brief.md:449-530`.
+
+| # | Owner's words | Planned change | Status |
+|---|---|---|---|
+| S4.1 | "Allow one dining session to record multiple restaurant receipts." | Host adds extra receipts beside the existing one, which becomes "Main receipt" once there are two | done |
+| S4.2 | "Each receipt should support: Optional descriptive label. Actual total amount. Associated participants or relevant allocations. Recorded adjustments. Reconciliation status." | Receipt = label (optional, ≤ 40) + typed total + who it covers (D22) + the adjustments on those people (derived, listed) + its own match / more / less chip | done |
+| S4.3 | "Example: Main table receipt, Senior citizen receipt, PWD receipt" | Label hint "e.g. Senior citizen receipt" | done |
+| S4.4 | "The receipts should be created when needed, not before ordering." | "Add another receipt" lives only in the Receipt check block (after a confirmed round, as today); nothing before ordering | done |
+| S4.5 | "Never double-count the same item or payment obligation." | A person can be on one extra receipt only (DB unique + picker disables people already covered); Main = everything not on an extra receipt | done |
+| S4.6 | "Never assume a separate receipt automatically belongs entirely to one participant." | Receipts never change anyone's share; they only compare. A receipt can cover several people | done |
+| S4.7 | "Keep unassigned amounts visible." | Main receipt shows what it carries, incl. "Decide later" adjustments; an extra receipt whose people have nothing on the bill is flagged | done |
+| S4.8 | "Ensure total receipt amounts reconcile with participant obligations." | Per-receipt chip + "All receipts ₱X · Salo ₱Y" summary row when there are two or more | done |
+| S4.9 | "Preserve the standard single-receipt workflow as the default." / "Avoid building a complete billing-group engine…" | No extra receipts → block, labels, chip and Copy summary byte-identical to today; receipts cover people, not lines | done |
+| S4.10 | "Allow the host to allocate a shared item's cost among selected participants." | Bill to gains "Split equally" across picked people (D23) | done |
+| S4.11 | "Initially support: Equal division. Selected participants. Explicit payer assignment. Custom amounts may be implemented if necessary…" | Equal split among selected people; explicit payer = today's one-person Bill to; custom amounts per D24 | done |
+| S4.12 | "Preserve the original source order. Do not change the waiter ticket." | Split stored in settlement only; tickets, Items text/PNG, confirmed snapshots untouched (`lib/snapshot.ts:39-44`) | done |
+| S4.13 | "Separate who submitted the order from who pays." | Origin row stays in its shared section tagged "Split 3 ways: Jun, Liza, Ana"; each payer card shows its share "from Whole table" | done |
+| S4.14 | "Prevent duplicate billing." | One-person Bill to and split are mutually exclusive on the same settlement row (one revision); shares sum to the line subtotal | done |
+| S4.15 | "Recalculate shares when the item's price changes." | Only the set of people is stored; shares derived in `buildKkb` | done |
+| S4.16 | "Handle cancellation and replacement correctly." | Shares follow the effective line (quantity corrections, replacement price); Bill to / split also offered on replacement lines (fixes today's hole, `kkb-view.tsx:78`) | done |
+| S4.17 | "Use deterministic rounding." | `allocate` with equal weights (largest remainder, ties by payer key) | done |
+| S4.18 | "Shared-cost allocation must also be compatible with receipt discounts." / "…does not automatically establish eligibility for a statutory discount." | Split shares count as the payer's food (service weight, proportional / % basis, D15 cap), like Bill to today; discounts still pick people explicitly, never from dish payers | done |
+
+### Today
+
+- **Receipt**: one `sessions.receipt_total_centavos` + `receipt_total_revision` (`schema.ts:57-58`); `PUT /receipt-total` (`receipt-total/route.ts:9-17`, `allowClosed`) → `setReceiptTotal` (`settlement.ts:159-166`); snapshot `settlement.receiptTotal` (`sessions/snapshot.ts:110`, `lib/snapshot.ts:67,91`). `reconcile(kkb, centavos)` compares with `kkb.adjustedTotal` after the incomplete / pending / waiting gates (`kkb.ts:316-324`). `ReceiptCheckBlock` (`receipt-check-block.tsx`, 97 lines): Food in Salo / Service charge / Salo total (`:80-82`), Discounts and extras + Adjusted total when any (`:83-84`), host `AmountEditor` "Receipt total (₱)" + chip (`:87-90`), chip copy `:29-40`. Mounted once at `kkb-view.tsx:166`. `kkbText` never mentions the receipt (contract S08).
+- **Bill to**: per entry, whole line, one payer: `entry_settlements.bill_to_participant_id | bill_to_label` (`schema.ts:366-382`, one-payer CHECK `:381`), `PUT /entries/[id]/settlement` (`allowClosed`, key `entry.settle:<id>`) → `setEntrySettlement` (`settlement.ts:34-74`): host only, shared lines only (422 for personal), person must be active. Body `entrySettlementSchema` (`validation.ts:108-116`).
+- **Math**: `buildKkb` routes a billed shared line twice: counted on the payer card (`billedFrom`), listed uncounted in the shared section (`billedTo`) (`kkb.ts:113-129`). `billBlockers` treats any shared line without `billedTo` as `unbilled`, which blocks the service charge and every adjustment (`kkb.ts:242-251`, used `:134,260`). Service charge and adjustments weight by `pricedCentavos` (`kkb.ts:261-268`, `adjustments.ts:71,82,87`).
+- **Picker**: radio chips "No one yet / Host (you) / Jun / Liza" in the inline `PriceEditor` fieldset "Bill to" (`price-editor.tsx:197-210`), copy "The whole dish goes to one person…" (`:200`); offered when `isHost && line.billable && !line.correctionId && !draft` (`kkb-view.tsx:78`). `billKeyOf` lower-cases labels (`price-editor.tsx:45`) while `payers` uses `normalizeText` (`kkb-view.tsx:51`): preselection can miss for a label that differs only by NFKC/whitespace.
+- **Replacement hole**: a replaced shared line keeps routing by the source entry's Bill to (`kkb.ts:118`), the server accepts Bill to on it, but the UI hides Bill to on replacement lines (`!line.correctionId`), so a shared dish swapped before billing blocks the service charge forever.
+- **Typed names**: claim approval adopts adjustment-share labels (`people.ts:151` → `adoptLabelShares`, `adjustments.ts:99-111`) only once the label has no food left; `labelHasFood` already counts `entry_settlements.bill_to_label` (`adjustments.ts:95`), so Bill to labels never need adopting.
+- `workspace.tsx` is at 800/800 lines; `kkb.ts` 449, `kkb-view.tsx` 415, `price-editor.tsx` 243, `schema.ts` 535. Latest migration `0014_cohosts`.
+
+### Approach
+
+Store only who and what the host typed; derive every share and expected total in pure code, as slices 1–2.
+
+- **Migration 0015** (`drizzle/0015_receipts_splits.sql`, additive; rollback drops the three tables):
+  - `entry_payers`: `entry_id` (FK `order_entries`, cascade), `session_id` (cascade), `participant_id` nullable (FK, no cascade: participants are soft-removed), `bill_to_label` nullable (tidied, ≤ 40), `num_nonnulls = 1`; unique `(entry_id, participant_id)` and `(entry_id, bill_to_label)`; `*_same_session` trigger on entry + participant (pattern `0007_settlement.sql:43-64`). Rows exist only for a split (≥ 2 people).
+  - `receipts`: `id uuid` (client-generated), `session_id` (cascade), `label` nullable (≤ 40), `total_centavos` nullable (0 … `MAX_SERVICE_CHARGE_CENTAVOS`, same cap as the receipt total), `revision ≥ 1`, `created_at`, `updated_by` (set null), `updated_at`, `session_idx`.
+  - `receipt_people`: `receipt_id` (cascade), `session_id`, `participant_id` | `bill_to_label` (`num_nonnulls = 1`); unique `(session_id, participant_id)` and `(session_id, bill_to_label)` so a person sits on one extra receipt at most (S4.5); same-session trigger.
+  - The main receipt stays the existing `sessions.receipt_total_*` (no backfill; R01-R05, V01 and `docs/contracts/receipt-total.md` stay valid). No `adjustments.receipt_id` (audit §4 idea dropped: adjustments reach a receipt through the people they apply to).
+- **Split API**: extend `PUT /entries/[id]/settlement`: `entrySettlementSchema` gains `splitAmong: [{participantId} | {label}]` (2 … `LIMITS.participantsPerSession`, distinct), mutually exclusive with `billTo` (zod refine). Setting `splitAmong` clears `bill_to_*` and replaces `entry_payers`; setting `billTo` (incl. null) deletes `entry_payers`; both bump the one `entry_settlements.revision` (so switching modes can't race). Same checks as Bill to (host, shared line, typed labels tidied). Duplicates by `personKey` (participantId, or `normalizeText` of the label) → 422 "Pick each person once" before insert (else `allocate`'s Map collapses keys and shares stop summing); DB backstop unique on `(entry_id, lower(bill_to_label))`. Newly added people must be active (404 `PERSON_NOT_FOUND`, as `settlement.ts:44`); a person already in the stored set may stay, and the editor lists them ticked "(left)" so the host can untick. Same two rules for receipt people (unique `(session_id, lower(bill_to_label))`). Same event `entry.settled`, same key type.
+- **Receipts API** (host only, existing `receipt.set` action, `allowClosed: true`, `assertBillable`):
+  - `PUT /api/sessions/[id]/receipts/[receiptId]` `{expectedRevision, label, totalCentavos, people: [{participantId}|{label}]}`, `expectedRevision 0` creates; people ≥ 1; replaces `receipt_people` in the transaction; a person already on another receipt → 409 `ALREADY_ON_RECEIPT` (unique violation mapped, never 500); `LIMITS.receiptsPerSession = 10` next to `adjustmentsPerSession` (`validation.ts:21`); 11th → 400 `TOO_MANY_RECEIPTS`. `totalCentavos` nullable: Save works with a blank total.
+  - `DELETE …/receipts/[receiptId]` `{expectedRevision}`; missing → 404 `RECEIPT_NOT_FOUND`; stale → 409.
+  - Events `receipt.set`, `receipt.removed` in `NON_TICKET_EVENTS` with the `tests/serving.test.ts:102` assertion (event names `receipt.set` / `receipt.removed` deliberately match the `receipt.set` action; docs say so). Keys `receipt.set:<id>` / `receipt.remove:<id>`.
+  - Claim approval: `labelHasFood` also counts `entry_payers.bill_to_label` (a typed name that is a split payer is never adopted); `adoptLabelShares` also adopts `receipt_people` labels. If the claimant already sits on an extra receipt (any, incl. the same one), delete the label row instead of updating it (else the unique → 500).
+- **Snapshot**: `settlement.entries[id].splitAmong?: {participantId, label}[]`, optional and omitted when there is no split (keeps `tests/settlement.test.ts:41` `toEqual` and typed fixtures valid); `settlement.receipts: SnapshotReceipt[]` (with people), ordered by `created_at`; `EMPTY_SETTLEMENT` (`lib/snapshot.ts:91`) and the literal at `tests/guide.test.ts:37` gain `receipts: []`.
+- **Split math** (`buildKkb` loop, helper in new `src/lib/splits.ts` so `kkb.ts` stays small): a shared line with `splitAmong` (and no Bill to) pushes one copy per payer with `subtotalCentavos = allocate(subtotal, equal weights by payer key)`, `billedFrom: origin.title`, `splitWays: n`; the origin keeps one listed, uncounted line with `billedTo` = the names. So `pricedCentavos`, service weight, adjustment basis, D15 cap and `foodCentavos` all follow with no further change (shares sum to the subtotal). An **unpriced** split line: payer copies keep `unpricedUnits` and `status: partial` on their own card (each card honestly shows "no price"; `toSection` never counts the `billedTo` origin, `kkb.ts:215-218`), and every bill-wide sum dedupes by `entryId`: `billBlockers` units and pending (`kkb.ts:245,248`), `kkbText` "Not yet settled" (one line under the origin title, `kkb.ts:349-353`) and its reasons. `priceCompleteness` already dedupes (`kkb.ts:292`). Server rejects `splitAmong` < 2 after de-duplication (422); a cancelled line (`quantity ≤ 0`, `kkb.ts:206`) keeps inert rows. A split with a removed person keeps their share on their "(left)" card, as Bill to does today.
+- **Receipt math** (new pure `src/lib/receipts.ts`, `reconcile` untouched): `reconcileReceipts(kkb, mainTotal, receipts)` → per receipt `{id, label, covers: names, expectedCentavos, adjustments: titles, state}` where expected = Σ covered cards' `totalCentavos ?? pricedCentavos` + the signed `shares` of **flagged** adjustments for its people (D15 flagged ones count in `adjustedTotal`, `adjustments.ts:115`, but not on cards; they keep `shares`, `:117`); Main expected = `adjustedTotal` − Σ extras' expected (so "Decide later" adjustments and anyone not covered land on Main). Same gates as `reconcile` (incomplete / pending / waiting) for every receipt; an extra receipt with no total → "Enter the total"; a covered person with no card or ₱0 → flagged "Ana has nothing on the bill". Overall: Σ receipt totals vs `adjustedTotal` when every total is entered.
+- **UI** (new files; `workspace.tsx` untouched: everything rides on the snapshot already passed to `KkbView`):
+  - `ReceiptCheckBlock`: no extra receipts → exactly today's markup and copy, plus a quiet "Add another receipt" button for the host. Unlabelled extras read "Receipt 2", "Receipt 3"… by `created_at`. With extras every chip says "on this receipt" (Main included); single-receipt copy "on the receipt" untouched (`e2e/receipt-check.spec.ts:46,55`). Covers line: names, "Host, Jun and 4 more" past 3 (`names`, `adjustments.ts:51`). Main with no total shows today's "Enter the receipt total…" (`receipt-check-block.tsx:97`). With extras → M1: one card per receipt (Main first), each with Salo's expected amount for it, its total field (Main keeps the existing `AmountEditor` "Receipt total (₱)" path; extras open the sheet), its chip; then the "All receipts" row. Region name "Check against the receipt" kept.
+  - `receipt-sheet.tsx`: drawer (M2) label, who it covers (checklist of people with food; people on another receipt disabled with "on Senior citizen receipt"), total, Save / Remove with inline confirm, conflict and offline states as `AmountEditor` / `AdjustmentSheet`.
+  - `split-picker.tsx` inside `PriceEditor`'s Bill to fieldset (D23 a): chips stay as today; a last option "Split equally…" mounts (not merely shows: `e2e/kkb.spec.ts:62` uses a strict `getByText("JD")`) a checklist of payers and the live "₱260.00 each" line. Copy line changes to "One person pays, or split it equally." Hidden when `payers.length < 2`. Save disabled below 2 with "Pick at least 2 people." A line already split opens on "Split equally…" with its people ticked; `billChanged` (`price-editor.tsx:85`) includes a change of the set and `adoptLatest` (`:72-76`) resets it; the table-price path's `expectedEntryRevision` (`:110`) bumps for it too.
+  - Replacement lines (D25): `lineProps` passes the entry's `billTo`, `splitAmong` and `settlement.entries[entryId].revision` for the bill part (today it hands correction lines `billTo: null`, `kkb-view.tsx:70-72`); the editor sends the price to `/corrections/:id/price` and Bill to / split to `/entries/:entryId/settlement` (today all goes to the correction route, `price-editor.tsx:92-99`). Two saves; a conflict on either keeps what was typed.
+  - Rows: origin "Split 3 ways: Jun, Liza, Ana" (replacing "Billed to …"; the origin line also carries `splitWays`, since `billedTo` is only a names string and `LineRow`, `kkb-view.tsx:379`, must tell split from Bill to). Payer copy: title `Crispy Pata ×{qty}`, sub-line `₱390.00 of ₱780.00 · split 3 ways · from Whole table` (no fraction glyphs); its action button reads the share; the editor on it is the same entry's editor. Unpriced: `No price yet · split 3 ways · from Whole table`. Check at 320 and 375 (baseline already wraps the shorter tag at 375). Footer "Everything here is billed to someone." counts splits as billed.
+  - `kkbText`: split shares appear inside each person's total (food sum), no new line; no receipt lines (S08 kept). Unbilled reason copy unchanged.
+- **Docs**: `docs/api.md` (settlement row, receipts rows), `docs/data-model.md:29,62` + KKB section, `docs/ux-specification.md:63-64` (also drop the stale "Read-only after the order ends"), `docs/realtime.md:12` events, new `docs/contracts/receipts.md`, `docs/contracts/table-prices.md` or the settlement contract for split rows, `docs/contracts/adjustments.md` D1 table (new routes).
+
+Rejected: line-level receipt assignment (`entry_settlements.receipt_id`): exact item membership, but it is the billing-group engine the brief says to avoid and reopens per-receipt service and adjustment math. A separate split route: two revisions on one line would let Bill to and a split both land (S4.14).
+
+### Reuse
+- `allocate` for split shares; `bucketOf` / `payerOfBillTo` key scheme (`p:<id>`, `n:<normalized>`) for split payers and receipt people.
+- `payers` list (`kkb-view.tsx:48-54`) for the split checklist and the receipt's "who it covers".
+- `adoptLabelShares` / `labelHasFood` (`adjustments.ts:90-111`) extended for `receipt_people` and `entry_payers`; `personKey` (`adjustments.ts:40`) for duplicate checks.
+- Route + revision pattern from `adjustments/[adjustmentId]/route.ts` and `server/orders/adjustments.ts:34-92`; trigger pattern from `0013_adjustments.sql`.
+- `Drawer`, `Button`, `AmountEditor`, `useDirectSave` + `useRetryOnReconnect`, `parsePeso`/`formatPeso`, `AdjustmentSheet` layout and Remove confirm.
+
+### Not doing
+- Uneven splits, portions or exact amounts (D24), per-receipt service charge (the host types the session's total service across receipts), labelling the Main receipt, line-level receipt membership.
+- Receipt lines in Copy summary, Items text/PNG, waiter ticket, invite.
+- Who actually paid (slice 5), rotating the odd-centavo winner across dishes.
+- Notifications for receipts or splits.
+
+### States
+
+| State | After |
+|---|---|
+| No extra receipts | Receipt check exactly as today + host "Add another receipt" (guests: unchanged) |
+| Two receipts, both matching | M1: Main + Senior citizen receipt cards with ✓ chips; "All receipts ₱3,054.00 · Salo ₱3,054.00 ✓" |
+| Extra receipt, no total yet | Its card: "Enter the total"; overall row hidden until every total is in |
+| One receipt more / less | Its chip "₱120.00 more on this receipt. Not split."; others unaffected |
+| Blocked (unpriced / pending / waiting / unbilled) | Every receipt shows today's incomplete copy once (block-level), no per-receipt chips |
+| Covered person has nothing on the bill | Receipt card flag "Ana has nothing on the bill" |
+| "Decide later" adjustment with extras | Main card line "Not assigned: Corkage +₱200.00" |
+| Flagged (D15) discount for a covered person | Counted on that person's receipt, not Main |
+| Receipt sheet: saving / failed offline / conflict / remove confirm / person on another receipt | As `AdjustmentSheet`; disabled checkbox "on Senior citizen receipt" |
+| 11th receipt | Add button hidden at the limit; server 400 |
+| Guest, open or ended | Read-only cards and chips, no Add / edit |
+| Split picker: choosing people | Checklist; "₱260.00 each" (or "₱260.34 or ₱260.33 each" when it doesn't divide); Save disabled below 2, "Pick at least 2 people."; option hidden with < 2 payers; left person in set ticked "(left)" |
+| Split, unpriced dish | Origin "Split 3 ways…"; each payer card shows "No price yet · split 3 ways…"; blockers / Copy summary count the dish once |
+| Split, priced | Payer cards each show their share; origin row uncounted; service charge unblocked |
+| Price changes / quantity corrected / replaced | Shares recompute live; replacement line offers Bill to / split |
+| Switch split → one person → split | One mode at a time; never both on cards |
+| Payer later removed | Their share stays on the "(left)" card, as Bill to today |
+| Ended order, host | Receipts and splits editable (D1); guest read-only |
+| Long names, 320 | Split checklist rows wrap under the box; receipt card title wraps; no horizontal scroll |
+| Widths | 320, 360, 375, 390, 430, 768, 1280; light and dark; sheets at 320 with keyboard |
+
+### Decisions
+
+Owner answers 2026-11-24: D22–D26 = recommended option. M1, M2, M3a and M4 confirmed as sketched. Follow-up 2 (owner, 2026-11-24): a receipt a name claim leaves covering nobody is kept with its total and flagged "Covers nobody yet. Tap the pencil to pick who." (guest: "Covers nobody yet."), no chip. After build (owner): "Split equally…" stays visible on an already-split dish even with fewer than 2 active payers, so the host can see and fix it.
+
+- **D22 [decided: (a) people it covers] What an extra receipt is tied to.** (a) The people it covers (optional label + total + people); Salo's expected amount = their cards; Main = everyone else (M1); (b) total only: sum of all receipt totals vs Salo's adjusted total, no per-receipt check; (c) line-level: each dish assigned to a receipt. Recommend (a): the brief asks for "Associated participants" and per-receipt "Reconciliation status", which (b) can't give; (c) is the "billing-group engine" the brief says to avoid; (a) reuses card totals that already include splits, service share and that person's discounts (`kkb.ts:261-268`, `adjustments.ts:71`).
+- **D23 [decided: (a) inside Bill to] Where the split lives.** (a) Inside the existing Bill to fieldset: chips as today plus "Split equally…" revealing a checklist (M3a); (b) separate "Split…" action on the row opening a drawer (M3b). Recommend (a): one place decides who pays, one revision (S4.14); the e2e `platter.getByText("JD")` chip click (`e2e/kkb.spec.ts:62`) keeps working because the one-person chips are unchanged and the checklist is hidden until chosen.
+- **D24 [decided: (a) equal only] Unequal splits.** (a) Equal only this slice; (b) equal + optional portions per person (Jun 2, Liza 1), stored as small integers and fed to `allocate`'s weights, so shares still recalc when the price changes; (c) exact ₱ amounts. Recommend (a): the brief lists equal division first and "Custom amounts may be implemented if necessary"; (b) is the safe upgrade if the owner wants it now; (c) goes stale when the price changes (slice 2 rejected stored shares). Note: Bill to is per entry and whole, so without (b)/(c) one platter ×1 can't be split unevenly.
+- **D25 [decided: (a) offer it] Bill to / split on replacement lines.** (a) Offer it (two saves: price to the correction route, payer to the entry route); (b) leave replacement lines without Bill to as today. Recommend (a): brief "Handle cancellation and replacement correctly"; today a shared dish swapped before billing blocks the service charge forever (`kkb-view.tsx:78`, `kkb.ts:118`).
+- **D26 [decided: (a) fix] Pre-existing picker bug.** (a) Fix `billKeyOf` to use `normalizeText` while editing `price-editor.tsx` (one line; a typed payer like "Ana " vs "ana" today opens with no chip selected); (b) leave it. Recommend (a): same file, same key scheme the split needs.
+- **D6 Mobile scope** carried: responsive + native feel (assumption, below).
+
+### Assumptions
+- Mobile scope: responsive + native feel (D6 carried); inputs `text-base`, `inputMode="decimal"`, 44 px targets; mobile baseline re-audited 2026-11-24, nothing regressed.
+- Split shares count as the payer's food for service weight, % basis and the D15 cap, the same as a whole-dish Bill to today.
+- Odd centavos go by `allocate`'s key order (same as the service charge); at most ₱0.01 per dish.
+- Groups and the whole table can't be covered by a receipt or be split payers; people and typed names can.
+- The service charge stays one session amount; the host types the total across receipts. A senior receipt with a different service line shows as more/less, never hidden.
+- Main receipt is labelled "Main receipt" only once an extra receipt exists; not editable.
+- Pre-existing, same file, approved (D26): `billKeyOf` lower-cases labels instead of `normalizeText` (`price-editor.tsx:45` vs `kkb-view.tsx:51`).
+
+### Done when
+- `timeout 900 pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm e2e` pass (Postgres via `pnpm db:up`).
+- Unit (`tests/splits.test.ts`, `tests/receipts.test.ts`): shares sum to the subtotal for 2–7 people and odd centavos; unpriced 3-way split: `billBlockers` units = quantity and `kkbText` has one "Not yet settled" line; duplicate label (Ana/ana) rejected; left person kept in a split edit; flagged-adjustment attribution to the receipt; price change and quantity correction recompute; split + service charge + proportional discount sums hold; Main = adjusted − extras; covered-nothing flag; no extras → `reconcile` result unchanged; `kkbText` byte-identical with no splits (`.shots/before/kkb-export.txt`).
+- Contract: `tests/contract-receipts.test.ts` + `docs/contracts/receipts.md` (create, edit, conflict 409, delete 404, guest 403, closed allowed, cancelled 409, person on two receipts 409, limit 400, cross-session trigger, idempotent replay, events keep Confirm fresh); split rows in the settlement contract (split ≥ 2, billTo + split 422 (repo validation status), personal line 422, newly added removed person 404, kept left person 200, duplicate person 422, switch modes bumps one revision, replacement line Bill to via entry route); claim approval with the claimant already on another receipt does not 500. `contract-billing-after-end` route list gains receipts.
+- E2E (`e2e/receipts-splits.spec.ts`): host splits Crispy Pata among Jun and Liza, both cards and the guest's dock update live, service charge unblocks; host adds a Senior citizen receipt for Liza, Main and Senior chips match (split-scenario amounts with the 20% discount: Host ₱880.00, Jun ₱1,232.00, Liza ₱864.00, adjusted ₱2,976.00; Main ₱2,112.00); guest read-only; host edits after End; axe light/dark on both sheets. Existing `kkb.spec.ts`, `receipt-check.spec.ts`, `adjustments.spec.ts` stay green.
+- Manual: shots of every state above.
+
+### Skills
+- `impeccable` + `.impeccable/surfaces/src-app.md`, `DESIGN.md`, `PRODUCT.md`: Operate surface, ticket world.
+- `database-migrations`: 0015 (hand plpgsql after `--> statement-breakpoint`, `pnpm db:generate`).
+- `backend-patterns` + `contract-first`: routes, contract docs; read `node_modules/next/dist/docs/` per AGENTS.md.
+- `frontend-a11y` / `accessibility`: checkbox group with a legend, labelled amounts, live save status.
+- `mobile-native`: decimal keypad, drawer above the keyboard.
+
+### You need to do
+- [ ] After merge, the first app start runs migration 0015 (watch logs).
+
+### Mockups (slice 4, text sketch)
+
+M1 Receipt check with an extra receipt (host, 375; amounts from the baseline seed, Crispy Pata billed whole to Jun):
+```
+┌ Check against the receipt ────────────────────┐
+│ Food in Salo                       ₱2,880.00  │
+│ Service charge                       ₱288.00  │
+│ Salo total                         ₱3,168.00  │
+│ Discounts and extras                −₱114.00  │
+│ Adjusted total                     ₱3,054.00  │
+│ ┌ Main receipt ──────────────────────────────┐│
+│ │ Host, Jun · Salo ₱2,541.00                 ││
+│ │ Receipt total (₱)   [ 2,541.00 ]           ││
+│ │ ✓ Matches the receipt.                     ││
+│ └────────────────────────────────────────────┘│
+│ ┌ Senior citizen receipt ──────────── [Edit] ┐│
+│ │ Liza · Salo ₱513.00                        ││
+│ │ Senior citizen discount                    ││
+│ │ Receipt total                    ₱513.00   ││
+│ │ ✓ Matches the receipt.                     ││
+│ └────────────────────────────────────────────┘│
+│ All receipts ₱3,054.00 · Salo ₱3,054.00  ✓    │
+│ [ + Add another receipt ]                     │
+└───────────────────────────────────────────────┘
+```
+M1 Decide later with extras: Main card gains `│ Not assigned: Corkage            +₱200.00 │`.
+M1 no extras: today's block unchanged + `[ + Add another receipt ]` (host only).
+M1 guest: same cards without the field, [Edit] and Add.
+
+M2 Receipt sheet (drawer, 375; same seed as M1):
+```
+┌ Add a receipt ────────────────────────────── ✕ ┐
+│ Label   [ Senior citizen receipt ]  optional   │
+│ Who it covers                                  │
+│ [✓] Liza                         ₱513.00       │
+│ [ ] Jun                          ₱1,661.00     │
+│ [ ] Host (you)                   ₱880.00       │
+│ Receipt total (₱)  [ 513.00 ]                  │
+│ Salo has ₱513.00 for Liza.                     │
+│ Everyone else stays on the main receipt.       │
+│ [ Save ]                            [ Remove ] │
+└────────────────────────────────────────────────┘
+```
+M2 person on another receipt: `[–] Ana   on PWD receipt` (disabled).
+
+M3a Bill to with split (inside the price editor, 375):
+```
+│ Bill to                                         │
+│ One person pays, or split it equally.           │
+│ ( No one yet ) ( Host (you) ) ( Jun ) ( Liza )  │
+│ ( • Split equally… )                            │
+│   [✓] Jun   [✓] Liza   [ ] Host (you)           │
+│   ₱390.00 each                                  │
+│ [ Save ]                                        │
+```
+M3b (D23 b): row actions `[ Bill to… ] [ Split… ]`; Split opens a drawer with the same checklist.
+
+M4 Payer card line and origin row:
+```
+Jun
+│ Sisig ×2                             ₱580.00 │
+│ Crispy Pata ×1                       ₱390.00 │
+│   ₱390.00 of ₱780.00 · split 2 ways · from Whole table │
+Whole table · settle at the table
+│ Crispy Pata          Split 2 ways: Jun, Liza │  (greyed, uncounted)
+```

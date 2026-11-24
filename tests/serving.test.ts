@@ -99,7 +99,7 @@ describe("food tracker", () => {
     await add(db, host, { dishName: "Halo-halo", quantity: 1, attribution: { type: "INDIVIDUAL" } });
     const seen = (await getSnapshot(db, host)).session.revision;
     await serve(host, roundId, line, 1);
-    expect(NON_TICKET_EVENTS).toContain("serving.updated");
+    expect(NON_TICKET_EVENTS).toEqual(expect.arrayContaining(["serving.updated", "receipt.set", "receipt.removed"]));
     const snap = await getSnapshot(db, host);
     await expect(run(host, (tx, s) => confirmRound(tx, s, host, snap.activeRoundId, seen))).resolves.toBeTruthy();
   });
