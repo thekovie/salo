@@ -30,7 +30,8 @@ export function JoinNameForm({ sessionId, code }: { sessionId: string; code: str
       track({ name: "guest_joined" });
       router.replace(`/s/${joined}?joined=1`);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong. Try again.");
+      // Nothing is queued here, so the shared "your change is kept" network message would be wrong.
+      setError(err instanceof ApiError ? (err.isNetwork ? "No connection. Your name is still here; try again when you’re back online." : err.message) : "Something went wrong. Try again.");
       setBusy(false);
     }
   }

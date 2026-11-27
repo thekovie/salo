@@ -8,7 +8,9 @@ import { openEventStream } from "@/server/realtime/stream";
 import { findInvite, joinSession } from "@/server/sessions/join";
 import { getSnapshot } from "@/server/sessions/snapshot";
 import { resetDb, testDb } from "./helpers/db";
-import { add, newSession } from "./helpers/session";
+import { runMutation } from "@/server/mutations";
+import { confirmRound, openRound, recordCorrection, removeCorrection } from "@/server/orders/rounds";
+import { add, key, newSession } from "./helpers/session";
 
 const db = testDb();
 beforeEach(() => resetDb(db));
@@ -98,6 +100,29 @@ describe("event log replay", () => {
     expect(await eventsAfter(db, sessionId, 1)).toEqual({ kind: "resync" });
     await db.insert(sessionEvents).values(Array.from({ length: REPLAY_LIMIT + 1 }, (_, i) => ({ sessionId, revision: 100 + i, eventType: "x" })));
     expect(await eventsAfter(db, sessionId, 99)).toEqual({ kind: "resync" });
+  });
+
+  it("brings a reconnecting device to the same state after several corrections", async () => {
+    const { host } = await newSession(db);
+    const run = <T>(apply: Parameters<typeof runMutation<T>>[3]) => runMutation(db, host, { idempotencyKey: key(), type: "t" }, apply);
+    const sisig = await add(db, host, { dishName: "Sisig", quantity: 3 });
+    const gyoza = await add(db, host, { dishName: "Gyoza", quantity: 1 });
+    const confirmed = await getSnapshot(db, host);
+    await run((tx, s) => confirmRound(tx, s, host, confirmed.activeRoundId, confirmed.session.revision));
+    await run((tx, s) => openRound(tx, s, host));
+    const seen = (await getSnapshot(db, host)).session.revision;
+
+    const swap = await run((tx, s) => recordCorrection(tx, s, host, { sourceEntryId: sisig.result.entryId, type: "REPLACE", replacement: "Bangus Sisig" }));
+    const less = await run((tx, s) => recordCorrection(tx, s, host, { sourceEntryId: sisig.result.entryId, type: "QUANTITY", quantity: 1 }));
+    const cancel = await run((tx, s) => recordCorrection(tx, s, host, { sourceEntryId: gyoza.result.entryId, type: "QUANTITY", quantity: 1 }));
+    await run((tx, s) => removeCorrection(tx, s, host, less.result.correctionId));
+
+    const replay = await eventsAfter(db, confirmed.session.id, seen);
+    const after = await getSnapshot(db, host);
+    if (replay.kind !== "events") throw new Error("expected a replay, got a resync");
+    expect(replay.events.map((e) => e.id)).toEqual(Array.from({ length: after.session.revision - seen }, (_, i) => seen + 1 + i));
+    expect(replay.events.map((e) => e.type)).toEqual(["correction.recorded", "correction.recorded", "correction.recorded", "correction.removed"]);
+    expect(after.corrections.map((c) => c.id).sort()).toEqual([swap.result.correctionId, cancel.result.correctionId].sort());
   });
 
   it("parses only numeric cursors", () => {

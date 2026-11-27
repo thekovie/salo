@@ -14,8 +14,8 @@ Each slice ships as its own branch and squash PR into `dev` (HANDOFF working rul
 | 3 | F04 (+F12 lock fix) | Co-hosts, `can()` capability map, role re-check under lock, serving precondition | 0014 | landed (PR #53) |
 | 4 | F05, F06 | Multiple receipts, shared-dish splits | 0015 | landed (PR #54) |
 | 5 | F07 | Payment ledger, derived balances | 0016 | landed (PR #55) |
-| 6 | F08, F09 | My order sheet, host transfer | none (D39) | landed (PR pending) |
-| 7 | F10, F12 | Manifest `id`/`scope`, invite continuity copy, reliability fixes + tests | — | not started |
+| 6 | F08, F09 | My order sheet, host transfer | none (D39) | landed (PR #56) |
+| 7 | F10, F12 | Manifest `id`/`scope`, invite continuity copy, reliability fixes + tests | — | landed (PR pending) |
 | 8 | F11, F13, F14, F16, F17 | Billing flow polish, export options, large-order search/collapse, menu link, creation animation (tail-less table: current mark has a speech-bubble tail, `brand/logo.tsx:3-6`; aligned to the final logo in slice 10) | 0017 | not started |
 | 9 | Phase 9 | Full regression, money property tests, a11y sweep; real phones and pilot stay owner tasks | — | not started |
 | 10 | F15 | Shared Table logo and icon set (last, alone) | — | not started |
@@ -1107,7 +1107,7 @@ M6 Fix drawer: "Fix payment" / "Who received ₱500.00 from Ana?" / (Host (you))
 
 ## Slice 6: My order and host transfer (F08, F09)
 
-Status: landed (PR pending)
+Status: landed (PR #56)
 
 Verify 2026-11-27: checker typecheck/lint/1031 unit + touched e2e pass; contract-tester 50/50 (`tests/contract-host-transfer-adversarial.test.ts`, golden `docs/contracts/host-transfer.md`); reviewer NOT SHIPPABLE → fixed (notices over drawers, claim on Shared rows, ClaimControl, typed rows) → re-check SHIPPABLE; qa SHIPPABLE; ui-critic SHIPPABLE, 9 fix-in-loop items fixed and measured. Follow-ups in `.shots/follow-ups.md`.
 
@@ -1327,3 +1327,140 @@ M5 Confirm step:
 ```
 
 M6 New host's notice (Updates): "Kovie made you the host." → opens the order.
+
+## Slice 7: invite continuity and reliability (F10, F12)
+
+Status: landed (PR pending)
+
+Verify 2026-11-27: checker typecheck/lint/1035 unit/build + 47 touched e2e pass; reviewer SHIPPABLE (fixed: `docs/pwa-invites.md` join line; corrections replay test rewritten to record real corrections); qa SHIPPABLE (7 flows); ui-critic SHIPPABLE, 3 fix-in-loop items fixed and measured (hint code weight 500, no gap before ".", curly apostrophe). Follow-ups in `.shots/follow-ups.md`.
+
+Brief F10 quoted from `salo-v1-4-brief.md:659-720`, F12 from `:762-800`. Research 2026-11-27 re-verified the audit's F10/F12 rows (`salo-v1-4-audit.md:45-60`) against slices 3–6. Slice 6 shots and handoff moved to `.shots/v1-4-slice6/`. Baseline: `.shots/before/` (21 states, script `.shots/before-s7.mjs`; `invite-ended-member-*` re-captured after End: the 404).
+
+### Ask ledger (slice 7)
+
+| # | Owner's words | Planned change | Status |
+|---|---|---|---|
+| S7.1 | "Define the proper PWA scope." | `manifest.ts`: `id: "/"`, `scope: "/"` (D44) | done |
+| S7.2 | "Support installed-app link capture." / "Evaluate launch-handler behavior." / "Avoid opening unnecessary duplicate application windows." | `launch_handler: { client_mode: "navigate-existing" }` (D44); capture itself is the OS's call, documented as such | done |
+| S7.3 | "Preserve the destination invitation." / "No invite codes are lost." | Invite page shows the code with a Home Screen hint (D45); join failures keep name and URL (already true) | done |
+| S7.3b | "Clear installed-app guidance." (iOS, Consider) | The D45 line: guidance for someone already using the Home Screen app, not an install how-to | done |
+| S7.3c | "Session resumption." (iOS, Consider) | Not doing: no cross-context identity; F09 rules out insecure takeover | not doing |
+| S7.3d | "Browser/PWA storage isolation." (iOS, Consider) | Documented in `docs/pwa-invites.md`, `[unverified until device check]` | done |
+| S7.3e | "Review the PWA manifest and invite routing." / "Use supported browser and OS mechanisms." / "Installed PWA launch works where supported." | Manifest per D44, invite routing per D46; launch behaviour confirmed by owner device check | done |
+| S7.4 | "Invitations open the correct session." | A member opening their ended order's invite lands on the order instead of a 404 (D46) | done |
+| S7.5 | "Browser fallback remains usable." / "Maintain a reliable browser fallback." / "No invite codes are lost." | Invite page stays the browser path; offline join error says what really happens | done |
+| S7.6 | "Existing sessions are not silently overwritten." | Already true (per-session cookies `credentials.ts:13-30`); pinned by a new e2e | done |
+| S7.7 | "Android and iOS behavior is documented accurately." / "Do not claim ordinary external HTTPS links can always force-launch a Home Screen PWA." / "Never use an unreliable custom URI scheme" | New `docs/pwa-invites.md`: what each platform does, what's unverified until a real-device check; no custom scheme | done |
+| S7.8 | F12 "Audit and strengthen: Server-Sent Events delivery. Reconnection behavior." | Covered: durable log replay + resync (`events.ts:19`, `use-session.ts:300-313`), `realtime.test.ts:81-155`; written up in new `## Reliability scenarios (F12)` section of `docs/realtime.md` (audit file untouched) | done |
+| S7.8b | "Offline change queues. Direct-save retries." | Queue persisted (`use-session.ts:214-228`, `queue.test.ts`); direct saves retry on `online` (`use-direct-save.ts:56-67`); new offline payment e2e (S7.12); serving per D48 | done |
+| S7.8c | "Idempotency keys." | `mutations.ts:62-78`; `contract-billing-after-end.test.ts:150` (E02), `contract-adjustments.test.ts:576` (R07); lost-response e2e (S7.10) | done |
+| S7.8d | "Concurrent serving updates." | `contract-serving.test.ts:545-596` (slice 3) | done |
+| S7.8e | "Stale price revisions." / "Simultaneous adjustment changes." / "Conflict handling." | `contract-table-prices.test.ts:203`, `contract-adjustments.test.ts:103`, `e2e/adjustments.spec.ts:97` | done |
+| S7.8f | "Session revision behavior." | Gap-free revisions, stale snapshots ignored (`use-session.ts:244`); `realtime.test.ts` | done |
+| S7.8g | "No duplicate serving increments, duplicated discounts, lost payments, silently overwritten prices, or invalid totals." / "Preserve existing working infrastructure and apply targeted improvements only." | Serving: `contract-serving.test.ts`; discounts/payments: S7.10; prices: `contract-table-prices.test.ts:203`; totals: money tests in `tests/kkb*.test.ts` + slice 9 property tests. No new infrastructure | done |
+| S7.9 | F12 "Test: Two co-hosts mark the same dish served simultaneously. Host revokes a co-host while an update is pending." | Already fixed and tested in slice 3 (`contract-serving.test.ts:545-596,645-664`, `e2e/cohosts.spec.ts:60,91`); cited, no new work | done |
+| S7.10 | F12 "A discount save succeeds but its response is lost. The client retries a saved receipt adjustment." | New e2e: response dropped after the server commits (adjustment, receipt, payment); retry must not duplicate or show a false conflict | done |
+| S7.11 | F12 "Two devices edit the same bill." | Already covered (`contract-table-prices.test.ts:203`, `e2e/adjustments.spec.ts:97`, `e2e/quick-prices.spec.ts:110`); cited | done |
+| S7.12 | F12 "The host switches networks during settlement." | New e2e: host records a payment offline, it retries on reconnect and lands once | done |
+| S7.13 | F12 "A participant reconnects after several corrections." | New contract/realtime test: replay after several correction events, then snapshot matches | done |
+| S7.14 | F12 "An order closes while changes remain queued." | Replay-after-End already pinned (E02, R07). New e2e only for a fresh queued add: guest adds offline, host ends, guest reconnects → "Not saved" list with Discard, nothing lands | done |
+| S7.15 | F12 "Notification read-state synchronization." | Documented limitation kept (refresh-only across one person's devices, `notifications.ts:150-158`) | done |
+| S7.16 | Slice 3 deferral: "persisting serving edits across reload (slice 7 F12)" | D48 (b): unsent / failed / in-flight served taps persisted with keys in `localStorage` `salo:served:<sessionId>`, resent on load | done |
+
+### Today (slice 7)
+- Manifest: `name`, `start_url: "/"`, `display: "standalone"`, colours, icons; no `id`, `scope`, `launch_handler`; no service worker (`src/app/manifest.ts:5-20`). Next's type has `id`, `scope`, `launch_handler` but not `handle_links` (`node_modules/next/dist/lib/metadata/types/manifest-types.d.ts:26,28-30,43`).
+- Invite page: closed or unknown code → `notFound()` (`src/app/i/[code]/page.tsx:55`) runs **before** the "already a member → redirect" check (`:60-61`), so a member tapping their ended order's link gets "Wala dito." while the order is still viewable at `/s/<id>` until expiry.
+- Join form offline: shows the shared network message "No connection. Your change is kept and will be retried." (`api-client.ts:48`, shown by `join-name-form.tsx:33`); nothing is kept or retried there.
+- No standalone detection or install guidance anywhere. iOS Home Screen apps don't share cookies with Safari, so a guest who joined in Safari is a stranger in the Home Screen app; the landing page's code field (`components/landing/join-form.tsx`) is the only way in from there, and the invite page never shows the code as text.
+- F12, re-verified: co-host serving race and revoke-under-lock fixed in slice 3; offline direct saves retry on `online` (`use-direct-save.ts:56-67`, 8 sheets); queue persisted in `localStorage` `salo:queue:<id>` (`use-session.ts:214-228`); server replay by key in `mutation_records`, before the closed check (`mutations.ts:62-82`). A lost-response retry of the same request reuses its key (`use-direct-save.ts:22-27`) and replays, but only while the same sheet stays mounted: ids are minted per mount (`adjustment-sheet.tsx:75`, `receipt-sheet.tsx:56`, `payment-sheet.tsx:55`). **Ceiling:** lost response, then close or reload and re-enter → a second row; the first is visible in the list via SSE. Accepted and documented in `docs/realtime.md`; fixing it needs a persisted id per sheet. Other gaps are test gaps plus serving taps held only in memory (`use-served-edits.ts:43-45`).
+
+### Approach (slice 7)
+1. **Manifest** (`manifest.ts`): add `id`, `scope`, and per D44 `launch_handler`. `id: "/"` equals the id browsers already derive from `start_url: "/"`, so existing installs are not treated as a new app.
+2. **Invite page** (`i/[code]/page.tsx`): keep `lookupInvite` first. For a found CLOSED invite, don't `notFound()` at `:55`; run the cookie + `resolveActor` check (`:60-61`) first and `notFound()` only with no actor (D46). Move `inviteActivity` (`:57`) after the actor check. `resolveActor` already returns null for expired orders and removed guests (`actor.ts:36-46,53-57`); `loadSessionForPage` renders closed orders for members (`page-data.ts:12-17`), so no loop. Strangers keep the same 404 (comment at `:54`). Home Screen line (D45): shows `normalizeJoinCode(code)` (`join-code.ts:6`) in the `tally` class with `sr-only` spaced letters as `invite-sheet.tsx:102-104`; hidden with `[@media(display-mode:standalone)]:hidden` (no JS `matchMedia`, it would flash).
+3. **Join form**: when `err instanceof ApiError && err.isNetwork` (`api-client.ts:11`), override the message in `join-name-form.tsx` only; other errors keep `err.message` ("No connection. Your name is still here; try again when you're back online."); `api-client.ts` stays shared and unchanged.
+4. **Docs**: `docs/pwa-invites.md` (platform behaviour, labelled verified / unverified), new `## Reliability scenarios (F12)` section in `docs/realtime.md` (incl. the lost-response ceiling), `HANDOFF.md` known limitations.
+5. **Tests**: the new e2e and contract tests in the ledger. Any test that fails reveals a bug that gets fixed in this slice.
+6. **Serving persistence** (D48 b, `use-served-edits.ts`): every `put` mirrors edits to `localStorage` `salo:served:<sessionId>`, keeping only edits with `unsent > 0`, failed ones, or `sending > 0 && committedRevision === null` (an in-flight send is stored with its key and `expected`, so a resend after reload replays instead of counting twice). On mount with `canServe`, read back (pure `toStoredServed` / `fromStoredServed`, unreadable entries dropped, as `queue.ts` `toStored`/`fromStored`) and send each: in-flight with its stored key, unsent as a new batch. A stale `expectedServed` applies nothing and returns the current count (`serving.ts:36-39`). Losing the role (`dropAll`, 403, `!canServe`) also clears the storage key. Listed on `/cookies` (`src/app/cookies/page.tsx`) beside `salo:queue`.
+
+Rejected: storing the pending invite code in `localStorage` with a "Continue joining" prompt (doesn't cross the iOS Safari/Home Screen storage split, which is the real gap; the code is already in the URL and share text). Server-side "same id + identical body = 200" for adjustments/receipts like payments: within one mounted sheet the same-body retry already replays by key; after close or reload the id is new, so it would never fire either.
+
+### Reuse
+- `resolveActor`, `credentialCookieName` (already on the invite page); `lookupInvite` returns the invite with its status, and `expiresAt` filtering already makes expired orders "missing" (`join.ts:38`).
+- Existing e2e helpers in `e2e/` (offline via `context.setOffline`, as `reconnect-retry.spec.ts`).
+- Dropping a committed response: `page.route` on the real adjustment / receipt / payment PUT path with a first-request-only counter: `await route.fetch(); await route.abort("failed")`, later calls `route.continue()`. The abort reads as NETWORK, the sheet shows Try again (`adjustment-sheet.tsx:340`, `receipt-sheet.tsx:205`, `payment-sheet.tsx:162`); `online` never fires, so the test clicks Try again (same key → replay). Assert exactly one row and no conflict banner.
+- `queue.ts` `toStored` / `fromStored` conventions for the served store (D48 b).
+
+### Not doing (slice 7)
+- No service worker, offline invite page, or custom URI scheme.
+- No `handle_links` (not in Next's type; Chromium-experimental).
+- No "resume on a new device" or cross-context identity (would need a takeover path; F09 rules out insecure takeover).
+- Notification read state stays refresh-only across one person's devices.
+- No change to the landing page's "Nothing to install" (still true: Salo works in the browser).
+- `theme-color` on landing/invite (tomato bar over paper, `layout.tsx:49-52`) stays as is; flag for slice 8/10 brand pass.
+- No pruning of stale `salo:queue:*` keys or `mutation_records`.
+- Real-device Android/iOS link tests: owner task (below).
+
+### States (slice 7)
+| State | After |
+|---|---|
+| Stranger opens invite (browser) | As today + one line "Using Salo from your Home Screen? Open it and enter **ABCDEF**." under the card (D45) |
+| Same, already in the installed app (standalone) | Line hidden |
+| Member opens own open order's invite | Redirect to the order (unchanged) |
+| Member opens own **ended** order's invite | Redirect to the order (read-only ended view) instead of 404 (D46) |
+| Member opens own **cancelled** (never confirmed) order's invite | Redirect to the cancelled view (`workspace.tsx:581`) |
+| Member of an order past its deletion date | 404 (invite "missing", `/s/<id>` gone) |
+| Removed guest opens an ended order's invite | 404, as a stranger |
+| Hint at 320, light and dark | Centred, wraps freely like the line above |
+| Stranger opens ended / unknown code | Same 404 as today |
+| Join offline | "No connection. Your name is still here; try again when you're back online."; name kept; button re-enabled |
+| Member of A opens invite B | Joins B; A untouched, both in "Pick up where you left off" (pinned by e2e) |
+| Widths | 320, 375, 768, 1280; light and dark |
+
+### Decisions
+
+Owner answers 2026-11-27: D44 (a), D45 (a), D46 (a) = recommended; D48 = (b) persist.
+
+- **D44 [decided: (a)] Manifest launch behaviour.** (a) `id: "/"`, `scope: "/"`, `launch_handler: { client_mode: "navigate-existing" }`; (b) `id`/`scope` only; (c) (a) + `handle_links: "preferred"` via a type cast. Recommend (a): `navigate-existing` reuses an open window where Chromium supports it ("Avoid opening unnecessary duplicate application windows") and is ignored elsewhere; `handle_links` isn't in Next's manifest type (`manifest-types.d.ts`) and is experimental.
+- **D45 [decided: (a)] Home Screen hint on the invite page.** (a) one line under the card showing the code, hidden in standalone; (b) no hint, docs only; (c) a guide step about installing too. Recommend (a): the code is what an iOS Home Screen user needs (Safari and the Home Screen app don't share storage), and memory "entry point at first use" says guidance belongs where users first meet it.
+- **D46 [decided: (a)] Member opens their ended order's invite.** (a) redirect to `/s/<id>`; (b) an "This order has ended" page with a link. Recommend (a): the ended view already exists and is read-only (`workspace.tsx:587`); strangers keep the 404.
+- D47 unused.
+- **D48 [decided: (b) persist, against the recommendation] Serving taps across reload.** (a) keep in memory (today); document; (b) persist unsent/failed taps with keys in `localStorage` and resend on load. Recommend (a): a lost offline tap leaves the count visibly unchanged and is re-tapped; `expectedServed` (`serving.ts:36-39`) makes (b) safe but it adds a second persisted queue for a kitchen counter; offline taps already retry on reconnect (`reconnect-retry.spec.ts:5-15`), only a reload loses them. Slice 3 promised this here (`salo-v1-4.md:528`), so (a) drops that deferral.
+- **Mobile scope**: carried from D6, responsive + native feel; this slice touches only the invite page and join form.
+
+### Assumptions
+- Hint copy: "Using Salo from your Home Screen? Open it and enter **ABCDEF**." (code in mono, as the invite sheet).
+- Lost-response tests: if the sheet shows "Someone changed this" after a committed create whose body the person then edited, that conflict is correct (the first save did land) and Keep mine re-saves; only a duplicate row or a stuck sheet counts as a bug.
+- Docs label platform claims `[verified in code]` or `[unverified until device check]`, as the audit does.
+
+### Done when (slice 7)
+- `pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm e2e` pass.
+- `GET /manifest.webmanifest` has `id`, `scope` (and `launch_handler` per D44).
+- Unit: `toStoredServed`/`fromStoredServed` round-trip and drop rules in `tests/served-edits.test.ts`.
+- New e2e: served tap offline → reload → online lands exactly once (in `e2e/reliability.spec.ts`).
+- New e2e: `e2e/invite-continuity.spec.ts` (ended-member redirect, stranger 404, A→B no overwrite, offline join message, hint element carries the `display-mode: standalone` hide class — Playwright can't emulate display-mode); `e2e/reliability.spec.ts` (lost response on adjustment / receipt / payment create, offline payment then reconnect, queued-then-ended). New test in `tests/realtime.test.ts` or a contract file: reconnect after several corrections.
+- Manual: invite page shots at 320/375/768/1280, light/dark, vs `.shots/before/`.
+
+### Skills
+- `mobile-native` (PWA manifest, standalone media query), `impeccable` + `.impeccable/surfaces/src-app.md` (invite copy), `e2e-testing`, `contract-first` (contract docs if a contract changes).
+
+### You need to do (slice 7)
+- [ ] Real-device check after merge: Android (Chrome, Messenger) and iPhone (Safari, Home Screen app) open an invite link; hint hidden inside the installed app; note results in `docs/pwa-invites.md`.
+
+### Mockups (slice 7, text sketch)
+M1 Invite page, browser (375):
+```
+┌ ticket ─────────────────────────────┐
+│ [logo]                              │
+│ Join the order at Max's Restaurant  │
+│ Add your dishes to the table's …    │
+│ ● Live · 3 people · 5 items so far  │
+│ Your name [            ]            │
+│ [        Join the order        ]    │
+└─────────────────────────────────────┘
+No app or account. Your name is only shown to this table.
+Using Salo from your Home Screen? Open it and enter ABCDEF.   ← new (D45)
+        Not now, back to Salo
+```
+M3 Hint at 320: same line, centred, wraps to two lines under "No app or account…".
+
+M2 Join offline: under the name field, "No connection. Your name is still here; try again when you're back online."
