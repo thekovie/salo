@@ -156,7 +156,7 @@ export async function resolveClaim(tx: Tx, session: SessionRow, actor: Actor, cl
       .set({ status: "REJECTED", resolvedAt: new Date() })
       .where(and(eq(entryClaims.batchId, claim.batchId), eq(entryClaims.status, "PENDING")));
     await resetReadiness(tx, batch.roundId, [claim.requestedBy, batch.attributedParticipantId]);
-    if (batch.collectiveLabel) await adoptLabelShares(tx, session.id, batch.collectiveLabel, claim.requestedBy);
+    if (batch.collectiveLabel) await adoptLabelShares(tx, session.id, batch.collectiveLabel, claim.requestedBy, actor.participantId);
   }
   await tx.update(entryClaims).set({ status, resolvedAt: new Date() }).where(eq(entryClaims.id, claimId));
   return { result: { claimId, status }, event: { type: "attribution.changed", payload: { claimId, batchId: claim.batchId, status } } };

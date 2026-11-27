@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { normalizeText } from "@/lib/dish-name";
-import { ADJUSTMENT_CATEGORIES, ADJUSTMENT_METHODS } from "@/lib/snapshot";
+import { ADJUSTMENT_CATEGORIES, ADJUSTMENT_METHODS, PAYMENT_METHODS } from "@/lib/snapshot";
 import { MAX_EXTRA_RECEIPTS } from "@/lib/receipts";
 import { MAX_SERVICE_CHARGE_CENTAVOS, MAX_UNIT_PRICE_CENTAVOS } from "@/lib/money";
 
@@ -21,6 +21,7 @@ export const LIMITS = {
   participantsPerSession: 30,
   adjustmentsPerSession: 20,
   receiptsPerSession: MAX_EXTRA_RECEIPTS,
+  paymentsPerSession: 200,
   /** The host's optional note to a guest they remove. */
   removalReason: 140,
 } as const;
@@ -206,3 +207,17 @@ export type ServingInput = z.infer<typeof servingSchema>;
 
 /** Mark some (or all) of your own updates read. */
 export const markReadSchema = z.union([z.strictObject({ ids: z.array(z.uuid()).min(1).max(50) }), z.strictObject({ all: z.literal(true) })]);
+
+export const paymentSchema = z.object({
+  payer: personRef,
+  /** null = the restaurant. */
+  payee: personRef.nullable(),
+  amountCentavos: z.number().int("Use whole centavos.").min(1, "Enter an amount.").max(MAX_SERVICE_CHARGE_CENTAVOS, "That amount is too large."),
+  method: z.enum(PAYMENT_METHODS).nullable(),
+  note: optional(LIMITS.label),
+});
+export type PaymentInput = z.infer<typeof paymentSchema>;
+
+/** Fix a payment that needs review: who really received it (null = the restaurant). */
+export const payeeSchema = z.strictObject({ payee: personRef.nullable() });
+export type PayeeInput = z.infer<typeof payeeSchema>;

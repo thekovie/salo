@@ -1,10 +1,12 @@
 import { and, count, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { personKey } from "@/lib/adjustments";
 import { normalizeText, tidyText } from "@/lib/dish-name";
 import { can, type Actor } from "@/lib/permissions";
 import type { Tx } from "@/server/db/client";
-import { adjustments, adjustmentShares, entryPayers, entrySettlements, orderBatches, orderEntries, participants, receiptPeople } from "@/server/db/schema";
+import { adjustments, adjustmentShares, entryPayers, entrySettlements, orderBatches, orderEntries, participants, payments, receiptPeople } from "@/server/db/schema";
 import { AppError, forbidden } from "@/server/errors";
 import type { Applied, SessionRow } from "@/server/mutations";
+import { notify } from "@/server/notifications";
 import { assertBillable, conflict } from "./settlement";
 import { LIMITS, type AdjustmentInput } from "./validation";
 
@@ -98,10 +100,11 @@ async function labelHasFood(tx: Tx, sessionId: string, key: string): Promise<boo
 }
 
 // A claim moves one draft batch only: while the typed name still has food, its shares stay on that card.
-export async function adoptLabelShares(tx: Tx, sessionId: string, typedName: string, participantId: string): Promise<void> {
+export async function adoptLabelShares(tx: Tx, sessionId: string, typedName: string, participantId: string, hostId: string): Promise<void> {
   const key = normalizeText(typedName);
   if (await labelHasFood(tx, sessionId, key)) return;
   await adoptReceiptLabel(tx, sessionId, key, participantId);
+  await adoptPaymentLabels(tx, sessionId, key, participantId, hostId);
   const rows = await tx.select().from(adjustmentShares).where(and(eq(adjustmentShares.sessionId, sessionId), isNotNull(adjustmentShares.billToLabel)));
   for (const row of rows.filter((r) => normalizeText(r.billToLabel ?? "") === key)) {
     const [twin] = await tx.select().from(adjustmentShares).where(and(eq(adjustmentShares.adjustmentId, row.adjustmentId), eq(adjustmentShares.participantId, participantId)));
@@ -122,4 +125,21 @@ async function adoptReceiptLabel(tx: Tx, sessionId: string, key: string, partici
   const [onOne] = await tx.select({ id: receiptPeople.id }).from(receiptPeople).where(and(eq(receiptPeople.sessionId, sessionId), eq(receiptPeople.participantId, participantId)));
   if (onOne) await tx.delete(receiptPeople).where(eq(receiptPeople.id, row.id));
   else await tx.update(receiptPeople).set({ participantId, billToLabel: null }).where(eq(receiptPeople.id, row.id));
+}
+
+/** Payments recorded against a typed name follow the claimant, as payer and as payee. One that now pays its own payer is kept, flagged in the snapshot, and the host is told. */
+async function adoptPaymentLabels(tx: Tx, sessionId: string, key: string, participantId: string, hostId: string): Promise<void> {
+  const rows = await tx.select().from(payments).where(eq(payments.sessionId, sessionId));
+  const [claimant] = await tx.select({ name: participants.displayName }).from(participants).where(eq(participants.id, participantId));
+  for (const row of rows) {
+    const asPayer = row.label !== null && normalizeText(row.label) === key;
+    const asPayee = row.payeeLabel !== null && normalizeText(row.payeeLabel) === key;
+    if (asPayer) await tx.update(payments).set({ participantId, label: null }).where(eq(payments.id, row.id));
+    if (asPayee) await tx.update(payments).set({ payeeParticipantId: participantId, payeeLabel: null }).where(eq(payments.id, row.id));
+    const payer = asPayer ? { participantId, label: null } : { participantId: row.participantId, label: row.label };
+    const payee = asPayee ? { participantId, label: null } : { participantId: row.payeeParticipantId, label: row.payeeLabel };
+    if ((asPayer || asPayee) && (payee.participantId || payee.label) && personKey(payer) === personKey(payee)) {
+      await notify(tx, sessionId, { type: "payment.needsReview", subject: { name: claimant.name, centavos: row.amountCentavos }, recipients: [hostId], dedupKey: `payment-review:${row.id}`, source: [`payment:${row.id}`, `payment-review:${row.id}`], actorId: participantId });
+    }
+  }
 }

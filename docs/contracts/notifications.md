@@ -24,6 +24,8 @@ Test-only interpretations, flagged in the scenario name: E03 (each recipient's `
 | E09b | order ended with nothing confirmed | | every guest | P |
 | E10 | routine dish additions, edits, remove/restore, partial ready, by host and guests, all attribution kinds | | no notification rows at all | P, B |
 | E11 | late joiner / removal | Dee joins after events; Cy removed, then another round confirmed and opened | Dee starts `{ items: [], unread: 0 }`; removing Cy writes no row; Cy gets nothing afterwards | P |
+| E14 | payment recorded / deleted (D30, D31) | host records ₱500 from Ana (participant), then from a typed name, then deletes the first | Ana only: `payment.recorded`, target "kkb", text "<host> recorded ₱500.00 from you", dedup `payment:<id>`; none for the typed name or the host's own card; deleting the payment deletes the notice | S5 D30 D31 |
+| E15 | claim leaves a payment paid to its own payer (S5 follow-up 2) | Ana pays typed Rafa; Ana claims Rafa; host fixes the payee | host only: `payment.needsReview`, target "kkb", text "<claimant>’s claim left a ₱500.00 payment paid to themself. Fix it on KKB.", dedup `payment-review:<id>`, source `payment:<id>` + `payment-review:<id>`; fixing the payee or deleting the payment deletes it; replaying the approval adds none | S5 addendum |
 | E13 | co-host set / revoked (D18) | host sets Ana, again (no-op), revokes, sets again | Ana only: `participant.cohostSet` x2 and `participant.cohostRevoked` x1 (target "served" for set); text names the host; not Bea, Cy, host | S3 D18 |
 | E12 | refused or rolled back change | stale confirm (409), guest marks unavailable (403), unknown dish (404) | no notification rows | P (same transaction), A14 |
 

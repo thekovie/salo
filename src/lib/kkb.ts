@@ -262,7 +262,7 @@ function countOnce(sections: KkbSection[], pick: (l: KkbLine) => boolean, amount
 }
 
 /** What stops a bill-wide amount (service charge, adjustments) from being split yet. */
-function billBlockers(sections: KkbSection[]): KkbBlocker[] {
+export function billBlockers(sections: KkbSection[]): KkbBlocker[] {
   const blockers: KkbBlocker[] = [];
   const unpriced = sections.filter((s) => s.unpricedUnits > 0);
   if (unpriced.length) blockers.push({ kind: "unpriced", units: countOnce(sections, (l) => l.unitCentavos == null, (l) => l.quantity), where: unpriced.map((s) => s.title) });

@@ -12,8 +12,8 @@ Each slice ships as its own branch and squash PR into `dev` (HANDOFF working rul
 | 1 | F01 + F11 (pricing part) | Price status in What's next, quick-entry Prices sheet, draft persistence, guest "so far" label | none | landed (PR #51) |
 | 2 | F02, F03 | Receipt adjustments, allocation methods A–E, adjusted vs actual totals | 0013 | landed (PR #52) |
 | 3 | F04 (+F12 lock fix) | Co-hosts, `can()` capability map, role re-check under lock, serving precondition | 0014 | landed (PR #53) |
-| 4 | F05, F06 | Multiple receipts, shared-dish splits | 0015 | landed (PR pending) |
-| 5 | F07 | Payment ledger, derived balances | 0016 | not started |
+| 4 | F05, F06 | Multiple receipts, shared-dish splits | 0015 | landed (PR #54) |
+| 5 | F07 | Payment ledger, derived balances | 0016 | landed (PR pending) |
 | 6 | F08, F09 | My order sheet, host transfer | 0017 | not started |
 | 7 | F10, F12 | Manifest `id`/`scope`, invite continuity copy, reliability fixes + tests | — | not started |
 | 8 | F11, F13, F14, F16, F17 | Billing flow polish, export options, large-order search/collapse, menu link, creation animation (tail-less table: current mark has a speech-bubble tail, `brand/logo.tsx:3-6`; aligned to the final logo in slice 10) | 0018 | not started |
@@ -622,7 +622,7 @@ D18 notifications: "Ana made you a co-host. You can mark food as served." / "Ana
 
 ## Slice 4: multiple receipts and shared-dish splits (F05, F06)
 
-Status: landed (PR pending)
+Status: landed (PR #54)
 
 Research brief (2026-11-24, researcher) cited below; baseline in `.shots/before/` (seed `.shots/before/seed.mjs`, index `README.md`; slice 3 shots moved to `.shots/v1-4-slice3/`). Pre-existing, seen in baseline: on a payer's card the tag "table price · from Whole table" wraps to two lines at 375 (`kkb-shared-billed-375`); at 320 long names make each Bill to chip wrap to 2 lines and "Billed to Maria Concepcion dela Cruz-Villanueva" runs 4 lines (`kkb-long-names-320`); the session header title button is 25 px next to 44 px buttons (geometry finding in every shot). Not this slice's scope unless the new UI makes them worse.
 
@@ -831,3 +831,276 @@ Jun
 Whole table · settle at the table
 │ Crispy Pata          Split 2 ways: Jun, Liza │  (greyed, uncounted)
 ```
+
+## Slice 5: payment tracking (F07)
+
+Status: landed (PR pending)
+
+Verify 2026-11-27: reviewer, contract-tester (43/44 + G41 known), qa, ui-critic all SHIPPABLE; follow-ups in `.shots/follow-ups.md`: 1 and 3 done (chip column measured; "of ₱Y" hidden when ₱0), 2 resolved by the addendum below.
+
+Research brief (2026-11-24, researcher) cited below; plan-critic pass applied (2026-11-24). Baseline in `.shots/before/` (seed `.shots/before/seed.mjs`, index `README.md`); slice 4 shots moved to `.shots/v1-4-slice4/`, incl. its `follow-ups.md`. Seeded: order A final (Crispy Pata split Jun/Liza, Liza senior −₱192, "Senior citizen receipt" for Liza, Jun co-host), order C with one unpriced dish, order B 7 long names. Pre-existing, seen in baseline: header title button 25 px next to 44 px buttons (all 26 geometry findings); split sub-line wraps at 375; "Add another receipt" sits at the viewport bottom at 375; ended-order cards start collapsed. Not this slice's scope.
+
+### Ask ledger (slice 5)
+
+Brief F07 quoted from `salo-v1-4-brief.md:531-579`; §5.1 "Payment: Money already paid toward an obligation" (`:984`), §5.2 "Sum of recorded payments. Remaining outstanding balances." and "an unpriced dish must never be treated as a free dish", §6 `settlement.record`, §7 "Payment status updated" + "Notifications should be meaningful, targeted, and non-redundant."
+
+| # | Owner's words | Planned change | Status |
+|---|---|---|---|
+| S5.1 | "Introduce optional settlement tracking after billing amounts are finalized." | Nothing shows until the host records a payment (no chips, no block); the only new control before that is the host's "Record payment" on cards with a share. Recording before the bill is final: D29 | done |
+| S5.2 | "Support: Unpaid / Partially paid / Paid" | Derived per person, never stored: chip (icon + words) "Unpaid" / "Partly paid" / "Paid" | done |
+| S5.3 | "Allow the authorized host to record: Payment amount. Payer. Recipient or payee, when relevant. Optional payment method. Optional note." | "Record payment" drawer from a person's card (payer = that card); amount, Paid to (D27), method toggles, note ≤ 40 | done |
+| S5.4 | "Show: Total obligation. Amount paid. Remaining balance." | Card footer: existing total row, then "Paid" + payment lines, then "Left to pay"; Payments block with table-wide Collected and Left to pay | done |
+| S5.5 | "Do not reset recorded payments if a bill changes. Instead, recalculate the remaining balance." | Payments are rows of their own; balance computed on render from `buildKkb`; a bill drop below paid shows "Overpaid ₱X" | done |
+| S5.6 | "Avoid allowing ordinary guests to mark themselves paid without an explicit authorization mechanism." | `settlement.record` host-only (co-hosts too are refused) in `can()`, server-checked; guests see no record or delete control | done |
+| S5.7 | "No GCash or Maya integration. No payment processing. No stored card information. No bank-account management." | Method is a label only; no links, numbers or accounts | done |
+| S5.8 | §7 "Payment status updated" / "meaningful, targeted, and non-redundant" | D30 (a) notify, D31 (a) retract on delete | done |
+| S5.9 | D5 (slice 0) "Payment status visibility" | D28 (a) everyone sees everyone | done |
+
+### Today
+- No payment concept in `src` (audit `salo-v1-4-audit.md:28`); the only "payments" text is the privacy page ("no accounts, no ads and no payments", `src/app/privacy/page.tsx:15`).
+- Obligation = `KkbSection.totalCentavos ?? pricedCentavos` (`kkb.ts:73-74`; fallback used at `receipts.ts:63`). `totalCentavos` = food + service share + adjustments, null while no service charge and no adjustment (`kkb.ts:280-294`, `adjustments.ts:128`). Splits and Bill to are folded into the payer's food (`kkb.ts:118-141`, `splits.ts:25-32`).
+- `buildKkb` runs on the client only (`kkb-view.tsx:43`, `receipt-sheet.tsx:35`, `adjustment-sheet.tsx:46`, `workspace.tsx:141`); the server can't tell who has a share or what is left.
+- Card keys `p:<participantId>` / `n:<normalizeText(label)>` (`kkb.ts:153-160`) = `personKey` (`adjustments.ts:40`). Removed people keep a "(left)" card (`snapshot.ts:133-136`); typed names have a card only while they have food (`adjustments.ts:88-98`); claim approval re-keys labels in `adoptLabelShares` (`adjustments.ts:101-125`, `people.ts:159`). `resolvePeople` 404s a newly added removed participant (`person-refs.ts:22-26`).
+- "Not final" pieces: `priceCompleteness` (`kkb.ts:308-321`), `billBlockers` (`kkb.ts:265-274`), charge `unset`/`blocked` (`kkb.ts:276-295`), `kkb.unresolved` (`adjustments.ts:128`).
+- Cards: `Card` / `SummaryAmount` / `Footer` (`kkb-view.tsx:257-354`, file 435 lines). The Total row prints only with a service charge or adjustment (`kkb-view.tsx:322-340`), else the footer ends at "Food subtotal" / "Priced subtotal". One mount (`summary-sheet.tsx:163`), same view open and ended.
+- Delete confirms: billing sheets use an in-sheet "Yes, remove / Keep" row (`adjustment-sheet.tsx:364`, `receipt-sheet.tsx:229`); Undo toasts exist only for draft edits (`workspace.tsx:291-321`); DESIGN.md:48 "Confirm questions stay centred dialogs"; `ConfirmDialog` in `confirm-dialog.tsx`. DESIGN.md:20 "Status, always with an icon and words".
+- Snapshot identical for every viewer except `me` and notifications (`sessions/snapshot.ts:18-142`).
+- Mutations: `runMutation` (`mutations.ts:44-107`); `can()` + `HOST_ONLY` (`permissions.ts:12-40`); receipts route/server fn (`receipts.ts:21-62`, 409 on an existing id via `expectedRevision` `:30`, 404 for another session's id `:29`); `useDirectSave` reuses the idempotency key only for an identical request (`use-direct-save.ts:28`); events join `NON_TICKET_EVENTS` (`settlement.ts:16`); `docs/realtime.md:12` lists events.
+- Notifications: `notify()` excludes the actor and dedups (`server/notifications.ts:25-40`), `source` + delete-by-source exists (`:25-60`); text renders from `subject` only (`lib/notifications.ts:44`); target defaults to "order" (`:30-32`); `notifications.type` has no CHECK (`schema.ts:466`).
+- Latest migration `drizzle/0015_receipts_splits.sql` (generated DDL + hand plpgsql same-session triggers `:63-96`); tables cascade from `sessions` (`schema.ts:20-23`), so cleanup (`maintenance/cleanup.ts:13-16`) covers a new table.
+
+### Approach
+- **Migration 0016 `payments`**: `id uuid` (client-minted), `session_id` cascade, payer `participant_id | label` (`num_nonnulls = 1`, label 1–40), payee `payee_participant_id | payee_label` (both null = Restaurant; never both set), `amount_centavos` CHECK 1…99,999,999, `method text null` CHECK in (`cash`,`gcash`,`maya`,`bank`,`other`), `note text null` CHECK 1–40, `created_at`, `created_by` participant. Same-session trigger for the three participant FKs, as 0015. Index `(session_id)`.
+- **Routes**: `PUT /api/sessions/[id]/payments/[paymentId]` creates; `DELETE` (no body) removes. Host only (`settlement.record` in `HOST_ONLY`), `allowClosed: true`, `assertBillable` (cancelled → 409). Idempotency: the client mints the id when the drawer opens and keeps it until saved; an existing id in this session → 200 no-op if the body matches, else 409 `CONFLICT`; an id in another session → 404 (as `receipts.ts:29`). DELETE of an unknown id → 404.
+- **Validation** (no card check, the server has no KKB): payer `participantId` must belong to this session, removed allowed; payer label via `tidyName` (≤ 40). Payee: an active participant (newly added removed → 404 `PERSON_NOT_FOUND`), a typed label taken as typed (as receipts), or null. Payee == payer (same `personKey`) → 422 "Pick someone else". Limit `LIMITS.paymentsPerSession = 200`. No revision: payments are never edited.
+- **Events** `payment.recorded` / `payment.deleted` (ids only) in `NON_TICKET_EVENTS` and `docs/realtime.md`; key types `payment.set:<id>` / `payment.delete:<id>`.
+- **Snapshot**: `settlement.payments: {id, payer: PersonRef, payee: PersonRef | null, amountCentavos, method, note, createdAt}[]`, oldest first; `EMPTY_SETTLEMENT` and `tests/guide.test.ts:37` gain `payments: []`.
+- **Math** (new pure `src/lib/payments.ts`):
+  - `billFinal(kkb)` (table-wide, not tied to End): `priceCompleteness` priced = total, `billBlockers` empty, no pending change, `charge.state` is `none` or `allocated`, `!kkb.unresolved`. Receipt more/less doesn't block.
+  - `paymentStatus(section, paid, final)`: obligation = `totalCentavos ?? pricedCentavos`. Cards with status `none`/`empty` or obligation 0 → no chip, no Left row (paid rows still show). Else paid 0 → Unpaid; final and paid ≥ obligation → Paid (overpaid = paid − obligation when > 0); else Partly paid. Not final never says "Paid"; its balance reads "Left to pay so far".
+  - `paymentTotals(kkb, payments)`: Collected = all payments incl. orphans; Of = sum of obligations over non-shared cards with a share; Left to pay = sum of per-person `max(0, left)` (an overpayment never hides someone else's debt). Orphans = payments whose payer key has no card.
+- **Claim**: `adoptLabelShares` re-keys payer and payee labels to the claimant (plain UPDATE; payments have no uniqueness).
+- **UI** (`kkb-view.tsx` + new `payment-sheet.tsx` + `payments-block.tsx`; `kkb-view.tsx` stays < 500 lines):
+  - Chip: in `SummaryAmount`'s row after the amount, non-shared cards with a share only, shown once the order has ≥ 1 payment. Icon + words (lucide, e.g. circle / circle-half / circle-check), tokens from DESIGN.md. At 320 it wraps under the amount, right-aligned; the heading never overflows.
+  - Footer: after the last amount row (Total, or Food/Priced subtotal when there is no Total) add "Paid ₱X", one line per payment ("₱500 · GCash · to Ana · note"; host gets a 44 px lucide trash button named "Delete ₱500 payment from Jun"), then "Left to pay ₱Y" / "Overpaid ₱Y" / "Left to pay so far ₱Y". Host: full-width secondary "Record payment" at the end of every card with a share (incl. the host's own), from the start.
+  - Delete: `ConfirmDialog` (danger), title "Delete ₱500 payment from Jun?", confirm "Delete"; `onConfirm` returns the server message so the dialog stays open on failure (offline: "You're offline. Try again when you're back."). No Undo.
+  - Record drawer: title "Record payment from Jun", line "₱628 left of ₱1,128" (or "so far"); amount prefilled with what's left, empty when nothing is left or obligation unknown; Paid to = radio group (D27); Method = toggle buttons (`aria-pressed`) in a labelled group, tap again to clear; note field (≤ 40); primary "Record ₱X". Saving / Not saved · Try again via `useDirectSave` + `useRetryOnReconnect`; typed values kept on failure; 422/403 show the server message under the button.
+  - Payments block (after Receipt check, once ≥ 1 payment, visible per D28): "Collected ₱X of ₱Y", "Left to pay ₱Z"; orphan payments listed under "Not matched to a share" with the host's delete.
+  - Privacy page: "no payment processing" instead of "no payments", and recorded payments (amount, method label, note) added to what Salo keeps until the order is deleted.
+- **Notification** per D30/D31: type `payment.recorded` joins `NotificationType`, `notificationText` "{host} recorded ₱500 from you", `notificationTarget` → "kkb"; subject `{centavos}` + actor; recipient = payer's `participantId` only when active (typed names get none; host's own card sends none since `notify()` skips the actor); dedup key `payment:<id>`, `source: ["payment:<id>"]`.
+- **Docs**: `docs/api.md`, `docs/data-model.md`, `docs/ux-specification.md:63` (KKB tab), `docs/realtime.md`, new `docs/contracts/payments.md`, `docs/contracts/notifications.md`.
+- Rejected: one stored "paid" amount per person (`receipt_people` style): loses payee, method and the ledger §5.1 describes.
+
+### Reuse
+- `personKey`, `tidyName`, `personRef` zod (`validation.ts:111`), receipts route + server fn shape (except idempotency, above), 0015 trigger SQL, `runMutation`, `notify` + `source`, `ConfirmDialog`, `Drawer` + `useDirectSave` + `useRetryOnReconnect` + `parsePeso` + `formatPeso`, Bill to pill styling from `price-editor.tsx` for Paid to.
+
+### Not doing
+- Paid status in `kkbText`, Items text/PNG or exports (F13, slice 8); `kkbText` stays byte-identical.
+- Paid status in the dock label; status counts ("2 paid · 1 unpaid"); ended-banner rewording.
+- Editing a payment (delete and record again), void history, guests self-reporting, any payment integration.
+- Payments by someone with no share: the host records it on the card it covers, with a note.
+
+### States
+Each has a sketch below (M-label).
+- No payments: today's KKB + host's Record payment (M1a); guest unchanged.
+- Partly paid (M1), paid (M4), overpaid (M1b), not final "so far" (M1c), no price / zero card (M1d), several payments + long payee/note + long name at 320 (M1e), host's own card (M1f), guest viewing someone else's card (M4b).
+- Drawer: default with prefill (M2), nothing left / empty prefill (M2b), Saving / Not saved · Try again / server error (M2c).
+- Delete confirm, incl. failure (M3c).
+- Payments block (M3), with orphans (M3b).
+- Ended order: host still records and deletes; guest read-only (same as M1 / M4).
+- Widths 320 / 375 / 430 / 768 / 1280; light and dark.
+
+### Decisions
+Owner answers 2026-11-24: D27–D31 = recommended option.
+
+- **D27 [decided: (a)] Paid to (payee).** (a) Radio pills: the people on the order who have a card, minus the payer, plus "Restaurant"; preselect the host, or "Restaurant" on the host's own card; stored as person ref, null = Restaurant; (b) free text ≤ 40; (c) no payee. Recommend (a): at a KKB table money goes to whoever fronted the bill (usually the host) or straight to the restaurant; pills reuse the Bill to picker; brief "Recipient or payee, when relevant".
+- **D28 [decided: (a)] Who sees payment status (was D5).** (a) Everyone sees every card's Paid / Left rows and the Payments block (every member already sees every price, `sessions/snapshot.ts:59-95`); (b) guests see only their own. Recommend (a): no per-viewer snapshot exists; (b) needs filtering in `getSnapshot` and the `/sync` SSE path.
+- **D29 [decided: (a)] Recording before the bill is final.** (a) Allowed; balance "Left to pay so far", chip never "Paid" until `billFinal`; (b) Record payment disabled until final. Recommend (a): people pay at the table before the last dish is priced; "after billing amounts are finalized" is honoured by never showing "Paid" early.
+- **D30 [decided: (a)] Notify the payer.** (a) One notice per recorded payment to an active participant payer: "Ana recorded ₱500 from you", opens KKB; (b) none. Recommend (a): brief §7 "Payment status updated"; one per real payment isn't noise. No balance in the text: the server can't compute it.
+- **D31 [decided: (a)] Delete retracts the notice.** (a) Deleting a payment deletes its notice (`source: ["payment:<id>"]`, existing delete-by-source, `server/notifications.ts:25-60`); (b) notice stays. Recommend (a): a mistyped ₱5,000 deleted and re-recorded as ₱500 would otherwise leave two notices, one wrong ("non-redundant").
+
+### Assumptions
+- Mobile scope: responsive + native feel (D6, carried): decimal keypad, drawer above the keyboard, 44 px targets.
+- Overpaying is allowed at record time; "Overpaid ₱X" shows on the card.
+- Method set Cash, GCash, Maya, Bank, Other is ours (brief says only "Optional payment method"); label only.
+- Co-hosts can't record (brief §6; slice 3 grants co-hosts `serving.update` only).
+- HANDOFF says no tool attribution in commits; the land step follows HANDOFF.
+
+### Done when
+- `timeout 900 pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm e2e` pass (Postgres via `pnpm db:up`).
+- Unit (`tests/payments.test.ts`): unpaid / partly / paid / overpaid; `billFinal` false for each piece (unpriced, blocker, pending, charge unset/blocked, unresolved) and never "Paid" then; no-price and zero cards get no status; price change after payment recomputes left, payment unchanged; split + adjustment obligation; removed person keeps payments; orphans surfaced; totals: Left = sum of max(0, left) with one overpaid person. `tests/permissions.test.ts`: `settlement.record` host only, co-host refused. `kkbText` byte-identical (`.shots/before/kkb-export.txt`).
+- Contract (`tests/contract-payments.test.ts` + `docs/contracts/payments.md`): record 200; same id same body 200 no-op; same id different body 409; other session's id 404; delete 200 / unknown 404; guest 403; co-host 403; closed allowed; cancelled 409; removed payer 200; newly added removed payee 404; payee == payer 422; bad method / note > 40 / amount 0 or > max → repo validation status; limit; cross-session trigger; events keep Confirm fresh; claim re-keys a typed payer and payee; notice created for a participant payer, none for a typed payer or the host's own card, deleted with the payment (D30/D31). `contract-billing-after-end` gains the payment routes; notifications contract gains `payment.recorded`.
+- E2E (`e2e/payments.spec.ts`): host records ₱500 GCash to self for Jun; Jun's card shows Partly paid and left live on Jun's phone, plus the notice opening KKB; host records the rest → Paid; host raises a price → Partly paid again, payments untouched; lowers it → Overpaid; host deletes a payment via the dialog and Jun's notice disappears; guest sees no controls; after End the host still records; axe light/dark on the drawer, the dialog and a card with payments. Existing KKB specs stay green.
+- Manual: shots of every state above.
+
+### Skills
+- `impeccable` + `.impeccable/surfaces/src-app.md`, `DESIGN.md`, `PRODUCT.md`: Operate surface, ticket world, status = icon + words, centred confirm dialogs.
+- `database-migrations`: 0016 (hand plpgsql after `--> statement-breakpoint`, `pnpm db:generate`).
+- `backend-patterns` + `contract-first`: routes, contract docs; read `node_modules/next/dist/docs/` per AGENTS.md.
+- `frontend-a11y` / `accessibility`: radio group (Paid to), toggle group (method), labelled amount, live save status, named delete buttons.
+- `mobile-native`: decimal keypad, drawer above the keyboard.
+
+### You need to do
+- [ ] After merge, the first app start runs migration 0016 (watch logs).
+
+### Mockups (slice 5, text sketch)
+
+M1 Host, Jun's card, partly paid (375):
+```
+┌─────────────────────────────────────────┐
+│ Jun                 ₱1,128  (◐ Partly paid)│
+│  Sisig ×2 ......................  ₱580   │
+│  Halo-halo .....................  ₱150   │
+│  Crispy Pata ½ · from Whole table ₱390   │
+│ - - - - - - - - - - - - - - - - - - - -  │
+│ Food subtotal                 ₱1,120     │
+│ Service charge                  ₱108     │
+│ Senior citizen discount         −₱100    │
+│ Total                         ₱1,128     │
+│ Paid                            ₱500     │
+│   ₱500 · GCash · to Ana            [trash]│
+│ Left to pay                     ₱628     │
+│ ┌─────────────────────────────────────┐ │
+│ │          Record payment             │ │
+│ └─────────────────────────────────────┘ │
+└─────────────────────────────────────────┘
+```
+M1a No payments yet (host): no chip; footer ends at Total, then [Record payment].
+M1b Overpaid (price lowered after paying): chip (● Paid); rows "Paid ₱1,200" … "Overpaid ₱72".
+M1c Bill not final (one dish unpriced anywhere): chip (◐ Partly paid) even if paid ≥ total so far; row "Left to pay so far ₱628".
+M1d No prices yet: heading "No prices yet", no chip; footer "No prices entered"; Paid rows only if payments exist; no Left row; [Record payment] (empty amount).
+M1e 320, long name + 2 payments:
+```
+┌──────────────────────────────────┐
+│ Maria Concepcion dela    ₱1,128  │
+│ Cruz-Villanueva  (◐ Partly paid) │
+│ …                                │
+│ Paid                      ₱800   │
+│  ₱500 · GCash · to Ana    [trash]│
+│  ₱300 · Cash · to         [trash]│
+│  Restaurant · for drinks         │
+│ Left to pay               ₱328   │
+│ [        Record payment        ] │
+└──────────────────────────────────┘
+```
+M1f Host's own card: same as M1; drawer preselects "Restaurant".
+
+M2 Record payment drawer (host, from Jun's card):
+```
+┌─────────────────────────────────────────┐
+│ Record payment from Jun                  │
+│ ₱628 left of ₱1,128                      │
+│ Amount                                   │
+│ ₱ [ 628.00                         ]     │
+│ Paid to                                  │
+│ (● Ana · host) ( Liza ) ( Restaurant )   │
+│ Method (optional)                        │
+│ [ Cash ] [ GCash ] [ Maya ] [ Bank ]     │
+│ [ Other ]                                │
+│ Note (optional)                          │
+│ [ e.g. for drinks                  ]     │
+│ ┌─────────────────────────────────────┐ │
+│ │           Record ₱628               │ │
+│ └─────────────────────────────────────┘ │
+└─────────────────────────────────────────┘
+```
+M2b Nothing left / unknown: subline "Nothing left to pay" or "No prices yet"; amount empty; button "Record payment" until an amount is typed.
+M2c Saving: button "Saving…" disabled. Not saved: "Not saved · Try again" under the button, values kept, retries on reconnect. Server error: message under the button (e.g. "Only the host can record payments.").
+
+M3 Payments block (after Receipt check, once a payment exists):
+```
+┌─────────────────────────────────────────┐
+│ Payments                                 │
+│ Collected              ₱2,000 of ₱3,054  │
+│ Left to pay                     ₱1,054   │
+└─────────────────────────────────────────┘
+```
+M3b With orphans: below, "Not matched to a share" + lines "₱300 · Cash · from Pedro [trash]".
+M3c Delete confirm (centred dialog):
+```
+┌───────────────────────────────┐
+│ Delete ₱500 payment from Jun? │
+│        [ Keep ]  [ Delete ]   │
+└───────────────────────────────┘
+```
+failure: message inside the dialog, dialog stays open.
+
+M4 Guest (Liza) own card, paid: M1 footer without trash buttons and without Record payment; chip (● Paid).
+M4b Guest viewing Jun's card (D28 a): same read-only rows as M4.
+
+### Slice 5 addendum: payments that need review after a claim (follow-up 2)
+
+Status: landed (PR pending)
+
+Verify 2026-11-27: checker 963/963 (e2e: 2 flaky specs outside payments, pass on re-run), reviewer, qa, ui-critic SHIPPABLE; G41 + G45–G51 pass as plain `it`; Fix/trash gap fixed and measured (8 px on every card at 320/375).
+
+Owner's message (2026-11-27), verbatim:
+
+> **Follow-up 2 — Payment becomes self-referential after a name claim**
+> Let's proceed with **Leave the payment record**, with additional safeguards.
+> When Ana claims a typed-name participant and that causes an existing payment to have the same payer and payee:
+> 1. Preserve the original payment record for auditability. Do not automatically delete it or change the payee to Restaurant.
+> 2. Mark the payment as **Needs review** because the payer and payee now refer to the same participant.
+> 3. Exclude the unresolved payment from settlement calculations so it cannot incorrectly reduce Ana's outstanding balance.
+> 4. Notify the host that the payment needs correction.
+> 5. Allow the host to reassign the payee to the correct participant or Restaurant, or remove the payment if it was entered incorrectly.
+> 6. Once corrected, restore its normal settlement effect.
+> 7. Ensure this behavior is handled atomically when a typed-name participant is claimed, with proper idempotency and realtime updates.
+> **For test G41:** Update the expected behavior to verify that the payment is preserved, flagged for review, and excluded from settlement totals until resolved. Remove the expected-failure marker only after the implementation passes.
+> The guiding rule is that identity changes must never silently rewrite payment history or produce an invalid financial settlement.
+
+#### Ask ledger (addendum)
+
+| # | Owner's words | Planned change | Status |
+|---|---|---|---|
+| S5.10 | "Preserve the original payment record… Do not automatically delete it or change the payee to Restaurant." | Claim keeps today's re-key (`adoptPaymentLabels`, `adjustments.ts:130-133`); amount, method, note, created_at untouched; never deleted or nulled | done |
+| S5.11 | "Mark the payment as **Needs review**" | Derived flag (D32 a): payer == payee | done |
+| S5.12 | "Exclude the unresolved payment from settlement calculations" | `paidByKey`, `paymentStatus`, `paymentTotals` skip flagged rows (Paid, Left, chip, Collected); line still listed on the payer's card | done |
+| S5.13 | "Notify the host that the payment needs correction." | One host notice per flagged payment, created in the claim tx, retracted on fix or delete (Pinned details) | done |
+| S5.14 | "Allow the host to reassign the payee to the correct participant or Restaurant, or remove the payment" | `PATCH /api/sessions/[id]/payments/[paymentId]` `{payee}` (host only, payee ≠ payer, same payee rules as record) + D33 UI; delete = existing trash + dialog | done |
+| S5.15 | "Once corrected, restore its normal settlement effect." | Flag clears as soon as payer ≠ payee; totals include it again; host notice retracted | done |
+| S5.16 | "handled atomically when a typed-name participant is claimed, with proper idempotency and realtime updates" | Flagging + host notice inside the claim-approval transaction (already one `runMutation`); PATCH via `runMutation` with key type `payment.payee:<id>`, event `payment.updated` in `NON_TICKET_EVENTS`; snapshot carries the flag | done |
+| S5.17 | "For test G41: … preserved, flagged for review, and excluded from settlement totals… Remove the expected-failure marker only after the implementation passes." | G41 rewritten to those expectations; `it.fails` → `it` only once green | done |
+
+#### Approach
+- **Flag is derived**: `needsReview = personKey(payer) === personKey(payee)` (payee non-null). Record and PATCH already refuse payee == payer (422), so a claim is the only way in, and any payee change clears it, so the flag can't drift. Snapshot payments gain `needsReview: boolean` computed server-side in `getSnapshot`, so every client agrees.
+- **Claim** (`adoptPaymentLabels`): after the re-key, for each payment that became payer == payee, `notify` the host in the same transaction: type `payment.needsReview`, text "{claimant}'s claim left a ₱500.00 payment paid to themself. Fix it on KKB.", target "kkb", dedup `payment-review:<id>`, `source: ["payment:<id>"]` (so delete removes it with the existing call) plus `["payment-review:<id>"]`. The claim's event already refreshes clients.
+- **PATCH payee**: body `{payee: personRef | null}`; host only (`settlement.record`), `allowClosed`, `assertBillable`; 404 unknown/other session; payee rules as record (active participant, typed label, or null = Restaurant; payee == payer 422). Allowed only on a payment that needs review (else 409 `NOT_NEEDS_REVIEW`; editing stays out of scope). Same body twice → 200 no-op via the idempotency key. Retracts the host's `payment-review:<id>` notice. Payer's original `payment.recorded` notice stays (it was true).
+- **Math**: flagged rows count nowhere (card Paid/Left/chip, Payments block Collected/Left); orphan logic unchanged.
+- **UI**: per D33.
+
+#### Decisions (addendum)
+Owner answers 2026-11-27: D32, D33, D35 = recommended option (D34 dropped: the owner asked for the notice).
+
+- **D32 [decided: (a)] How "Needs review" is stored.** (a) Derived from payer == payee, no column; (b) a `needs_review_at` column set on claim and cleared on fix. Recommend (a): it can't disagree with the data, needs no migration change, and a fixed payee clears it by definition.
+- **D33 [decided: (a)] Where the host fixes it.** (a) The payment line on the payer's card shows a tag "Needs review" (alert icon + words, saffron) and, for the host, a "Fix" button next to the trash that opens the payment drawer in a payee-only mode: "Who received ₱500.00 from Ana?" + Paid to pills (payer excluded) + "Save"; guests see the tag only; (b) a "Needs review" list in the Payments block with the same Fix/delete controls. Recommend (a): the line is where the host sees it, and it reuses the drawer and pills.
+- **D35 [decided: (a)] PATCH scope.** (a) Only payments that need review (409 otherwise); (b) any payment's payee. Recommend (a): plan says payments aren't edited; the owner asked only for the flagged case.
+
+#### Pinned details (plan-critic, verified)
+- **Host notice recipient**: `notify` drops the actor (`server/notifications.ts:33`) and claim approval is host-only (`permissions.ts:35`), so `adoptLabelShares` / `adoptPaymentLabels` gain a `hostId` argument; `resolveClaim` (`people.ts:159`) passes `actor.participantId`; the notice goes with `recipients: [hostId]`, `actorId: <claimant participantId>`. The claimant is always a guest (`requestClaim` is guest-only, `people.ts:105`), so the host is never the self-payer.
+- **Notice type**: `payment.needsReview` joins the `NotificationType` union (`lib/notifications.ts:3`), the `kkb` case of `notificationTarget` (`:37`) and `notificationText` (`:74`); subject `{ name: claimant displayName, centavos }`; text "{name}'s claim left a ₱500.00 payment paid to themself. Fix it on KKB."; dedup `payment-review:<id>`; `source: ["payment:<id>", "payment-review:<id>"]`. No migration (`schema.ts:466`).
+- **Replay**: replaying the claim-approval key returns the stored result before `apply` (`mutations.ts:73-79`), so no second notice; a new key gets 409 `CLAIM_RESOLVED` (`people.ts:134`).
+- **No flag while the name still has food**: `adoptLabelShares` returns early (`adjustments.ts:103`); the payment stays on the typed name's card, unflagged. Tested.
+- **Payer-side variant** (typed payer, participant payee, payee claims the name) flags the same way; the line lands on the claimant's card. Only the payee can be fixed (owner item 5); delete covers the rest.
+- **Orphans**: `paymentTotals.orphans` still scans all payments, flagged included; `collected`, `left`, `paidByKey` skip flagged rows. A flagged orphan shows in "Not matched to a share" with the tag, Fix (host) and trash. PATCH doesn't check the payer (as `deletePayment`), so Fix works for a removed payer. A flagged line appears once: on its card or in the orphan list.
+- **Paid ₱0.00**: with only a flagged payment, the card shows "Paid ₱0.00", the line with the tag, and Left unchanged; the Payments block shows "Collected ₱0.00 of ₱X". Intended.
+- **Delete dialog** for a flagged payment: body "It was not counted in what they have paid." (title unchanged).
+- **Fix drawer (M6)**: opens with no pill selected, Save disabled until one is chosen; options = `payeeOptions` (`payment-sheet.tsx:43-49`) minus the payer; amount, method and note hidden; failure keeps the drawer open with the message. Stale fix (409 `NOT_NEEDS_REVIEW`): "That payment doesn’t need review any more.", then closes on refresh. Only the same idempotency key replays.
+- **PATCH route**: added to `api/sessions/[id]/payments/[paymentId]/route.ts`, `allowClosed: true`, key type `payment.payee:<id>`; event `payment.updated` in `NON_TICKET_EVENTS` (`settlement.ts:16`) and `docs/realtime.md:12`.
+- **Docs**: `docs/api.md` PATCH row; `docs/contracts/payments-golden.md` G41 rewritten + G45–G51; `docs/contracts/notifications.md` E-row for `payment.needsReview`; `docs/contracts/payments.md` flag rule.
+
+#### Done when (addendum)
+- Unit: flagged rows excluded from paid/left/chip/totals; fixing the payee restores them.
+- Contract (G41 rewritten + new G45–G51): claim flags the payment (row preserved byte for byte except the re-keyed side); the host has exactly 1 `payment.needsReview` notice after approval; replaying the approval key doesn't add one; claim while the name still has food leaves it unflagged; payer-side variant flags; flagged orphan (payer removed) can be fixed and deleted; PATCH 200 clears the flag and retracts the notice; PATCH on an unflagged payment 409; PATCH payee == payer 422; guest/co-host 403; delete of a flagged payment removes both notices; after End allowed. `it.fails` removed only when green.
+- E2E: host records Ana paying typed Rafa, approves Ana's claim of Rafa, Ana's card shows the line with "Needs review" and her Left unchanged, host gets the notice, fixes payee to Restaurant, balance updates live on Ana's phone.
+- `timeout`-wrapped typecheck, lint, test, build, e2e pass.
+
+#### Mockups (addendum, text sketch)
+M5 Host, Ana's card with a flagged payment (375):
+```
+│ Paid                            ₱0.00    │
+│   ₱500.00 · GCash · to Ana   [Fix][trash]│
+│   (! Needs review)                       │
+│ Left to pay                   ₱1,128.00  │
+```
+M6 Fix drawer: "Fix payment" / "Who received ₱500.00 from Ana?" / (Host (you)) (Liza) (Restaurant) / [ Save ].

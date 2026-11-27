@@ -1,6 +1,6 @@
 import { formatPeso } from "./money";
 
-export type NotificationType = "round.confirmed" | "round.opened" | "dish.unavailable" | "order.correctionTold" | "price.defaultSet" | "food.served" | "guests.ready" | "order.ended" | "participant.cohostSet" | "participant.cohostRevoked";
+export type NotificationType = "round.confirmed" | "round.opened" | "dish.unavailable" | "order.correctionTold" | "price.defaultSet" | "food.served" | "guests.ready" | "order.ended" | "participant.cohostSet" | "participant.cohostRevoked" | "payment.recorded" | "payment.needsReview";
 
 type Subject = Record<string, string | number | boolean | null | undefined>;
 
@@ -34,6 +34,8 @@ export function notificationTarget(type: NotificationType): NotificationTarget {
     case "order.ended":
       return "rounds";
     case "price.defaultSet":
+    case "payment.recorded":
+    case "payment.needsReview":
       return "kkb";
     default:
       return "order";
@@ -70,6 +72,10 @@ export function notificationText({ type, subject: s }: Pick<NotificationView, "t
       return `${str(s.host)} made you a co-host. You can mark food as served.`;
     case "participant.cohostRevoked":
       return `${str(s.host)} stopped your co-host role.`;
+    case "payment.recorded":
+      return `${str(s.host)} recorded ${formatPeso(num(s.centavos))} from you`;
+    case "payment.needsReview":
+      return `${str(s.name)}’s claim left a ${formatPeso(num(s.centavos))} payment paid to themself. Fix it on KKB.`;
   }
 }
 
