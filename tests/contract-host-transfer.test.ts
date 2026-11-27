@@ -191,7 +191,8 @@ describe("PUT /host", () => {
     const t = await table();
     const [a, b] = await Promise.all([put(t.sessionId, t.hostToken, { participantId: pid(t.jun) }), put(t.sessionId, t.hostToken, { participantId: pid(t.liza) })]);
     expect([a.status, b.status].sort()).toEqual([200, 403]);
-    expect([a, b].find((r) => r.status === 403)?.body.error?.code).toBe("ROLE_CHANGED");
+    // Unsynchronised: the loser is ROLE_CHANGED if it authenticated before the commit, FORBIDDEN after (the adversarial suite pins each).
+    expect(["ROLE_CHANGED", "FORBIDDEN"]).toContain([a, b].find((r) => r.status === 403)?.body.error?.code);
     expect(await hosts(t.sessionId)).toHaveLength(1);
   });
 
