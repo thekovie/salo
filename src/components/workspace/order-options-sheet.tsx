@@ -1,8 +1,9 @@
 "use client";
 
-import { Compass, HandHelping, LoaderCircle, X } from "lucide-react";
-import { useId, useState } from "react";
+import { BookOpen, Compass, HandHelping, LoaderCircle, X } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { MenuLinkStep, type MenuLinkValue } from "./menu-link";
 import { HostHandover, type HandoverGuest } from "./host-handover";
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
 
@@ -31,6 +32,9 @@ interface OrderOptionsSheetProps {
   handoverGuests: readonly HandoverGuest[];
   /** Refreshes the snapshot after a hand over (marks this device's guest tour seen first). */
   onHandoverRefresh: () => Promise<unknown>;
+  /** The saved menu link, and a snapshot refresh after it changes. */
+  menu: MenuLinkValue | null | undefined;
+  onMenuRefresh: () => Promise<unknown>;
 }
 
 /**
@@ -47,12 +51,19 @@ export function OrderOptionsSheet(props: OrderOptionsSheetProps) {
   );
 }
 
-function OptionsBody({ onOpenChange, title, anyConfirmed, unsentRound, waitingItems = 0, onRename, myName, onRenameMe, onEnd, onTour, sessionId, handoverGuests, onHandoverRefresh, startAt = "options" }: OrderOptionsSheetProps) {
+function OptionsBody({ onOpenChange, title, anyConfirmed, unsentRound, waitingItems = 0, onRename, myName, onRenameMe, onEnd, onTour, sessionId, handoverGuests, onHandoverRefresh, menu, onMenuRefresh, startAt = "options" }: OrderOptionsSheetProps) {
   const id = useId();
   const [draft, setDraft] = useState(title ?? "");
   const unnamed = myName.trim().toLowerCase() === "host";
   const [name, setName] = useState(unnamed ? "" : myName);
-  const [step, setStep] = useState<"options" | "confirm" | "handover">(startAt);
+  const [step, setStep] = useState<"options" | "confirm" | "handover" | "menu">(startAt);
+  const menuRow = useRef<HTMLButtonElement>(null);
+  const wasMenu = useRef(false);
+  // Back from the menu step lands on the "Menu link" row, not on the drawer.
+  useEffect(() => {
+    if (step === "options" && wasMenu.current) menuRow.current?.focus();
+    wasMenu.current = step === "menu";
+  }, [step]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const verb = anyConfirmed ? "End" : "Cancel";
@@ -83,6 +94,10 @@ function OptionsBody({ onOpenChange, title, anyConfirmed, unsentRound, waitingIt
 
   if (step === "handover") {
     return <HostHandover sessionId={sessionId} guests={handoverGuests} needsName={unnamed} refresh={onHandoverRefresh} onBack={() => setStep("options")} close={close} onDone={() => onOpenChange(false)} />;
+  }
+
+  if (step === "menu") {
+    return <MenuLinkStep sessionId={sessionId} current={menu} refresh={onMenuRefresh} onBack={() => setStep("options")} close={close} onSaved={() => setStep("options")} />;
   }
 
   if (step === "confirm") {
@@ -170,13 +185,21 @@ function OptionsBody({ onOpenChange, title, anyConfirmed, unsentRound, waitingIt
         </Button>
       </form>
 
+      <button type="button" ref={menuRow} onClick={() => setStep("menu")} className="mt-5 flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-xl px-1 text-left hover:bg-ink/6">
+        <BookOpen className="size-5 shrink-0 text-ink-soft" aria-hidden />
+        <span className="shrink-0 whitespace-nowrap font-semibold">Menu link</span>
+        <span data-ph-mask="" className="min-w-0 flex-1 truncate text-right text-sm text-ink-soft [direction:rtl]">
+          {menu ? <bdi>{menu.domain}</bdi> : "Add a link"}
+        </span>
+      </button>
+
       <button
         type="button"
         onClick={() => {
           onOpenChange(false);
           onTour();
         }}
-        className="mt-5 flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-xl px-1 text-left hover:bg-ink/6"
+        className="mt-1 flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-xl px-1 text-left hover:bg-ink/6"
       >
         <Compass className="size-5 shrink-0 text-ink-soft" aria-hidden />
         <span className="flex-1 font-semibold">How Salo works</span>

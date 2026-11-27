@@ -33,6 +33,7 @@ import { OrderTicket, type TicketActions } from "./order-ticket";
 import { ArrivalPills, ARRIVAL_MS } from "./arrival-pills";
 import { NotificationBell, NotificationsDrawer } from "./notifications-drawer";
 import { ConnectionPill } from "./connection-pill";
+import { MenuLink } from "./menu-link";
 import { OrderOptionsSheet } from "./order-options-sheet";
 import { SummarySheet, type SummaryTab } from "./summary-sheet";
 import { PricesSheet } from "./prices-sheet";
@@ -540,6 +541,8 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
             markTourSeen("GUEST");
             return refresh();
           }}
+          menu={snapshot.session.menu}
+          onMenuRefresh={refresh}
         />
       ) : null}
 
@@ -640,6 +643,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
         ) : null}
         <ViewTabs view={view} onChange={setView} counts={{ people: snapshot.participants.length, groups: groupCount, rounds: snapshot.rounds.length > 1 ? snapshot.rounds.length : 0 }} />
         <div role="tabpanel" id={`panel-${view}`} aria-labelledby={`tab-${view}`} tabIndex={-1} className="outline-none">
+          {view === "order" ? <MenuLink menu={snapshot.session.menu} title={snapshot.session.title} isHost={isHost} /> : null}
           {view === "order" && confirmedTicket ? (
             <div className="space-y-4">
               <WaiterTicket ticket={confirmedTicket} size="compact" confirmed justConfirmed={justConfirmed === round.id} />

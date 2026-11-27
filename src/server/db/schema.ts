@@ -56,6 +56,9 @@ export const sessions = pgTable(
     /** The receipt's printed total in centavos (KKB check): null = not entered. Never split; only compared. */
     receiptTotalCentavos: integer("receipt_total_centavos"),
     receiptTotalRevision: integer("receipt_total_revision").notNull().default(0),
+    /** The restaurant's menu link (F16): normalised https URL, optional label. Never fetched by the server. */
+    menuUrl: text("menu_url"),
+    menuLabel: text("menu_label"),
   },
   (t) => [
     uniqueIndex("sessions_join_code_uq").on(t.joinCode),
@@ -63,6 +66,9 @@ export const sessions = pgTable(
     check("sessions_status_ck", inList("status", SESSION_STATUSES)),
     check("sessions_revision_ck", sql`revision >= 0`),
     check("sessions_closed_ck", sql`(status = 'CLOSED') = (closed_at IS NOT NULL)`),
+    check("sessions_menu_url_ck", sql`char_length(menu_url) <= 500`),
+    check("sessions_menu_label_ck", sql`char_length(menu_label) <= 40`),
+    check("sessions_menu_label_url_ck", sql`menu_label IS NULL OR menu_url IS NOT NULL`),
     check("sessions_service_charge_ck", sql`service_charge_centavos BETWEEN 0 AND 99999999`),
     check("sessions_service_charge_revision_ck", sql`service_charge_revision >= 0`),
     check("sessions_receipt_total_ck", sql`receipt_total_centavos BETWEEN 0 AND 99999999`),

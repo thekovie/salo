@@ -15,7 +15,8 @@ export interface MutationEvent {
 
 export interface Applied<T> {
   result: T;
-  event: MutationEvent;
+  /** `null`: nothing changed, so no event and no revision bump (the key is still recorded). */
+  event: MutationEvent | null;
 }
 
 export interface MutationOutcome<T> {
@@ -83,6 +84,10 @@ export async function runMutation<T>(
 
     if (!options.usesFreshActor && fresh.role !== actor.role) throw new AppError(403, "ROLE_CHANGED", "Your role in this order changed. Reload to continue.");
     const { result, event } = await apply(tx, session, fresh);
+    if (!event) {
+      await tx.insert(mutationRecords).values({ sessionId: session.id, actorId: actor.participantId, idempotencyKey: options.idempotencyKey, mutationType: options.type, result: { result, revision: session.revision } });
+      return { result, revision: session.revision, replayed: false };
+    }
     const revision = session.revision + 1;
     await tx
       .update(sessions)

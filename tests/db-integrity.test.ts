@@ -64,6 +64,15 @@ describe("database integrity rules", () => {
     expect(new Set(guests.map((g) => g.id)).size).toBe(2);
   });
 
+  it("keeps the menu link within its length and never a label without a link", async () => {
+    const s = await seed();
+    const set = (v: Partial<typeof t.sessions.$inferInsert>) => db.update(t.sessions).set(v).where(eq(t.sessions.id, s.session.id));
+    await rejects(set({ menuUrl: `https://a.com/${"x".repeat(500)}` }), /sessions_menu_url_ck/);
+    await rejects(set({ menuUrl: "https://a.com/", menuLabel: "x".repeat(41) }), /sessions_menu_label_ck/);
+    await rejects(set({ menuLabel: "Drinks" }), /sessions_menu_label_url_ck/);
+    await expect(set({ menuUrl: "https://a.com/", menuLabel: "x".repeat(40) })).resolves.toBeDefined();
+  });
+
   it("never lets the session revision go backwards", async () => {
     const s = await seed();
     await db.update(t.sessions).set({ revision: 5 }).where(eq(t.sessions.id, s.session.id));
