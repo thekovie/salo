@@ -96,6 +96,8 @@ Verification on `chore/v1-3-final`: typecheck, lint and build pass; 596 unit and
 - `html` `scroll-padding-bottom` is a fixed 10rem, smaller than the 320 px dock.
 - Offline price, served and receipt saves don't retry on reconnect until Try again (follow-up 21 in `.shots/follow-ups.md`).
 - Notification read state isn't live across one person's devices until refresh.
+- A save whose response is lost, followed by closing or reloading the sheet and saving again, makes a second adjustment, receipt or payment: the sheet's idempotency id is minted per open (`docs/realtime.md`, Reliability scenarios). The first row shows in the list via the live stream.
+- Safari and the iOS Home Screen app don't share cookies: a guest who joined in Safari is a stranger in the installed app and uses the code shown on the invite page. Real-device Android/iOS link behaviour is unchecked (`docs/pwa-invites.md`).
 - Group members are matched by group label because `batch.groupId` is never set.
 
 ## Next steps

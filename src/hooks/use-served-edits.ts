@@ -21,7 +21,7 @@ export interface ServedEdit {
   expected: number;
 }
 
-type LineEdit = ServedEdit & { roundId: string; lineKey: string };
+export type LineEdit = ServedEdit & { roundId: string; lineKey: string };
 
 /** One more tap on a line's edit; null when nothing is left to send, show or retry. */
 export function applyTap<E extends ServedEdit>(edit: E | undefined, delta: number, seen: number): E | null {
@@ -34,6 +34,48 @@ export function applyTap<E extends ServedEdit>(edit: E | undefined, delta: numbe
 export const settle = <E extends ServedEdit>(edit: E, revision: number): E => (edit.committedRevision !== null && edit.committedRevision <= revision ? { ...edit, sending: 0 } : edit);
 
 const idOf = (roundId: string, lineKey: string) => `${roundId}|${lineKey}`;
+
+const servedKey = (sessionId: string) => `salo:served:${sessionId}`;
+
+/**
+ * What survives a reload: taps not sent yet, refused ones, and sends whose answer never arrived (kept with their key and
+ * `expected`, so a resend replays instead of counting twice). Accepted ones are left out; the snapshot has them.
+ */
+export function toStoredServed(list: readonly LineEdit[]): LineEdit[] {
+  return list
+    .filter((e) => e.unsent > 0 || e.failed || (e.sending > 0 && e.committedRevision === null))
+    .map((e) => ({ ...e, failed: null, committedRevision: null }));
+}
+
+const isCount = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n) && n >= 0;
+
+/** Reads back what `toStoredServed` wrote; anything unreadable is dropped rather than trusted. */
+export function fromStoredServed(raw: string | null): LineEdit[] {
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((item: Partial<LineEdit> | null) => {
+      if (!item || typeof item.roundId !== "string" || typeof item.lineKey !== "string") return [];
+      if (![item.unsent, item.sending, item.seen, item.expected].every(isCount)) return [];
+      if (item.sending && typeof item.key !== "string") return [];
+      const edit: LineEdit = { roundId: item.roundId, lineKey: item.lineKey, unsent: item.unsent!, sending: item.sending!, key: item.sending ? item.key! : null, failed: null, committedRevision: null, seen: item.seen!, expected: item.expected! };
+      return edit.unsent || edit.sending ? [edit] : [];
+    });
+  } catch {
+    return [];
+  }
+}
+
+function writeStored(sessionId: string, list: readonly LineEdit[]) {
+  try {
+    const keep = toStoredServed(list);
+    if (keep.length) window.localStorage.setItem(servedKey(sessionId), JSON.stringify(keep));
+    else window.localStorage.removeItem(servedKey(sessionId));
+  } catch {
+    // Storage blocked or full: taps still work, they just don't survive a reload.
+  }
+}
 
 /**
  * The served taps of the host and co-hosts: shown at once, sent as one delta per line after a short pause. A failed send keeps its
@@ -49,7 +91,8 @@ export function useServedEdits(sessionId: string, refresh: () => Promise<unknown
     delete rest[id];
     edits.current = next ? { ...rest, [id]: next } : rest;
     setView(edits.current);
-  }, []);
+    writeStored(sessionId, Object.values(edits.current));
+  }, [sessionId]);
 
   /** Revoked (or removed): nothing left to send, and no stuck "Couldn’t save this" row. */
   const dropAll = useCallback(() => {
@@ -57,7 +100,8 @@ export function useServedEdits(sessionId: string, refresh: () => Promise<unknown
     timers.current.clear();
     edits.current = {};
     setView({});
-  }, []);
+    writeStored(sessionId, []);
+  }, [sessionId]);
 
   // Losing the role drops every edit, so a later re-grant can't bring back a dead tap. View is reset during render
   // (React's "previous value" pattern); refs and timers in the effect.
@@ -71,7 +115,8 @@ export function useServedEdits(sessionId: string, refresh: () => Promise<unknown
     timers.current.forEach(clearTimeout);
     timers.current.clear();
     edits.current = {};
-  }, [canServe]);
+    writeStored(sessionId, []);
+  }, [canServe, sessionId]);
 
   const send = useCallback(
     async (id: string) => {
@@ -116,6 +161,24 @@ export function useServedEdits(sessionId: string, refresh: () => Promise<unknown
   );
 
   const retry = useCallback((roundId: string, lineKey: string) => void send(idOf(roundId, lineKey)), [send]);
+
+  // A reload with unsent or unanswered taps: resend them (in-flight ones with their stored key, so nothing counts twice).
+  useEffect(() => {
+    if (!canServe) return;
+    let raw: string | null = null;
+    try {
+      raw = window.localStorage.getItem(servedKey(sessionId));
+    } catch {
+      return;
+    }
+    for (const stored of fromStoredServed(raw)) {
+      const id = idOf(stored.roundId, stored.lineKey);
+      if (edits.current[id]) continue;
+      // `failed` marks an in-flight send as resendable (send() skips one that is still being awaited).
+      put(id, { ...stored, failed: stored.sending ? "Couldn’t save." : null });
+      void send(id);
+    }
+  }, [sessionId, canServe, put, send]);
 
   useEffect(() => {
     const resend = () => Object.keys(edits.current).forEach((id) => edits.current[id]?.failed && void send(id));

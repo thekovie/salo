@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { groupServed, trackerLines } from "@/lib/serving";
-import { applyTap, settle, type ServedEdit } from "@/hooks/use-served-edits";
+import { applyTap, fromStoredServed, settle, toStoredServed, type ServedEdit } from "@/hooks/use-served-edits";
 
 const edit = (over: Partial<ServedEdit> = {}): ServedEdit => ({ unsent: 0, sending: 0, key: null, failed: null, committedRevision: null, seen: 0, expected: 0, ...over });
 
@@ -78,5 +78,37 @@ describe("served grouping", () => {
 
   it("keeps history rows in the fully served group", () => {
     expect(groupServed(tracker).done.some((r) => r.line.history)).toBe(true);
+  });
+});
+
+describe("served persistence", () => {
+  const line = (over: Partial<ServedEdit> = {}) => ({ ...edit(over), roundId: "r1", lineKey: "sisig" });
+
+  it("keeps unsent, failed and unanswered sends, and drops accepted or empty ones", () => {
+    const kept = toStoredServed([
+      line({ unsent: 1 }),
+      line({ sending: 2, key: "k", expected: 1 }),
+      line({ sending: 1, key: "k2", failed: "no" }),
+      line({ sending: 1, key: "k3", committedRevision: 5 }),
+      line(),
+    ]);
+    expect(kept.map((e) => [e.unsent, e.sending, e.key])).toEqual([
+      [1, 0, null],
+      [0, 2, "k"],
+      [0, 1, "k2"],
+    ]);
+  });
+
+  it("round-trips what it stores, with the key and expected count of an in-flight send", () => {
+    const stored = toStoredServed([line({ unsent: 1, seen: 2 }), line({ sending: 2, key: "k", expected: 1 })]);
+    expect(fromStoredServed(JSON.stringify(stored))).toEqual(stored);
+  });
+
+  it("drops unreadable, empty and keyless in-flight entries", () => {
+    expect(fromStoredServed(null)).toEqual([]);
+    expect(fromStoredServed("{nope")).toEqual([]);
+    expect(fromStoredServed('{"a":1}')).toEqual([]);
+    const bad = [line({ unsent: -1 }), line({ sending: 1 }), line(), { ...line({ unsent: 1 }), roundId: 5 }];
+    expect(fromStoredServed(JSON.stringify(bad))).toEqual([]);
   });
 });

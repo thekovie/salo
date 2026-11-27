@@ -27,3 +27,21 @@ Own changes queue on the device and go to the server one at a time, in order, ea
 
 ## Proxy
 Coolify's Traefik does not buffer streamed responses by default; the 20 s heartbeat keeps idle connections below common proxy timeouts. After a redeploy the stream drops, the browser reconnects with `Last-Event-ID`, and missed events replay. CI runs the proxy check (`scripts/sse-proxy-check.mjs`) through Traefik; the production check stays an owner task.
+
+## Reliability scenarios (F12)
+What happens, and what pins it. Serving, price and adjustment races are cited, not repeated.
+
+| Scenario | Behaviour | Pinned by |
+|---|---|---|
+| Stream drops, device reconnects | `Last-Event-ID` replays the durable log; a gap or more than `REPLAY_LIMIT` events sends `resync` and the client fetches a snapshot. Stale snapshots are ignored by revision | `tests/realtime.test.ts` (replay, resync, several corrections then reconnect) |
+| Changes made offline | Queue in `localStorage` `salo:queue:<id>`, sent in order with keys, retried on `online` | `tests/queue.test.ts`, `e2e/offline.spec.ts` |
+| Direct saves (prices, adjustments, receipts, payments) offline | Sheet shows Not saved; retried on `online` with the same key | `e2e/reliability.spec.ts` (offline payment), `e2e/reconnect-retry.spec.ts` |
+| Save committed, response lost | A retry from the same open sheet reuses its key and replays: one row, no conflict | `e2e/reliability.spec.ts` (adjustment, receipt, payment) |
+| Served taps and a reload | Unsent, failed or unanswered taps are kept in `localStorage` `salo:served:<id>` with their key and expected count, and resent on load; a stale expected count applies nothing | `tests/served-edits.test.ts`, `e2e/reliability.spec.ts` |
+| Order ends with changes queued | Replays of earlier changes still resolve by key; a fresh queued add is refused and listed under Not saved with Discard | `tests/contract-billing-after-end.test.ts`, `e2e/reliability.spec.ts` |
+| Two co-hosts serve at once, revoke during an update | Serving is clamped and re-checks the role under lock | `tests/contract-serving.test.ts`, `e2e/cohosts.spec.ts` |
+| Two devices edit prices or the bill | Revision check gives CONFLICT; the latest value is shown | `tests/contract-table-prices.test.ts`, `e2e/adjustments.spec.ts` |
+
+Ceiling (accepted): the idempotency id of an adjustment, receipt or payment is minted when its sheet opens. If the response is lost and the person closes or reloads and saves again, the new id makes a second row; the first is visible in the list through the stream. Fixing it needs a persisted id per sheet.
+
+Notification read state is refresh-only across one person's devices (`src/server/notifications.ts`): a read on one phone shows on another after a reload.

@@ -81,3 +81,12 @@ export async function openKkb(page: Page) {
   await sheet.getByRole("tab", { name: "KKB" }).click();
   await expect(sheet.getByRole("tab", { name: "KKB" })).toHaveAttribute("aria-selected", "true");
 }
+
+/** Ends the order from Order options and closes the summary sheet that opens. */
+export async function endOrder(page: Page) {
+  await page.getByRole("button", { name: "Order options" }).click();
+  await page.getByRole("button", { name: "End order" }).click();
+  await page.getByRole("dialog", { name: "End this order?" }).getByRole("button", { name: "Yes, end the order" }).click();
+  await expect(page.getByRole("dialog", { name: "Who ordered what" })).toBeVisible({ timeout: 15_000 });
+  await page.keyboard.press("Escape");
+}

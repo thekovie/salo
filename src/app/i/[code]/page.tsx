@@ -7,6 +7,7 @@ import { JoinNameForm } from "@/components/join/join-name-form";
 import { PolicyLinks } from "@/components/policy/policy-links";
 import { isMetaCrawler } from "@/lib/crawlers";
 import { INVITE_DESCRIPTION, inviteTitle } from "@/lib/invite";
+import { normalizeJoinCode } from "@/lib/join-code";
 import { resolveActor } from "@/server/auth/actor";
 import { credentialCookieName } from "@/server/auth/credentials";
 import { getDb } from "@/server/db/client";
@@ -51,14 +52,16 @@ export default async function JoinPage({ params }: Props) {
       </main>
     );
   }
-  // Unknown and ended orders look the same to a stranger: neither confirms that a code was ever used.
-  if (lookup.kind === "missing" || lookup.invite.status === "CLOSED") notFound();
+  if (lookup.kind === "missing") notFound();
   const invite = lookup.invite;
-  const activity = await inviteActivity(getDb(), invite.sessionId);
 
-  // Already part of this order on this phone: go straight in.
+  // Already part of this order on this phone: go straight in, ended or not (the ended view is read-only).
   const token = (await cookies()).get(credentialCookieName(invite.sessionId))?.value;
   if (await resolveActor(getDb(), invite.sessionId, token)) redirect(`/s/${invite.sessionId}`);
+  // Unknown and ended orders look the same to a stranger: neither confirms that a code was ever used.
+  if (invite.status === "CLOSED") notFound();
+  const activity = await inviteActivity(getDb(), invite.sessionId);
+  const joinCode = normalizeJoinCode(code);
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col gap-6 px-4 pt-[max(env(safe-area-inset-top),2.5rem)] pb-10">
@@ -75,6 +78,14 @@ export default async function JoinPage({ params }: Props) {
         <JoinNameForm sessionId={invite.sessionId} code={code} />
       </div>
       <p className="text-center text-sm text-ink-soft">No app or account. Your name is only shown to this table.</p>
+      <p data-testid="home-screen-hint" className="text-center text-sm text-ink-soft [@media(display-mode:standalone)]:hidden">
+        Using Salo from your Home Screen? Open it and enter&nbsp;
+        <span className="tally -mr-[0.15em] font-medium tracking-[0.15em] text-ink">
+          <span aria-hidden>{joinCode}</span>
+          <span className="sr-only">code {joinCode.split("").join(" ")}</span>
+        </span>
+        .
+      </p>
       <Link href="/" className="text-center text-sm font-semibold text-ink underline-offset-4 hover:underline">
         Not now, back to Salo
       </Link>
