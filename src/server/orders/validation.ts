@@ -103,6 +103,7 @@ export const unavailableSchema = z.object({ replacement: optional(LIMITS.dishNam
 export type UnavailableInput = z.infer<typeof unavailableSchema>;
 
 export const cohostSchema = z.object({ cohost: z.boolean() });
+export const transferHostSchema = z.object({ participantId: z.string().max(64), displayName: z.string().max(200).optional() });
 export const removeParticipantSchema = z.object({ reason: z.string().trim().max(LIMITS.removalReason, `Keep the reason under ${LIMITS.removalReason} characters.`).nullish() });
 
 /** Whole centavos; null clears (unknown price / service charge not entered). */

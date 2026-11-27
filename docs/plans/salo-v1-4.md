@@ -13,10 +13,10 @@ Each slice ships as its own branch and squash PR into `dev` (HANDOFF working rul
 | 2 | F02, F03 | Receipt adjustments, allocation methods A–E, adjusted vs actual totals | 0013 | landed (PR #52) |
 | 3 | F04 (+F12 lock fix) | Co-hosts, `can()` capability map, role re-check under lock, serving precondition | 0014 | landed (PR #53) |
 | 4 | F05, F06 | Multiple receipts, shared-dish splits | 0015 | landed (PR #54) |
-| 5 | F07 | Payment ledger, derived balances | 0016 | landed (PR pending) |
-| 6 | F08, F09 | My order sheet, host transfer | 0017 | not started |
+| 5 | F07 | Payment ledger, derived balances | 0016 | landed (PR #55) |
+| 6 | F08, F09 | My order sheet, host transfer | none (D39) | landed (PR pending) |
 | 7 | F10, F12 | Manifest `id`/`scope`, invite continuity copy, reliability fixes + tests | — | not started |
-| 8 | F11, F13, F14, F16, F17 | Billing flow polish, export options, large-order search/collapse, menu link, creation animation (tail-less table: current mark has a speech-bubble tail, `brand/logo.tsx:3-6`; aligned to the final logo in slice 10) | 0018 | not started |
+| 8 | F11, F13, F14, F16, F17 | Billing flow polish, export options, large-order search/collapse, menu link, creation animation (tail-less table: current mark has a speech-bubble tail, `brand/logo.tsx:3-6`; aligned to the final logo in slice 10) | 0017 | not started |
 | 9 | Phase 9 | Full regression, money property tests, a11y sweep; real phones and pilot stay owner tasks | — | not started |
 | 10 | F15 | Shared Table logo and icon set (last, alone) | — | not started |
 
@@ -834,7 +834,7 @@ Whole table · settle at the table
 
 ## Slice 5: payment tracking (F07)
 
-Status: landed (PR pending)
+Status: landed (PR #55)
 
 Verify 2026-11-27: reviewer, contract-tester (43/44 + G41 known), qa, ui-critic all SHIPPABLE; follow-ups in `.shots/follow-ups.md`: 1 and 3 done (chip column measured; "of ₱Y" hidden when ₱0), 2 resolved by the addendum below.
 
@@ -1030,7 +1030,7 @@ M4b Guest viewing Jun's card (D28 a): same read-only rows as M4.
 
 ### Slice 5 addendum: payments that need review after a claim (follow-up 2)
 
-Status: landed (PR pending)
+Status: landed (PR #55)
 
 Verify 2026-11-27: checker 963/963 (e2e: 2 flaky specs outside payments, pass on re-run), reviewer, qa, ui-critic SHIPPABLE; G41 + G45–G51 pass as plain `it`; Fix/trash gap fixed and measured (8 px on every card at 320/375).
 
@@ -1104,3 +1104,226 @@ M5 Host, Ana's card with a flagged payment (375):
 │ Left to pay                   ₱1,128.00  │
 ```
 M6 Fix drawer: "Fix payment" / "Who received ₱500.00 from Ana?" / (Host (you)) (Liza) (Restaurant) / [ Save ].
+
+## Slice 6: My order and host transfer (F08, F09)
+
+Status: landed (PR pending)
+
+Verify 2026-11-27: checker typecheck/lint/1031 unit + touched e2e pass; contract-tester 50/50 (`tests/contract-host-transfer-adversarial.test.ts`, golden `docs/contracts/host-transfer.md`); reviewer NOT SHIPPABLE → fixed (notices over drawers, claim on Shared rows, ClaimControl, typed rows) → re-check SHIPPABLE; qa SHIPPABLE; ui-critic SHIPPABLE, 9 fix-in-loop items fixed and measured. Follow-ups in `.shots/follow-ups.md`.
+
+Research brief (2026-11-27, researcher) cited below. Baseline in `.shots/before/` (seed `.shots/before/seed.mjs`, index `README.md`; slice 5 shots moved to `.shots/v1-4-slice5/`). Seeded: host + Jun (co-host), Liza, Ana (joined, nothing added); round 1 confirmed, round 2 draft with Liza's Large + note dish, a dish the host added for Liza, a dish Liza added for Jun, a whole-table dish; Jun ready. Pre-existing, seen in baseline: header title button 25 px next to 44 px buttons (all 20 geometry findings). Not this slice's scope.
+
+### Ask ledger (slice 6)
+
+Brief F08 and F09 quoted from `salo-v1-4-brief.md:581-657`.
+
+| # | Owner's words | Planned change | Status |
+|---|---|---|---|
+| S6.1 | "Improve the existing readiness workflow rather than introducing a duplicate confirmation system." | One ready toggle, same `PUT /readiness`; where it lives per D36 | done |
+| S6.2 | "Provide a convenient **My order** review showing: Dish names. Quantities. Variants. Preparation notes. Assigned participant. Current round. Readiness status." | New `MyOrderSheet` drawer (M2): header "My order · Round n" + readiness line; rows show qty, dish, size, note, and who it is for / who added it | done |
+| S6.3 | "Allow participants to: Correct their draft items when permitted." | Rows the guest may edit (`canEditEntry`) get the ticket's stepper and Edit (opens the existing `EditDishSheet`); host-added rows per D43 | done |
+| S6.4 | "Identify mistakes before confirmation." | Sheet covers the open round only (D37); groups my items by "For you" / "You added for others" / "Shared" | done |
+| S6.5 | "Clearly indicate readiness." | Sheet footer toggle "I'm ready" / "Ready ✓ · tap to undo"; dock shows the state (D36) | done |
+| S6.6 | "The host should see which participants have responded." | Already: People badges "Ready" / "Still choosing" (`people-view.tsx:149-155`) and Review "x of y ready · still choosing: names" (`review-panel.tsx:65-70`); wording per D38 | done |
+| S6.7 | "Readiness must remain appropriately scoped to the active round." | Unchanged: rows keyed (participant, draft round) (`people.ts:21-31`), reset on own changes (`:48-58`) | done (existing) |
+| S6.8 | "Do not add mandatory confirmation steps for guests who are not actively participating." | Readiness stays advisory (never blocks Confirm); D38 decides whether guests with nothing in the round count | done |
+| S6.9 | "Introduce an explicit host-transfer workflow. … 1. Select another active participant. 2. Review the transfer consequences. 3. Confirm the transfer. 4. Relinquish host authority." | Order options → "Hand over host" → pick (M4) → consequences + confirm (M5); old host becomes a guest (D40) | done |
+| S6.10 | "The new host should receive the appropriate capabilities immediately." | Role swap in one `runMutation`; event refetches every device's snapshot; `isHost` flips from `snapshot.me.role` (`workspace.tsx:74`); new host gets a notice (M6) | done |
+| S6.11 | "Only the active host can initiate a normal transfer." | `can(fresh, "host.transfer")`, new action in `HOST_ONLY` | done |
+| S6.12 | "Transfer must be atomic." / "Never allow two primary hosts accidentally." | One transaction under the session lock: demote then promote (one-host unique index `schema.ts:95`, cohost CHECK `:93`); a second transfer in flight fails 403 `ROLE_CHANGED`, one sent after the commit 403 `FORBIDDEN` | done |
+| S6.13 | "Update permissions across connected devices." | Event `host.transferred` (ids only) → SSE refetch on all devices; in `NON_TICKET_EVENTS` | done |
+| S6.14 | "Reject stale writes from the former host." | After the commit the old host resolves as GUEST and fails `can()` → 403 `FORBIDDEN`; a write already in flight hits the `ROLE_CHANGED` guard (`mutations.ts:84`, R01 `tests/contract-slice3-golden.test.ts:385-399`); client refreshes on any 403 (today only 409/404, `use-session.ts:359`) | done |
+| S6.15 | "Record the transfer event." | `host.transferred {fromId, toId}` event in `session_events` (D39 a) | done |
+| S6.16 | "Lost-device recovery should be evaluated separately." / "Do not implement insecure automatic takeover, predictable PINs, or unrestricted host reassignment." | Not built; noted in Not doing | planned (none) |
+
+### Today
+
+- **Ready control**: guest-only dock button "I'm ready" / "Ready" (`workspace.tsx:738-753`, `!isHost && isOpen`), op `{kind:"ready"}` → `PUT /readiness` → `setReady` (`people.ts:21-43`), DRAFT round only (`people.ts:13-15`). The host has no ready state.
+- **"Everyone ready" notice**: fires when ready guests = all non-removed guests (`people.ts:33-37`), so a guest who added nothing (Ana) blocks it. Host count "n/m guests ready" (`views.ts:105-109`, dock `workspace.tsx:713-717`); Review "1 of 3 guests ready · still choosing: Liza, Ana" (`review-panel.tsx:44-45,65-70`).
+- **A guest's own items**: inline in the shared round ticket (`order-ticket.tsx:61,85`) and in People "for me" (`people-view.tsx:84-92,176-182`). KKB My share is the only all-rounds personal view (`workspace.tsx:721-727`). No review sheet.
+- **Edit rules**: draft round only and `canEditEntry` = host or submitter (`permissions.ts:~43`, `entries.ts:~118-122`). A guest can't edit a dish someone else added for them; they can edit dishes they added for others. Edit UI: `EditDishSheet` (`workspace.tsx:482`), stepper/remove via `TicketActions` (`workspace.tsx:315-330`).
+- **Assignment data**: snapshot entry `attribution {type, label, participantId}` + `submittedBy` (`lib/snapshot.ts`); groups via `snapshot.groups[].memberIds` (`views.ts:~53`).
+- **Host role**: `participants.role`, partial unique index one HOST per session (`schema.ts:~90`); CHECK `cohost_at IS NULL OR (role='GUEST' AND removed_at IS NULL)`. `runMutation` re-reads role under the lock and throws 403 `ROLE_CHANGED` if it changed (`mutations.ts:57-84`). No transfer exists. Options sheet (`order-options-sheet.tsx`, host + open only, `session-header.tsx:~58-70`) already has a two-step options → confirm flow for End.
+- **Files at cap**: `workspace.tsx` 800/800 lines; `use-session.ts` 569.
+
+### Approach
+
+**F08 My order**
+- New `src/components/workspace/my-order-sheet.tsx` (vaul `Drawer`, like `PricesSheet`; `EditDishSheet` stacks over it as PaymentSheet does over SummarySheet, `kkb-view.tsx:200-201`). Guests only, open order with a draft round.
+- Pure `myOrderRows(roundEntries /* overlay, so steppers move optimistically */, {participants, removedPeople, groups}, meId)` in `src/lib/views.ts`: open-round entries in groups. **For you**: `attribution.participantId === me`. **Host added for "{name}"** (typed name = my display name, `normalizeText`, as `people-view.tsx:86-87`) per D43. **You added for others**: `submittedBy === me` and for someone else. **Shared**: TABLE, and GROUP whose `normalizeText(label)` matches a group with me in `memberIds` (attribution has no groupId, `snapshot.ts:143-150`). Each row: qty, dish, size, note, plus "for {name}" or "added by {name}" when not both me.
+- Rows I may edit (`canEditEntry`) reuse the ticket's controls: export `EditButton` from `order-ticket.tsx:26`, use `Stepper` from `./stepper`; sheet takes `actions: TicketActions` (built `workspace.tsx:315`). Row layout = `SourceRow` (`order-ticket.tsx:59`): text left with `min-w-0` wrap and Edit after the detail, stepper right; "Saving…" on `entry.pending` rows.
+- Footer: the ready toggle (same op). Header line: "Round 2 · You're ready" / "Round 2 · Not marked ready yet".
+- Entry per D36.
+- **Room in `workspace.tsx`**: extract the dock (`workspace.tsx:700-757`) to `src/components/workspace/dock.tsx` first, behaviour unchanged, then wire the sheet there. See Pinned details.
+
+**F09 Host transfer**
+- Action `host.transfer` in `HOST_ONLY` (`permissions.ts:35`).
+- `PUT /api/sessions/[id]/host` body `{participantId, displayName?}`, modelled on `participants/[pid]/cohost/route.ts`; key type `host.transfer:${pid}`; `apply` uses its third argument `(tx, s, fresh) => transferHost(tx, s, fresh, …)`; not `usesFreshActor`. No route pre-check needed (guard makes `fresh.role === actor.role`). Open orders only (D41). Transport per D42.
+- `transferHost(tx, session, fresh, targetId, displayName?)` in `src/server/orders/people.ts`: `can(fresh, "host.transfer")`; `targetId === actor` → 422 `ALREADY_HOST` (checked first); target via `loadTarget` (`people.ts:~176`, FOR UPDATE; not `loadGuest`, which says `CANNOT_REMOVE_HOST`): unknown → 404, removed → 409 `ALREADY_REMOVED`. If `displayName` given: `tidyName` (`settlement.ts:19`) and rename the old host first. Then `UPDATE` old host `role='GUEST', cohost_at=NULL` (D40), then target `role='HOST', cohost_at=NULL`, in that order (index). Event `host.transferred {fromId, toId}` in `NON_TICKET_EVENTS` (`settlement.ts:16`). Notice `host.transferred` to the new host only: "{old name} made you the host." using the name after any rename; dedup `host.transferred:${toId}:${session.revision+1}`; `NotificationType` + `notificationText` (`lib/notifications.ts:3,~71`), target defaults to order. Pending claims the target requested are rejected in the same transaction (as `removeParticipant`, `people.ts:~188`).
+- Record per D39.
+- Client: per D42. Any 403 joins the refresh set (`use-session.ts:359`). On success the old host's device runs `markTourSeen("guest")` (else a guest tour offer pops up right after handing over); `<Guide key={role}>` so a promoted guest mid-tour doesn't keep a stale step index (`workspace.tsx:495-497`).
+- UI (M3–M5): Options sheet gets a "Hand over host" row above "All done? End order" → step "pick": radio list of active guests, co-hosts first then join order, names `break-words` → step "handover": consequences list + stacked buttons (as End's confirm, `order-options-sheet.tsx:96-103`): [Make Jun the host] primary, [Keep hosting] ghost with autoFocus. `step` union gains `pick` | `handover`; `startAt="confirm"` still means End. If the host's name is still "Host" (`order-options-sheet.tsx:49` test), the handover step shows a required "Your name" field sent as `displayName` in the same request (Assumption A6.1).
+- Everything else follows `snapshot.me.role` on refetch: Review, Rounds, KKB pricing, groups, claims queue, Options button, guide.
+
+Rejected: transfer from the People card (right cluster already full at 320, slice 3 D17 note); a FullScreenSheet for My order (Drawer-over-Drawer is proven, `kkb-view.tsx:200-201`; Drawer over a top-layer `<dialog>` is not).
+
+### Pinned details (plan-critic, verified)
+- **D38 [decided 2026-11-27: (a) guests with no order don't count] rule** (if (a)): one pure `orderingIds(entries, participants, groups, roundId)` in `src/lib/views.ts`, used by client and `setReady`. Ordering = any non-deleted open-round entry with `attribution.participantId === me`, or `submittedBy === me`, or INDIVIDUAL with no participantId and `normalizeText(label) === normalizeText(displayName)`, or GROUP whose label matches a group with me in `memberIds` (server: `withMembers`, `server/notifications.ts:~66`). Whole-table and unassigned dishes don't count. A guest with nothing who taps Ready counts as Ready in both n and m. `readinessSummary` (`views.ts:105`) takes `entries, groups, activeRoundId` too and returns `{ready, total, readyIds, noOrderIds}`; callers `workspace.tsx:250`, `review-panel.tsx:44,66-70`, `people-view.tsx:89`. Notice needs `ordering.length > 0`.
+- **Dock extraction**: safe; `composerActive` (`workspace.tsx:97`) is used only in the dock and moves with it; `dockRef` is a callback ref (`use-dock-height.ts`) passed as a prop. ~20 props (`dockRef, isOpen, isHost, total, ready, iAmReady, shareLabel, left, onShare, onPrices, confirmedTicket, correctionsThisRound, onMode, mutate, snapshot, recipients, view, detailsSignal, onAdd, onMyOrder`). Net ≈ −10 lines in `workspace.tsx`; `e2e/slice8-measure.spec.ts` dock geometry is the guard.
+- **Session events are never pruned** beyond the session's own deletion (checked), so D39 (a) is a durable record for the order's life.
+
+### Reuse
+- `Drawer` + `PricesSheet` structure; `TicketActions` (stepper, Edit, remove + Undo) and `EditDishSheet` for edits; `canEditEntry`.
+- `attributionLabel` (`lib/snapshot.ts:~143`) for "for {name}"; `everyone(snapshot)` for "added by {name}". `people-view.tsx` is not refactored.
+- `setCohost` route/server/op/notification shape (slice 3) for the transfer; `OrderOptionsSheet` step pattern for pick → confirm.
+- Contract tests: `tests/contract-cohosts.test.ts` template; e2e `e2e/cohosts.spec.ts` helpers.
+
+### Not doing
+- Lost-device recovery, automatic takeover, PINs (brief: "evaluated separately").
+- Transfer to a typed name (no device) or to a removed person.
+- A ready state or My order sheet for the host (the host has Review).
+- Earlier, confirmed rounds in My order (D37 a); KKB My share covers them.
+- New edit permissions: a guest still can't edit a dish someone else added for them.
+- Re-parenting `submitted_by` on transfer. Claims key on the submitter's current role (`people.ts:110`) and only work in the draft round, so dishes the old host added in that round become editable by the new host directly instead of claimable. Accepted (Assumptions).
+
+### States
+| State | After |
+|---|---|
+| Guest, draft round, items for them | Dock entry (D36); sheet M2 with groups, editable rows have stepper + Edit |
+| Guest, draft round, nothing for them | Sheet M2-empty: "Nothing for you in round 2 yet." + ready toggle |
+| Guest ready | Dock shows ready state; sheet header "You're ready"; any change of theirs resets it (existing) |
+| Guest edits in sheet | Stepper/Edit as the ticket; queued op, "not saved" handling as today; readiness resets; Undo toast shows above the sheet (toast stack `z-50` → `z-[60]`, `toasts.tsx:77`; clears the sheet footer at 320) |
+| Someone adds a dish for a passive guest | They become "ordering" and "Still choosing"; any ready is cleared (existing reset, `entries.ts:97`) |
+| Only shared dishes in the round | "Nothing for you in round 2 yet." then the Shared section |
+| Dish added for me by someone else | Guest-added: read-only "added by Jun". Host-added: per D43 |
+| Round confirmed while sheet open | Sheet closes; `useEffect` sets `myOrderOpen=false` when `!isOpen \|\| isHost`, render `open={myOrderOpen && !isHost && isOpen}` so it never reopens by itself |
+| No draft round / order ended | No My order entry |
+| Co-host (Jun) | Same as guest (role GUEST) |
+| Host, Options | "Hand over host" row (open order, ≥1 active guest); hidden with no guests |
+| Pick step | Active guests list, none preselected, Continue disabled until one picked |
+| Confirm step | Consequences (M5); name field when host is still "Host"; busy; offline: "No connection. Keep this open: it hands over as soon as you're back online.", retries on reconnect (D42) |
+| After transfer, old host's phone | Becomes guest view on refetch: My order / ready, no Review/Options, no tour offer; People card has no suffix (`people-view.tsx:140-146`) |
+| After transfer, new host's phone | Host view on refetch + notice M6; host tour offer appears (not seen as host) |
+| Old host's write after the swap | 403 `FORBIDDEN` (per-action message), or 403 `ROLE_CHANGED` ("Your role in this order changed. Reload to continue.") if already in flight; both refresh the snapshot |
+| Two transfers | In flight together (different keys): first wins, second 403 `ROLE_CHANGED`; sent after the commit: 403 `FORBIDDEN`; same key: replayed (`mutations.ts:64-77`), no second notice |
+| Target removed meanwhile | 409 `ALREADY_REMOVED` with message, stays on handover step |
+| Host dock count when nobody is ordering | Hidden (as `ready.total > 0` today) |
+| Widths | 320, 375, 430, 768, 1280; light and dark |
+
+### Decisions
+
+Owner answers 2026-11-27: D36–D43 = recommended option.
+
+- **D36 [decided 2026-11-27: (a) dock "My order" → sheet with the ready toggle] My order entry and the ready control.** (a) The dock's ready button becomes "My order" (M1a): opens the sheet; the sheet's footer holds the one ready toggle; dock label shows the state ("My order ✓ Ready"). (b) Keep the dock "I'm ready" one-tap button as is and add "Check my order" as a link at the top of the People "for me" list and in the Order tab (M1b); the sheet also has the toggle. Recommend (a): the brief asks to improve readiness "rather than introducing a duplicate", and puts review before ready ("verify their orders before the host confirms"); the dock row is already at its limit at 320 (`workspace.tsx:719-753`, `max-[359px]` wrap), so (a) adds no button. Cost: ready takes two taps instead of one.
+- **D37 [decided 2026-11-27: (a) open round only] Rounds in My order.** (a) Open round only. (b) Open round editable + earlier rounds read-only below. Recommend (a): readiness is per round (`people.ts:13`), confirmed rounds can't change, and KKB My share already lists every round with prices.
+- **D38 Guests with nothing in the round.** (a) Guests with no dish for them in the open round (for you, added by you, or a group they're in) don't count in "n of m ready" and don't hold back the "Everyone is ready" notice; Review reads "1 of 2 ready · still choosing: Liza · no order yet: Ana"; People badge "No order yet". (b) Unchanged: everyone counts. Recommend (a): today a passive guest blocks the notice (`people.ts:33-37`) and shows "Still choosing" forever, which is what the brief's "not actively participating" line rules out. Notice copy becomes "Everyone who's ordering is ready for round n".
+- **D39 [decided 2026-11-27: (a) session event, no migration] Transfer record.** (a) The `host.transferred` event in `session_events` (durable, ids only, kept as long as the order, `schema.ts:~346`); no migration. (b) New `host_transfers` table (migration 0017, from/to ids, time, same-session trigger). Recommend (a): nothing reads a separate table, retention would be the same (cascades with the session), and the brief asks only to "record the transfer event". Slice table's 0017 then moves to slice 8.
+- **D40 [decided 2026-11-27: (a) plain guest] The old host after transfer.** (a) Plain guest. (b) Co-host (keeps serving). Recommend (a): the brief's step 4 is "relinquish host authority"; the new host can make them co-host in one tap (`cohost-toggle.tsx`).
+- **D41 [decided 2026-11-27: (a) open orders only] Transfer after End.** (a) Open orders only (Options sheet is hidden on ended orders, `session-header.tsx:~58-70`). (b) Also after End, since billing after End is host-only (D1). Recommend (a): the host can still bill from their own phone after End, and (b) needs a new host surface on ended orders. Revisit if the pilot shows hosts leaving before the bill.
+- **D42 [decided 2026-11-27: (a) direct call via `useDirectSave`] How the transfer reaches the server.** (a) Direct call from the handover step with `useDirectSave` (`src/hooks/use-direct-save.ts`, as PaymentSheet): same-key retry, offline shows "No connection…" and retries on reconnect while the step is open, nothing persisted; route is PUT. (b) Queued op in `use-session.ts`: persisted in localStorage (`use-session.ts:223,414`), so an offline "Make Jun the host" could fire hours later. Recommend (a): a handover should happen while the host is looking at it ("Transfer must be atomic"); also keeps `use-session.ts` (569 lines) untouched.
+- **D43 [decided 2026-11-27: (a) "That's mine" claim on host-added rows] Dishes the host added for me (by participant or typed name) in My order.** (a) Show the existing "That's mine" claim on host-added rows (reuse `onClaim` / `myClaims`, `people-view.tsx:127-129,151-155`); typed-name rows in their own group 'The host added these for "Liza". Yours?'. (b) Read-only "added by Host", no claim. Recommend (a): claiming is the only existing way a guest corrects a host-added dish ("Correct their draft items when permitted", "Identify mistakes before confirmation"), and `requestClaim` says names alone never merge (`people.ts:~100`), so typed names can't be shown as mine without it.
+- Mobile scope: carried from D6 (responsive + native feel; all baseline items present, researcher re-checked 2026-11-27).
+
+### Assumptions
+- Co-hosts see My order like any guest (role GUEST).
+- The new host's earlier ready row is left as is (`readinessSummary` counts guests only).
+- `participant_credentials.credential_type` left stale (never read, `create.ts:42`).
+- The new host gets the host tour offer (`tourSeen` is per role, `guide-steps.ts:169`); kept, it helps. The old host's guest offer is suppressed.
+- A6.1 Handover step asks for the host's name when it is still "Host" (one request); not asked by the owner, needed because a guest can't rename themself (`permissions.ts:35`).
+- The M6 notice is an addition (brief asks only for immediate capabilities and a record); same shape as the co-host notice.
+- Unread `guests.ready` / `payment.needsReview` notices in the old host's Updates stay.
+- The old host's own open-round dishes make them "ordering" (via `submittedBy`) under D38, so they hold back the notice until they tap ready.
+- D38 notice is evaluated only in `setReady`: a guest removing their last dish when everyone else is ready sends no notice. Accepted.
+- The new host's earlier dishes in the open round become claimable by guests (claim rule keys on current role, `people.ts:110`). Accepted.
+- Guide: guest step "Tell the host you're done" (`guide-steps.ts:128-135`) copy becomes "Check your order" / "Tap My order to see everything that's yours this round, fix mistakes, then tap I'm ready." (D36 a); the dock button keeps `data-tour="ready"`; no host-transfer guide step (first-use prompt: the row sits in Options, where the host meets it).
+- Claims after transfer as in Not doing.
+
+### Done when
+- `timeout`-wrapped `pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm e2e` pass.
+- Unit: `myOrderRows` grouping (for you / added for others / shared incl. group membership / typed-name fold); `readinessSummary` with D38; `can()` table gains `host.transfer`.
+- Contract (`tests/contract-host-transfer.test.ts`, golden `docs/contracts/host-transfer.md`): host transfers → roles swapped, one HOST; new host's `cohost_at` cleared; old host co-host flag cleared; guest/co-host 403; self 422; removed target 409; typed/unknown 404; closed order 409 `SESSION_CLOSED`; replay same key = same result, no second notice; old host's write after transfer 403 `FORBIDDEN`, in-flight one 403 `ROLE_CHANGED` (R01-style `betweenAuthAndLock`); two concurrent transfers → exactly one HOST; displayName renames before demote; target's pending claims rejected; event in `NON_TICKET_EVENTS`; notice to new host only (E16 in `contract-notifications`). D38: notice fires when all ordering guests are ready, never with 0 ordering.
+- Existing tests to update: `e2e/groups.spec.ts:42-47`, `e2e/rounds.spec.ts:25`, `e2e/slice8-measure.spec.ts:99` (dock), `tests/contract-notifications.test.ts:331,346` (E08/E08b under D38), `tests/views.test.ts:74`, `tests/people.test.ts:29-42`.
+- E2E (`e2e/my-order.spec.ts`, `e2e/host-transfer.spec.ts`): guest opens My order, sees size + note + "added by Host" row, changes quantity in the sheet, marks ready, host sees Ready; host hands over to Jun, Jun's phone shows Review without reload, old host's phone shows "I'm ready"/My order; axe on both sheets light/dark.
+- Manual: shots of every state above at 320/375/430/768/1280.
+
+### Skills
+- `.impeccable/surfaces/src-app.md`, `DESIGN.md`: order-pad world, dock, sheet styling.
+- `frontend-a11y` / `accessibility`: drawer focus, radio group, aria-pressed toggle, live status.
+- `mobile-native`: drawer on phones, tap targets.
+- `contract-first`: new route + golden contract.
+- AGENTS.md: read `node_modules/next/dist/docs/` route handler guide before the new route.
+
+### You need to do
+- Nothing (no migration: D39 a).
+
+### Mockups (slice 6, text sketch)
+
+M1 Guest dock, 375 (today: `[Share ₱880] [Ticket] [✓ I'm ready]`):
+```
+M1a (D36 a)                                M1b (D36 b)
+│ 7 items                                │ │ 7 items                               │
+│ [Share ₱880] [Ticket] [☰ My order]     │ │ [Share ₱880] [Ticket] [✓ I'm ready]   │
+│   ready: [☰ My order ✓]  (ok-wash)     │ │ + Order tab, above Liza's first row:  │
+│                                        │ │   "Check my order →"                  │
+```
+
+M2 My order sheet (guest Liza, 375):
+```
+┌──────────────────────────────────────────┐
+│ My order                             [✕] │
+│ Round 2 · Not marked ready yet           │
+│──────────────────────────────────────────│
+│ FOR YOU                                  │
+│ 2× Sinigang · Large                [−][+]│
+│    No sauce, extra calamansi · Edit      │
+│ 1× Halo-halo                             │
+│    added by Host          [That's mine?] │  (D43 a)
+│ THE HOST ADDED THESE FOR "LIZA". YOURS?  │  (D43 a, only if any)
+│ 1× Pancit                 [That's mine?] │
+│ YOU ADDED FOR OTHERS                     │
+│ 1× Sisig · for Jun · Edit          [−][+]│
+│ SHARED                                   │
+│ 1× Crispy Pata · whole table             │
+│──────────────────────────────────────────│
+│ [        ✓ I'm ready        ]            │
+│ The host sees this. Changing anything    │
+│ clears it.                               │
+└──────────────────────────────────────────┘
+```
+M2-empty: "Nothing for you in round 2 yet." then any SHARED rows, same footer.
+M2-ready: header "Round 2 · You're ready"; footer button `[✓ Ready · tap to undo]` (ok-wash, aria-pressed=true).
+
+M3 Order options (host, 375), new row above End:
+```
+│ Your name [ Kovie        ]              │
+│ Order name [ Max's Restaurant ] [Save]  │
+│ ─────────────────────────────────────── │
+│ How Salo works                          │
+│ Hand over host →                        │
+│ All done? End order                     │
+```
+
+M4 Pick step:
+```
+│ ← Hand over host                    [✕] │
+│ Who should host this order?             │
+│ ( ) Jun · co-host                       │
+│ ( ) Liza                                │
+│ ( ) Ana                                 │
+│ [ Continue ]  (disabled until picked)   │
+```
+
+M5 Confirm step:
+```
+│ ← Make Jun the host?                [✕] │
+│ • Jun can confirm rounds, change prices,│
+│   record payments and end the order.    │
+│ • You become a guest. You can't undo    │
+│   this; only Jun can hand it back.      │
+│ • Everyone's phone updates right away.  │
+│ Your name [            ] (only if "Host")│
+│ [      Make Jun the host       ]        │
+│ [        Keep hosting          ] (ghost)│
+```
+
+M6 New host's notice (Updates): "Kovie made you the host." → opens the order.

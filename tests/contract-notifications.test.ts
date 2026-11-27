@@ -328,15 +328,17 @@ describe("notifications: who is told about what", () => {
     expect([await served(t.ana), await served(t.bea), await served(t.cy)]).toEqual([1, 2, 0]);
   });
 
-  it("E08 all guests ready -> the host, once per round; not before the last guest; guests are never told", async () => {
+  it("E08 everyone who is ordering is ready -> the host, once per round; guests with nothing in the round don't hold it back; guests are never told", async () => {
     const t = await room();
     await addFor(t.ana, "Katsu", 1, ind(t.ana));
+    await addFor(t.bea, "Gyoza", 1, ind(t.bea));
     const host = () => countOf(t.sid, t.host.who, "guests.ready");
     ok(await ready(t, t.ana, true));
-    ok(await ready(t, t.bea, true));
     expect(await host()).toBe(0);
-    ok(await ready(t, t.cy, true));
+    ok(await ready(t, t.bea, true));
     expect(await host()).toBe(1);
+    // Cy ordered nothing: saying ready anyway changes nothing, and toggling doesn't tell the host again.
+    ok(await ready(t, t.cy, true));
     ok(await ready(t, t.cy, false));
     ok(await ready(t, t.cy, true));
     expect(await host()).toBe(1);
@@ -344,12 +346,17 @@ describe("notifications: who is told about what", () => {
     await confirm(t);
     await openRound(t);
     await addFor(t.ana, "Gyoza", 1, ind(t.ana));
-    for (const g of [t.ana, t.bea, t.cy]) ok(await ready(t, g, true));
+    ok(await ready(t, t.ana, true));
     expect(await host()).toBe(2);
   });
 
-  it("E08b a removed guest does not hold the host's 'everyone is ready' back", async () => {
+  it("E08b a removed guest does not hold the host's notice back, and nobody ordering never sends it", async () => {
     const t = await room();
+    ok(await ready(t, t.ana, true));
+    expect(await countOf(t.sid, t.host.who, "guests.ready")).toBe(0);
+    await addFor(t.ana, "Katsu", 1, ind(t.ana));
+    await addFor(t.bea, "Gyoza", 1, ind(t.bea));
+    await addFor(t.cy, "Ramen", 1, ind(t.cy));
     await removeGuest(t, t.cy);
     ok(await ready(t, t.ana, true));
     expect(await countOf(t.sid, t.host.who, "guests.ready")).toBe(0);
@@ -662,6 +669,7 @@ describe("notifications: snapshot cap, unread count, dedup", () => {
 
   it("D03 the same event for the same round twice (ready toggled) gives one row", async () => {
     const t = await room();
+    for (const g of [t.ana, t.bea, t.cy]) await addFor(g, "Katsu", 1, ind(g));
     for (const g of [t.ana, t.bea, t.cy]) ok(await ready(t, g, true));
     for (let i = 0; i < 3; i++) {
       ok(await ready(t, t.cy, false));
