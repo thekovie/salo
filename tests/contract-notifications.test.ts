@@ -18,6 +18,7 @@ import { POST as UNAVAILABLE } from "@/app/api/sessions/[id]/dishes/[dishId]/una
 import { POST as ENTRY_RESTORE } from "@/app/api/sessions/[id]/entries/[entryId]/restore/route";
 import { DELETE as ENTRY_DELETE } from "@/app/api/sessions/[id]/entries/[entryId]/route";
 import { POST as READ } from "@/app/api/sessions/[id]/notifications/read/route";
+import { DELETE as PAYMENT_DELETE, PATCH as PAYMENT_PATCH, PUT as PAYMENT_PUT } from "@/app/api/sessions/[id]/payments/[paymentId]/route";
 import { PUT as COHOST } from "@/app/api/sessions/[id]/participants/[pid]/cohost/route";
 import { POST as REMOVE } from "@/app/api/sessions/[id]/participants/[pid]/remove/route";
 import { PUT as PRICE } from "@/app/api/sessions/[id]/prices/route";
@@ -34,6 +35,8 @@ import { resolveActor } from "@/server/auth/actor";
 import { credentialCookieName } from "@/server/auth/credentials";
 import { getDb } from "@/server/db/client";
 import { sessions } from "@/server/db/schema";
+import { runMutation } from "@/server/mutations";
+import { requestClaim, resolveClaim } from "@/server/orders/people";
 import { findInvite, joinSession } from "@/server/sessions/join";
 import { getSnapshot } from "@/server/sessions/snapshot";
 import { resetDb, TEST_DATABASE_URL, testDb } from "./helpers/db";
@@ -412,6 +415,39 @@ describe("notifications: who is told about what", () => {
     const set = (await box(t.sid, t.ana.who)).items.find((i) => i.type === "participant.cohostSet")!;
     expect(notificationText(set)).toContain("made you a co-host");
     expect(notificationTarget("participant.cohostSet")).toBe("served");
+  });
+
+  it("E14 payment recorded -> only a participant payer, with the host's name; none for a typed payer or the host's own card; deleting the payment deletes the notice", async () => {
+    const t = await room();
+    const pay = (payer: unknown, id = uuid()) => call(PAYMENT_PUT, t.sid, t.host.who, { method: "PUT", path: `/payments/${id}`, params: { paymentId: id }, body: { payer, payee: null, amountCentavos: 50000, method: null, note: null } });
+    const first = uuid();
+    ok(await pay({ participantId: t.ana.id }, first));
+    ok(await pay({ label: "Pedro" }));
+    ok(await pay({ participantId: t.host.id }));
+    expect(await typesOf(t.sid, t.ana.who)).toEqual(["payment.recorded"]);
+    for (const p of [t.bea, t.cy, t.host]) expect(await typesOf(t.sid, p.who)).toEqual([]);
+    const n = (await box(t.sid, t.ana.who)).items[0];
+    expect(notificationText(n)).toContain("recorded ₱500.00 from you");
+    expect(notificationTarget("payment.recorded")).toBe("kkb");
+    ok(await call(PAYMENT_DELETE, t.sid, t.host.who, { method: "DELETE", path: `/payments/${first}`, params: { paymentId: first } }));
+    expect(await typesOf(t.sid, t.ana.who)).toEqual([]);
+  });
+
+  it("E15 a claim that leaves a payment paid to its own payer -> host only: payment.needsReview naming the claimant; fixing the payee retracts it", async () => {
+    const t = await room();
+    const pid = uuid();
+    await addFor(t.host, "Soup", 1, { type: "INDIVIDUAL", label: "Rafa" });
+    const batchId = (await syncOf(t.sid, t.host.who)).entries.at(-1)!.batchId as string;
+    ok(await call(PAYMENT_PUT, t.sid, t.host.who, { method: "PUT", path: `/payments/${pid}`, params: { paymentId: pid }, body: { payer: { participantId: t.ana.id }, payee: { label: "Rafa" }, amountCentavos: 50000, method: null, note: null } }));
+    const { result } = await runMutation(db, t.ana.actor, { idempotencyKey: key(), type: "t" }, (tx, s) => requestClaim(tx, s, t.ana.actor, batchId));
+    await runMutation(db, t.host.actor, { idempotencyKey: key(), type: "t" }, (tx, s) => resolveClaim(tx, s, t.host.actor, result.claimId, true));
+    expect(await countOf(t.sid, t.host.who, "payment.needsReview")).toBe(1);
+    for (const p of [t.ana, t.bea, t.cy]) expect(await countOf(t.sid, p.who, "payment.needsReview")).toBe(0);
+    const n = (await box(t.sid, t.host.who)).items.find((i) => i.type === "payment.needsReview")!;
+    expect(notificationText(n)).toBe("Ana’s claim left a ₱500.00 payment paid to themself. Fix it on KKB.");
+    expect(notificationTarget("payment.needsReview")).toBe("kkb");
+    ok(await call(PAYMENT_PATCH, t.sid, t.host.who, { method: "PATCH", path: `/payments/${pid}`, params: { paymentId: pid }, body: { payee: null } }));
+    expect(await countOf(t.sid, t.host.who, "payment.needsReview")).toBe(0);
   });
 
   it("E12 a refused or rolled back change leaves no notification (stale confirm, guest marking unavailable, unknown dish)", async () => {

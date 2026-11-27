@@ -598,3 +598,31 @@ export const receiptPeople = pgTable(
     check("receipt_people_label_ck", sql`char_length(bill_to_label) BETWEEN 1 AND 40`),
   ],
 );
+
+/** A payment toward someone's KKB share (host-recorded, never edited). A null payee is the restaurant. Balances are computed from the bill, never stored. */
+export const payments = pgTable(
+  "payments",
+  {
+    id: uuid("id").primaryKey(),
+    sessionId: sessionRef(),
+    participantId: uuid("participant_id").references(() => participants.id),
+    label: text("label"),
+    payeeParticipantId: uuid("payee_participant_id").references(() => participants.id),
+    payeeLabel: text("payee_label"),
+    amountCentavos: integer("amount_centavos").notNull(),
+    method: text("method"),
+    note: text("note"),
+    createdAt: createdAt(),
+    createdBy: uuid("created_by").references(() => participants.id, { onDelete: "set null" }),
+  },
+  (t) => [
+    index("payments_session_idx").on(t.sessionId),
+    check("payments_one_payer_ck", sql`num_nonnulls(participant_id, label) = 1`),
+    check("payments_label_ck", sql`char_length(label) BETWEEN 1 AND 40`),
+    check("payments_one_payee_ck", sql`num_nonnulls(payee_participant_id, payee_label) <= 1`),
+    check("payments_payee_label_ck", sql`char_length(payee_label) BETWEEN 1 AND 40`),
+    check("payments_amount_ck", sql`amount_centavos BETWEEN 1 AND 99999999`),
+    check("payments_method_ck", sql`method IN ('cash', 'gcash', 'maya', 'bank', 'other')`),
+    check("payments_note_ck", sql`char_length(note) BETWEEN 1 AND 40`),
+  ],
+);

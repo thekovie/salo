@@ -11,6 +11,9 @@ import { formatPeso, parsePeso, toPesoInput } from "@/lib/money";
 import type { EntrySettlement } from "@/lib/snapshot";
 import { SplitPicker } from "./split-picker";
 
+/** Radio pill for picking one person; shared with the payment sheet. */
+export const pillOption = "inline-flex min-h-11 cursor-pointer items-center rounded-full border-[1.5px] border-input bg-ticket px-3.5 text-sm font-semibold has-checked:border-ink has-checked:bg-ink has-checked:text-paper has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-ink";
+
 /** Someone the host can bill a shared dish to: a joined person or a name typed for someone without a phone. */
 export interface Payer {
   key: string;
@@ -223,7 +226,7 @@ export function PriceEditor({ line, sessionId, refresh, canPrice, canBillTo, pay
           </p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {[{ key: NOBODY, title: "No one yet" }, ...payers, ...(canSplit ? [{ key: SPLIT, title: "Split equally…" }] : [])].map((p) => (
-              <label key={p.key} className="inline-flex min-h-11 cursor-pointer items-center rounded-full border-[1.5px] border-input bg-ticket px-3.5 text-sm font-semibold has-checked:border-ink has-checked:bg-ink has-checked:text-paper has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-ink">
+              <label key={p.key} className={pillOption}>
                 <input type="radio" name={`${id}-bill`} value={p.key} checked={billKey === p.key} onChange={() => setBillKey(p.key)} className="sr-only" />
                 {p.title}
               </label>

@@ -1,7 +1,8 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
-import { sharedPriceKey, type SessionSnapshot } from "@/lib/snapshot";
+import { personKey } from "@/lib/adjustments";
+import { sharedPriceKey, type PaymentMethod, type SessionSnapshot } from "@/lib/snapshot";
 import type { Db } from "@/server/db/client";
-import { adjustmentShares, adjustments, confirmedRoundSnapshots, correctionSettlements, dishes, entryClaims, entryPayers, entrySettlements, orderBatches, orderEntries, orderGroupMembers, orderGroups, participantRoundReadiness, participants, receiptPeople, receipts, rounds, servedCounts, sessions, sharedPrices } from "@/server/db/schema";
+import { adjustmentShares, adjustments, confirmedRoundSnapshots, correctionSettlements, dishes, entryClaims, entryPayers, entrySettlements, orderBatches, orderEntries, orderGroupMembers, orderGroups, participantRoundReadiness, participants, payments, receiptPeople, receipts, rounds, servedCounts, sessions, sharedPrices } from "@/server/db/schema";
 import { notFound } from "@/server/errors";
 import { loadNotifications } from "@/server/notifications";
 import { loadCorrections } from "@/server/orders/rounds";
@@ -34,7 +35,7 @@ export async function getSnapshot(db: Db, actor: Actor): Promise<SessionSnapshot
           .limit(LIMITS.dishesPerSession),
       ]);
       const draft = roundRows.find((r) => r.status === "DRAFT") ?? roundRows[roundRows.length - 1];
-      const [claimRows, readyRows, groupRows, memberRows, correctionRows, ticketRows, entryPriceRows, correctionPriceRows, sharedPriceRows, servedRows, adjustmentRows, adjustmentShareRows, payerRows, receiptRows, receiptPeopleRows, notificationsView] = await Promise.all([
+      const [claimRows, readyRows, groupRows, memberRows, correctionRows, ticketRows, entryPriceRows, correctionPriceRows, sharedPriceRows, servedRows, adjustmentRows, adjustmentShareRows, payerRows, receiptRows, receiptPeopleRows, paymentRows, notificationsView] = await Promise.all([
         tx.select().from(entryClaims).where(and(eq(entryClaims.sessionId, session.id), eq(entryClaims.status, "PENDING"))).orderBy(asc(entryClaims.createdAt)),
         tx.select().from(participantRoundReadiness).where(eq(participantRoundReadiness.roundId, draft.id)),
         tx.select().from(orderGroups).where(eq(orderGroups.sessionId, session.id)).orderBy(asc(orderGroups.createdAt)),
@@ -58,6 +59,7 @@ export async function getSnapshot(db: Db, actor: Actor): Promise<SessionSnapshot
         tx.select().from(entryPayers).where(eq(entryPayers.sessionId, session.id)).orderBy(asc(entryPayers.participantId), asc(entryPayers.billToLabel)),
         tx.select().from(receipts).where(eq(receipts.sessionId, session.id)).orderBy(asc(receipts.createdAt), asc(receipts.id)),
         tx.select().from(receiptPeople).where(eq(receiptPeople.sessionId, session.id)).orderBy(asc(receiptPeople.participantId), asc(receiptPeople.billToLabel)),
+        tx.select().from(payments).where(eq(payments.sessionId, session.id)).orderBy(asc(payments.createdAt), asc(payments.id)),
         loadNotifications(tx, actor),
       ]);
       const payersOf = (entryId: string) => payerRows.filter((r) => r.entryId === entryId).map((r) => ({ participantId: r.participantId, label: r.billToLabel }));
@@ -134,6 +136,16 @@ export async function getSnapshot(db: Db, actor: Actor): Promise<SessionSnapshot
             totalCentavos: r.totalCentavos,
             people: receiptPeopleRows.filter((p) => p.receiptId === r.id).map((p) => ({ participantId: p.participantId, label: p.billToLabel })),
             revision: r.revision,
+          })),
+          payments: paymentRows.map((p) => ({
+            id: p.id,
+            payer: { participantId: p.participantId, label: p.label },
+            payee: p.payeeParticipantId || p.payeeLabel ? { participantId: p.payeeParticipantId, label: p.payeeLabel } : null,
+            amountCentavos: p.amountCentavos,
+            method: p.method as PaymentMethod | null,
+            note: p.note,
+            createdAt: p.createdAt.toISOString(),
+            needsReview: Boolean(p.payeeParticipantId || p.payeeLabel) && personKey({ participantId: p.participantId, label: p.label }) === personKey({ participantId: p.payeeParticipantId, label: p.payeeLabel }),
           })),
         },
       };

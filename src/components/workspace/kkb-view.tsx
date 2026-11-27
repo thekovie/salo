@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, CircleAlert, CircleCheck, Copy, Pencil, Share2 } from "lucide-react";
+import { Check, Circle, CircleAlert, CircleCheck, Contrast, Copy, Pencil, Share2 } from "lucide-react";
 import { Fragment, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { personKey } from "@/lib/adjustments";
@@ -8,12 +8,16 @@ import { normalizeText } from "@/lib/dish-name";
 import { track } from "@/lib/analytics";
 import { buildKkb, kkbText, priceCompleteness, tableLines, type Kkb, type KkbLine, type KkbSection } from "@/lib/kkb";
 import { formatPeso } from "@/lib/money";
+import { billFinal, hasShare, paidByKey, paymentStatus, paymentTotals, type PaymentStatus } from "@/lib/payments";
 import type { SessionSnapshot } from "@/lib/snapshot";
 import { cn } from "@/lib/utils";
 import { HostNamePrompt } from "./host-name-prompt";
 import { PricesSheet } from "./prices-sheet";
 import { PriceEditor, type Payer, type TablePrice } from "./price-editor";
 import { AdjustmentsBlock } from "./adjustments-block";
+import { FixPaymentSheet } from "./fix-payment-sheet";
+import { PaymentSheet } from "./payment-sheet";
+import { CardPaymentRows, PaymentsBlock } from "./payments-block";
 import { ReceiptCheckBlock } from "./receipt-check-block";
 import { ServiceChargeBlock } from "./service-charge-block";
 
@@ -43,6 +47,8 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
   const kkb = useMemo(() => buildKkb(snapshot, meId), [snapshot, meId]);
   const [editing, setEditing] = useState<string | null>(null);
   const [pricesOpen, setPricesOpen] = useState(false);
+  const [paying, setPaying] = useState<string | null>(null);
+  const [fixing, setFixing] = useState<string | null>(null);
   const [copy, setCopy] = useState<"idle" | "copied" | "error">("idle");
   // Which cards start open is decided once, so a card doesn't snap shut while the host is pricing it.
   const [startOpen] = useState(() => new Set(kkb.sections.filter((s) => s.shared || (isHost && (s.unpricedUnits > 0 || s.drafts.some((l) => l.unitCentavos == null)))).map((s) => s.key)));
@@ -89,6 +95,28 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
       editor: <PriceEditor key={key} line={line} sessionId={snapshot.session.id} refresh={refresh} canPrice={canPrice} canBillTo={canBillTo} payers={payers} table={table} live={live} bill={entry} leftPayers={leftPayers} onDone={() => setEditing((open) => (open === key ? null : open))} />,
     };
   };
+
+  const { payments } = snapshot.settlement;
+  const final = billFinal(kkb);
+  const paid = paidByKey(payments);
+  const statusOf = (s: KkbSection) => (s.shared ? null : paymentStatus(s, paid.get(s.key) ?? 0, final));
+  const payOf = (s: KkbSection): PayProps => ({
+    status: statusOf(s),
+    chip: payments.length > 0 && hasShare(s),
+    rows: (
+      <CardPaymentRows
+        status={statusOf(s)}
+        payments={payments.filter((p) => personKey(p.payer) === s.key)}
+        snapshot={snapshot}
+        isHost={isHost}
+        refresh={refresh}
+        onRecord={isHost && hasShare(s) ? () => setPaying(s.key) : null}
+        onFix={isHost ? setFixing : null}
+        showBalance={payments.length > 0 && hasShare(s)}
+      />
+    ),
+  });
+  const payingSection = kkb.sections.find((s) => s.key === paying) ?? null;
 
   const mine = kkb.sections.find((s) => s.isMe);
   const people = kkb.sections.filter((s) => !s.isMe && !s.shared);
@@ -139,7 +167,7 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
       {needsName ? <HostNamePrompt onSave={onRenameMe} label="Add your name so the table knows which dishes are yours" /> : null}
 
       {mine ? (
-        <Card section={mine} isMe>
+        <Card section={mine} isMe pay={payOf(mine)}>
           <Lines section={mine} lineProps={lineProps} draftRound={draftRound} />
         </Card>
       ) : null}
@@ -147,7 +175,7 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
       {people.length > 0 ? (
         <section aria-label="Everyone else" className="space-y-2">
           {people.map((s) => (
-            <Card key={s.key} section={s} collapsible defaultOpen={startOpen.has(s.key)}>
+            <Card key={s.key} section={s} collapsible defaultOpen={startOpen.has(s.key)} pay={payOf(s)}>
               <Lines section={s} lineProps={lineProps} draftRound={draftRound} />
             </Card>
           ))}
@@ -168,6 +196,9 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
       <ServiceChargeBlock kkb={kkb} live={snapshot.settlement.serviceCharge} sessionId={snapshot.session.id} refresh={refresh} canEdit={isHost} isHost={isHost} />
       <AdjustmentsBlock kkb={kkb} snapshot={snapshot} refresh={refresh} isHost={isHost} />
       <ReceiptCheckBlock kkb={kkb} live={snapshot.settlement.receiptTotal} sessionId={snapshot.session.id} refresh={refresh} canEdit={isHost} snapshot={snapshot} />
+      <PaymentsBlock totals={paymentTotals(kkb, payments)} snapshot={snapshot} isHost={isHost} onFix={isHost ? setFixing : null} refresh={refresh} />
+      {isHost ? <PaymentSheet section={payingSection} status={payingSection ? statusOf(payingSection) : null} snapshot={snapshot} cards={kkb.sections.filter((s) => !s.shared)} refresh={refresh} onClose={() => setPaying(null)} /> : null}
+      {isHost ? <FixPaymentSheet payment={payments.find((p) => p.id === fixing && p.needsReview) ?? null} snapshot={snapshot} cards={kkb.sections.filter((s) => !s.shared)} refresh={refresh} onClose={() => setFixing(null)} /> : null}
       {isHost ? <PricesSheet open={pricesOpen} onOpenChange={setPricesOpen} snapshot={snapshot} refresh={refresh} /> : null}
     </div>
   );
@@ -254,7 +285,27 @@ function noteOf(section: KkbSection, isMe: boolean) {
   return null;
 }
 
-function Card({ section, isMe = false, collapsible = false, defaultOpen = false, children }: { section: KkbSection; isMe?: boolean; collapsible?: boolean; defaultOpen?: boolean; children: React.ReactNode }) {
+/** What a person's card shows about payments: the chip beside the amount (once anything is recorded) and the rows at the end. */
+type PayProps = { status: PaymentStatus | null; chip: boolean; rows: React.ReactNode };
+
+const CHIP = {
+  unpaid: { icon: Circle, text: "Unpaid", tone: "bg-paper text-ink-soft" },
+  partly: { icon: Contrast, text: "Partly paid", tone: "bg-saffron-wash text-saffron-ink" },
+  paid: { icon: CircleCheck, text: "Paid", tone: "bg-ok-wash text-ok" },
+} as const;
+
+function PayChip({ status }: { status: PaymentStatus | null }) {
+  if (!status?.chip) return null;
+  const { icon: Icon, text, tone } = CHIP[status.chip];
+  return (
+    <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 font-sans text-xs font-semibold", tone)}>
+      <Icon className="size-3.5" aria-hidden />
+      {text}
+    </span>
+  );
+}
+
+function Card({ section, isMe = false, collapsible = false, defaultOpen = false, pay, children }: { section: KkbSection; isMe?: boolean; collapsible?: boolean; defaultOpen?: boolean; pay?: PayProps; children: React.ReactNode }) {
   const note = noteOf(section, isMe);
   const heading = (
     <div className="flex items-baseline justify-between gap-3">
@@ -262,7 +313,10 @@ function Card({ section, isMe = false, collapsible = false, defaultOpen = false,
         {section.title}
         {note ? <span className="ml-1.5 font-sans text-sm text-ink-soft">· {note}</span> : null}
       </p>
-      <SummaryAmount section={section} />
+      <span className="flex shrink-0 flex-col items-end gap-y-1">
+        <SummaryAmount section={section} />
+        {pay?.chip ? <PayChip status={pay.status} /> : null}
+      </span>
     </div>
   );
   if (!collapsible) {
@@ -276,6 +330,7 @@ function Card({ section, isMe = false, collapsible = false, defaultOpen = false,
         {heading}
         {children}
         <Footer section={section} />
+        {pay?.rows}
       </section>
     );
   }
@@ -287,6 +342,7 @@ function Card({ section, isMe = false, collapsible = false, defaultOpen = false,
       <div className="pb-3">
         {children}
         <Footer section={section} />
+        {pay?.rows}
       </div>
     </details>
   );

@@ -74,6 +74,24 @@ export interface SettlementView {
   adjustments: SnapshotAdjustment[];
   /** Extra receipts (the main one is `receiptTotal`), oldest first. */
   receipts: SnapshotReceipt[];
+  /** Recorded payments, oldest first. Balances are computed from the bill (`lib/payments.ts`), never stored. */
+  payments: SnapshotPayment[];
+}
+
+export const PAYMENT_METHODS = ["cash", "gcash", "maya", "bank", "other"] as const;
+export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
+
+export interface SnapshotPayment {
+  id: string;
+  payer: PersonRef;
+  /** null = the restaurant. */
+  payee: PersonRef | null;
+  amountCentavos: number;
+  method: PaymentMethod | null;
+  note: string | null;
+  createdAt: string;
+  /** Payer and payee became the same person (a name was claimed): kept for the record, counted nowhere until the host fixes the payee. */
+  needsReview: boolean;
 }
 
 export interface SnapshotReceipt {
@@ -104,7 +122,7 @@ export interface SnapshotAdjustment {
   revision: number;
 }
 
-export const EMPTY_SETTLEMENT: SettlementView = { entries: {}, corrections: {}, defaults: {}, serviceCharge: { centavos: null, revision: 0 }, receiptTotal: { centavos: null, revision: 0 }, adjustments: [], receipts: [] };
+export const EMPTY_SETTLEMENT: SettlementView = { entries: {}, corrections: {}, defaults: {}, serviceCharge: { centavos: null, revision: 0 }, receiptTotal: { centavos: null, revision: 0 }, adjustments: [], receipts: [], payments: [] };
 
 /** Any price anywhere: a line's, a replacement's or a table price. */
 export const anyPrice = (s: Pick<SessionSnapshot, "settlement">) =>
