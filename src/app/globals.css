@@ -452,9 +452,10 @@ body:has([data-vaul-drawer]) .floating-notices {
   display: none;
 }
 
-/* With a sheet open the dock is hidden: drop the stack to just above a typical sheet footer instead of the dock's height. */
+/* Over a drawer the stack moves to the top, onto the overlay: any bottom offset lands on some sheet's controls. */
 body:has([data-vaul-drawer]) [data-toast-stack] {
-  bottom: calc(env(safe-area-inset-bottom) + 7.75rem);
+  top: calc(env(safe-area-inset-top) + 0.5rem);
+  bottom: auto;
 }
 
 /* Live arrivals: slide down and in (~200 ms), hold, fade up and out (~140 ms). One animation, so nothing has to

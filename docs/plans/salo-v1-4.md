@@ -1192,7 +1192,7 @@ Rejected: transfer from the People card (right cluster already full at 320, slic
 | Guest, draft round, items for them | Dock entry (D36); sheet M2 with groups, editable rows have stepper + Edit |
 | Guest, draft round, nothing for them | Sheet M2-empty: "Nothing for you in round 2 yet." + ready toggle |
 | Guest ready | Dock shows ready state; sheet header "You're ready"; any change of theirs resets it (existing) |
-| Guest edits in sheet | Stepper/Edit as the ticket; queued op, "not saved" handling as today; readiness resets; Undo toast shows above the sheet (toast stack `z-50` → `z-[60]`, `toasts.tsx:77`; clears the sheet footer at 320) |
+| Guest edits in sheet | Stepper/Edit as the ticket; queued op, "not saved" handling as today; readiness resets; Undo toast shows above the sheet, at the top of the screen on the overlay while any sheet is open (`z-[60]`; a bottom offset covered short sheets' controls, CI axe on quick-prices) |
 | Someone adds a dish for a passive guest | They become "ordering" and "Still choosing"; any ready is cleared (existing reset, `entries.ts:97`) |
 | Only shared dishes in the round | "Nothing for you in round 2 yet." then the Shared section |
 | Dish added for me by someone else | Guest-added: read-only "added by Jun". Host-added: per D43 |
