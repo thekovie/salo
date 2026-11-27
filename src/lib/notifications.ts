@@ -1,6 +1,6 @@
 import { formatPeso } from "./money";
 
-export type NotificationType = "round.confirmed" | "round.opened" | "dish.unavailable" | "order.correctionTold" | "price.defaultSet" | "food.served" | "guests.ready" | "order.ended" | "participant.cohostSet" | "participant.cohostRevoked" | "payment.recorded" | "payment.needsReview";
+export type NotificationType = "round.confirmed" | "round.opened" | "dish.unavailable" | "order.correctionTold" | "price.defaultSet" | "food.served" | "guests.ready" | "order.ended" | "participant.cohostSet" | "participant.cohostRevoked" | "payment.recorded" | "payment.needsReview" | "host.transferred";
 
 type Subject = Record<string, string | number | boolean | null | undefined>;
 
@@ -65,7 +65,7 @@ export function notificationText({ type, subject: s }: Pick<NotificationView, "t
     case "food.served":
       return `${str(s.label)} is all served`;
     case "guests.ready":
-      return `Everyone is ready for round ${num(s.roundNumber)}`;
+      return `Everyone who’s ordering is ready for round ${num(s.roundNumber)}`;
     case "order.ended":
       return s.cancelled ? "The host cancelled the order" : "The host ended the order";
     case "participant.cohostSet":
@@ -74,6 +74,8 @@ export function notificationText({ type, subject: s }: Pick<NotificationView, "t
       return `${str(s.host)} stopped your co-host role.`;
     case "payment.recorded":
       return `${str(s.host)} recorded ${formatPeso(num(s.centavos))} from you`;
+    case "host.transferred":
+      return `${str(s.host)} made you the host.`;
     case "payment.needsReview":
       return `${str(s.name)}’s claim left a ${formatPeso(num(s.centavos))} payment paid to themself. Fix it on KKB.`;
   }

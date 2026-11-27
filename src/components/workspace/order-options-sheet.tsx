@@ -1,8 +1,9 @@
 "use client";
 
-import { Compass, LoaderCircle, X } from "lucide-react";
+import { Compass, HandHelping, LoaderCircle, X } from "lucide-react";
 import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { HostHandover, type HandoverGuest } from "./host-handover";
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
 
 interface OrderOptionsSheetProps {
@@ -25,6 +26,11 @@ interface OrderOptionsSheetProps {
   onEnd: () => Promise<boolean>;
   /** Replay the "how Salo works" tour. */
   onTour: () => void;
+  sessionId: string;
+  /** Active guests who could take over (co-hosts first); none hides "Hand over host". */
+  handoverGuests: readonly HandoverGuest[];
+  /** Refreshes the snapshot after a hand over (marks this device's guest tour seen first). */
+  onHandoverRefresh: () => Promise<unknown>;
 }
 
 /**
@@ -41,12 +47,12 @@ export function OrderOptionsSheet(props: OrderOptionsSheetProps) {
   );
 }
 
-function OptionsBody({ onOpenChange, title, anyConfirmed, unsentRound, waitingItems = 0, onRename, myName, onRenameMe, onEnd, onTour, startAt = "options" }: OrderOptionsSheetProps) {
+function OptionsBody({ onOpenChange, title, anyConfirmed, unsentRound, waitingItems = 0, onRename, myName, onRenameMe, onEnd, onTour, sessionId, handoverGuests, onHandoverRefresh, startAt = "options" }: OrderOptionsSheetProps) {
   const id = useId();
   const [draft, setDraft] = useState(title ?? "");
   const unnamed = myName.trim().toLowerCase() === "host";
   const [name, setName] = useState(unnamed ? "" : myName);
-  const [step, setStep] = useState<"options" | "confirm">(startAt);
+  const [step, setStep] = useState<"options" | "confirm" | "handover">(startAt);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const verb = anyConfirmed ? "End" : "Cancel";
@@ -74,6 +80,10 @@ function OptionsBody({ onOpenChange, title, anyConfirmed, unsentRound, waitingIt
       <X className="size-5" aria-hidden />
     </DrawerClose>
   );
+
+  if (step === "handover") {
+    return <HostHandover sessionId={sessionId} guests={handoverGuests} needsName={unnamed} refresh={onHandoverRefresh} onBack={() => setStep("options")} close={close} onDone={() => onOpenChange(false)} />;
+  }
 
   if (step === "confirm") {
     return (
@@ -172,6 +182,14 @@ function OptionsBody({ onOpenChange, title, anyConfirmed, unsentRound, waitingIt
         <span className="flex-1 font-semibold">How Salo works</span>
         <span className="text-sm text-ink-soft">30-second tour</span>
       </button>
+
+      {handoverGuests.length > 0 ? (
+        <button type="button" onClick={() => setStep("handover")} className="mt-1 flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-xl px-1 text-left hover:bg-ink/6">
+          <HandHelping className="size-5 shrink-0 text-ink-soft" aria-hidden />
+          <span className="shrink-0 whitespace-nowrap font-semibold">Hand over host</span>
+          <span className="min-w-0 flex-1 truncate text-right text-sm text-ink-soft">Pick a new host</span>
+        </button>
+      ) : null}
 
       <div className="mt-4 border-t-[1.5px] border-dashed border-rule pt-5">
         <p className="font-semibold">{anyConfirmed ? "All done?" : "Not ordering after all?"}</p>

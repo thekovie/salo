@@ -40,7 +40,7 @@ describe("co-host", () => {
 
   it("may update serving and nothing else the host alone may do", () => {
     expect(can(cohost, "serving.update")).toBe(true);
-    for (const action of ["entry.editAny", "session.rename", "round.confirm", "round.open", "session.close", "claim.approve", "participant.remove", "price.editAny", "price.default", "dish.unavailable", "billTo.set", "serviceCharge.set", "receipt.set", "adjustment.set", "participant.renameSelf", "cohost.set", "settlement.record"] as const) {
+    for (const action of ["entry.editAny", "session.rename", "round.confirm", "round.open", "session.close", "claim.approve", "participant.remove", "price.editAny", "price.default", "dish.unavailable", "billTo.set", "serviceCharge.set", "receipt.set", "adjustment.set", "participant.renameSelf", "cohost.set", "host.transfer", "settlement.record"] as const) {
       expect(can(cohost, action), action).toBe(false);
     }
   });
@@ -49,5 +49,6 @@ describe("co-host", () => {
     expect(can(cohost, "entry.add")).toBe(true);
     expect(can(guest, "serving.update")).toBe(false);
     expect(can(host, "cohost.set")).toBe(true);
+    expect(can(host, "host.transfer")).toBe(true);
   });
 });

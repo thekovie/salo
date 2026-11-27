@@ -1,11 +1,12 @@
 "use client";
 
-import { CircleCheck, Clock, Hand, ReceiptText } from "lucide-react";
+import { CircleCheck, Clock, ReceiptText } from "lucide-react";
 import { hasSubLines, preparationLabel } from "@/lib/consolidate";
 import { everyone, type SessionSnapshot, type SnapshotEntry } from "@/lib/snapshot";
 import { cn } from "@/lib/utils";
 import { normalizeText } from "@/lib/dish-name";
 import { byPerson, findLikelyDuplicates, readinessSummary, type PersonBucket } from "@/lib/views";
+import { ClaimControl, claimSets } from "./claim-control";
 import { CohostToggle } from "./cohost-toggle";
 import { RemoveGuestSheet } from "./remove-guest-sheet";
 
@@ -24,8 +25,8 @@ interface PeopleViewProps {
   onSummary?: () => void;
 }
 
-function Lines({ bucket, claimable, canClaimEntry, myClaims, onClaim }: { bucket: PersonBucket; claimable: boolean; canClaimEntry: (e: SnapshotEntry) => boolean; myClaims: Set<string>; onClaim: (e: SnapshotEntry) => void }) {
-  if (bucket.entries.length === 0) return <p className="text-sm text-ink-soft">Nothing yet.</p>;
+function Lines({ bucket, forOthers = 0, isMe = false, claimable, canClaimEntry, myClaims, onClaim }: { bucket: PersonBucket; forOthers?: number; isMe?: boolean; claimable: boolean; canClaimEntry: (e: SnapshotEntry) => boolean; myClaims: Set<string>; onClaim: (e: SnapshotEntry) => void }) {
+  if (bucket.entries.length === 0) return <p className="text-sm text-ink-soft">{forOthers > 0 ? `Nothing for ${isMe ? "you" : bucket.title} yet · added ${forOthers} for others` : "Nothing yet."}</p>;
   if (claimable) {
     // Guests see each dish separately so they can say which one is theirs.
     return (
@@ -37,15 +38,7 @@ function Lines({ bucket, claimable, canClaimEntry, myClaims, onClaim }: { bucket
               {e.variant || e.instructions ? <span className="text-ink-soft"> · {[e.variant, e.instructions].filter(Boolean).join(" · ")}</span> : null}
               <span className="tally ml-2 text-tomato-ink">×{e.quantity}</span>
             </span>
-            {!canClaimEntry(e) ? null : myClaims.has(e.batchId) ? (
-              <span className="inline-flex items-center gap-1 text-sm text-ink-soft">
-                <Clock className="size-4" aria-hidden /> Asked the host
-              </span>
-            ) : (
-              <button type="button" onClick={() => onClaim(e)} className="inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-full border-[1.5px] border-input px-3 text-sm font-semibold hover:bg-paper">
-                <Hand className="size-4" aria-hidden /> That&rsquo;s mine
-              </button>
-            )}
+            {canClaimEntry(e) ? <ClaimControl entry={e} asked={myClaims.has(e.batchId)} onClaim={onClaim} /> : null}
           </li>
         ))}
       </ul>
@@ -86,11 +79,10 @@ export function PeopleView({ snapshot, entries, canClaim, onClaim, onRemoveDupli
   const myName = normalizeText(snapshot.me.displayName);
   const forMe = snapshot.me.role === "HOST" ? undefined : all.find((b) => b.kind === "name" && normalizeText(b.title) === myName);
   const buckets = all.filter((b) => b !== forMe);
-  const ready = readinessSummary(snapshot);
+  const ready = readinessSummary(snapshot, entries, snapshot.activeRoundId);
   const isHost = snapshot.me.role === "HOST";
   const hints = isHost ? findLikelyDuplicates(entries, snapshot.participants) : [];
-  const myClaims = new Set(snapshot.claims.filter((c) => c.requestedBy === snapshot.me.participantId).map((c) => c.batchId));
-  const hostIds = new Set(snapshot.participants.filter((p) => p.role === "HOST").map((p) => p.id));
+  const { hostIds, myClaims } = claimSets(snapshot);
 
   if (buckets.length === 0 && !forMe) {
     return (
@@ -133,6 +125,7 @@ export function PeopleView({ snapshot, entries, canClaim, onClaim, onRemoveDupli
       {buckets.map((bucket) => {
         const isMe = bucket.participantId === snapshot.me.participantId;
         const guestReady = bucket.participantId ? ready.readyIds.has(bucket.participantId) : false;
+        const noOrder = bucket.participantId ? ready.noOrderIds.has(bucket.participantId) : false;
         // Dishes the host added under a typed name, for nobody, or straight onto this guest's own card can be claimed.
         const claimable = canClaim && (bucket.kind === "name" || bucket.kind === "unassigned" || isMe) && bucket.entries.some((e) => hostIds.has(e.submittedBy));
         return (
@@ -149,7 +142,7 @@ export function PeopleView({ snapshot, entries, canClaim, onClaim, onRemoveDupli
                 {bucket.role === "GUEST" && !(bucket.participantId && removedIds.has(bucket.participantId)) ? (
                   <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold", guestReady ? "bg-ok-wash text-ok" : "bg-ink/6 text-ink-soft")}>
                     {guestReady ? <CircleCheck className="size-3.5" aria-hidden /> : <Clock className="size-3.5" aria-hidden />}
-                    {guestReady ? "Ready" : "Still choosing"}
+                    {guestReady ? "Ready" : noOrder ? "No order yet" : "Still choosing"}
                   </span>
                 ) : null}
                 <span className="tally whitespace-nowrap text-sm text-ink-soft">
@@ -169,7 +162,7 @@ export function PeopleView({ snapshot, entries, canClaim, onClaim, onRemoveDupli
             {onSetCohost && bucket.role === "GUEST" && bucket.participantId && !removedIds.has(bucket.participantId) ? (
               <CohostToggle name={bucket.title} isCohost={bucket.cohost} onSet={(cohost) => onSetCohost(bucket.participantId as string, bucket.title, cohost)} />
             ) : null}
-            <Lines bucket={bucket} claimable={claimable} canClaimEntry={(e) => hostIds.has(e.submittedBy) && !e.id.startsWith("pending:")} myClaims={myClaims} onClaim={onClaim} />
+            <Lines bucket={bucket} isMe={isMe} forOthers={entries.filter((e) => e.submittedBy === bucket.participantId && e.attribution.participantId !== bucket.participantId).length} claimable={claimable} canClaimEntry={(e) => hostIds.has(e.submittedBy) && !e.id.startsWith("pending:")} myClaims={myClaims} onClaim={onClaim} />
             {isMe && forMe ? (
               <div className="tear mt-3 pt-3">
                 <p className="mb-1 text-sm text-ink-soft">The host added these for &ldquo;{forMe.title}&rdquo;. Yours?</p>

@@ -356,7 +356,7 @@ export function useSession(initial: SessionSnapshot) {
             break;
           }
           // Refused (conflict, removed, confirmed, invalid…): show the latest state and say what was not saved.
-          if (err.status === 409 || err.status === 404) await refresh().catch(() => undefined);
+          if (err.status === 409 || err.status === 404 || err.status === 403) await refresh().catch(() => undefined);
           if (resolvers.current.get(item.key)?.onError) {
             // The caller reports this failure itself (e.g. confirmation): nothing to list as "not saved".
             setQueue((list) => list.filter((p) => p.key !== item.key));

@@ -7,7 +7,7 @@ PostgreSQL, defined in `src/server/db/schema.ts`; migrations in `drizzle/` (appl
 | Table | Purpose |
 |---|---|
 | `sessions` | One table's ordering session. `status` OPEN/CLOSED, `revision` (+1 per committed change), `join_code` (6-character typed code), `last_activity_at`, `closed_at`, `expires_at` (when cleanup deletes it). |
-| `participants` | Host or guest identity. Display names may repeat; identity is the id. Exactly one HOST per session. `removed_at`/`removed_reason` (≤140) when the host removes a guest; CHECK: only guests can be removed (`0005`). `cohost_at` (nullable, `0014`): set while the host lets this guest mark food served; CHECK `cohost_at IS NULL OR (role = 'GUEST' AND removed_at IS NULL)`; cleared on removal. |
+| `participants` | Host or guest identity. Display names may repeat; identity is the id. Exactly one HOST per session. `removed_at`/`removed_reason` (≤140) when the host removes a guest; CHECK: only guests can be removed (`0005`). `cohost_at` (nullable, `0014`): set while the host lets this guest mark food served; CHECK `cohost_at IS NULL OR (role = 'GUEST' AND removed_at IS NULL)`; cleared on removal. A host transfer demotes the old host before promoting the new one (the one-HOST unique index) and clears `cohost_at` on both. |
 | `participant_credentials` | SHA-256 hash of each participant's cookie token (raw tokens are never stored). Type HOST or GUEST. |
 | `rounds` | Ordering rounds, numbered from 1. DRAFT or CONFIRMED. At most one DRAFT per session. |
 | `participant_round_readiness` | "I'm ready" per participant per round, with the revision they acknowledged. |

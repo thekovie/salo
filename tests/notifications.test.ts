@@ -235,7 +235,8 @@ describe("recipients, the actor and dedup", () => {
 
   it("the host hears when every guest is ready, once per round; the order ending reaches everyone but the host", async () => {
     const { host, ana, ben } = await table();
-    await add(db, host, { dishName: "Gyoza", quantity: 1 });
+    await add(db, host, { dishName: "Gyoza", quantity: 1, attribution: forPerson(ana) });
+    await add(db, host, { dishName: "Katsu", quantity: 1, attribution: forPerson(ben) });
     const ready = (a: Actor, r: boolean) => run(a, (tx, s) => setReady(tx, s, a, r));
     await ready(ana, true);
     expect((await mine(host)).items).toEqual([]);

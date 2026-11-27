@@ -1,12 +1,14 @@
 import { and, count, eq, inArray, isNull } from "drizzle-orm";
 import { normalizeText, tidyText } from "@/lib/dish-name";
+import { orderingIds, readinessOf } from "@/lib/views";
 import { can, type Actor } from "@/lib/permissions";
 import type { Tx } from "@/server/db/client";
 import { entryClaims, orderBatches, orderEntries, orderGroupMembers, orderGroups, participantRoundReadiness, participants, rounds } from "@/server/db/schema";
 import { AppError, forbidden } from "@/server/errors";
-import { notify } from "@/server/notifications";
+import { notify, withMembers } from "@/server/notifications";
 import type { Applied, SessionRow } from "@/server/mutations";
 import { adoptLabelShares } from "./adjustments";
+import { tidyName } from "./settlement";
 import { LIMITS } from "./validation";
 
 async function draftRoundId(tx: Tx, sessionId: string): Promise<string> {
@@ -29,14 +31,31 @@ export async function setReady(tx: Tx, session: SessionRow, actor: Actor, ready:
       target: [participantRoundReadiness.participantId, participantRoundReadiness.roundId],
       set: { ready, acknowledgedRevision: session.revision + 1, updatedAt: new Date() },
     });
-  if (ready) {
-    const guests = await tx.select({ id: participants.id }).from(participants).where(and(eq(participants.sessionId, session.id), eq(participants.role, "GUEST"), isNull(participants.removedAt)));
-    const [{ n }] = await tx.select({ n: count() }).from(participantRoundReadiness).where(and(eq(participantRoundReadiness.roundId, roundId), eq(participantRoundReadiness.ready, true), inArray(participantRoundReadiness.participantId, guests.map((g) => g.id))));
-    const [host] = await tx.select({ id: participants.id }).from(participants).where(and(eq(participants.sessionId, session.id), eq(participants.role, "HOST")));
-    const [round] = await tx.select({ number: rounds.roundNumber }).from(rounds).where(eq(rounds.id, roundId));
-    if (n === guests.length) await notify(tx, session.id, { type: "guests.ready", subject: { roundId, roundNumber: round.number }, recipients: [host.id], dedupKey: `guests.ready:${roundId}`, actorId: actor.participantId });
-  }
+  if (ready) await notifyIfAllReady(tx, session, actor, roundId);
   return { result: { ready }, event: { type: "readiness.changed", payload: { participantId: actor.participantId } } };
+}
+
+/** "Everyone who's ordering is ready" (D38): guests with nothing in the round don't hold it back, and it never fires with nobody ordering. */
+async function notifyIfAllReady(tx: Tx, session: SessionRow, actor: Actor, roundId: string) {
+  const guests = await tx.select({ id: participants.id, displayName: participants.displayName }).from(participants).where(and(eq(participants.sessionId, session.id), eq(participants.role, "GUEST"), isNull(participants.removedAt)));
+  const entries = await tx
+    .select({ roundId: orderEntries.roundId, submittedBy: orderBatches.submittedBy, type: orderBatches.attributionType, participantId: orderBatches.attributedParticipantId, label: orderBatches.collectiveLabel })
+    .from(orderEntries)
+    .innerJoin(orderBatches, eq(orderBatches.id, orderEntries.batchId))
+    .where(and(eq(orderEntries.roundId, roundId), isNull(orderEntries.deletedAt)));
+  const groups = await withMembers(tx, session.id, entries.flatMap((e) => (e.type === "GROUP" ? [{ label: e.label }] : [])));
+  const readyRows = await tx.select({ id: participantRoundReadiness.participantId }).from(participantRoundReadiness).where(and(eq(participantRoundReadiness.roundId, roundId), eq(participantRoundReadiness.ready, true)));
+  const ordering = orderingIds(
+    entries.map((e) => ({ roundId: e.roundId, submittedBy: e.submittedBy, attribution: { type: e.type, label: e.label, participantId: e.participantId } })),
+    guests,
+    groups.map((g) => ({ label: g.label ?? "", memberIds: g.memberIds })),
+    roundId,
+  );
+  const summary = readinessOf(guests.map((g) => g.id), ordering, new Set(readyRows.map((r) => r.id)));
+  if (!guests.some((g) => ordering.has(g.id)) || summary.ready !== summary.total) return;
+  const [host] = await tx.select({ id: participants.id }).from(participants).where(and(eq(participants.sessionId, session.id), eq(participants.role, "HOST")));
+  const [round] = await tx.select({ number: rounds.roundNumber }).from(rounds).where(eq(rounds.id, roundId));
+  await notify(tx, session.id, { type: "guests.ready", subject: { roundId, roundNumber: round.number }, recipients: [host.id], dedupKey: `guests.ready:${roundId}`, actorId: actor.participantId });
 }
 
 /**
@@ -253,4 +272,23 @@ async function assertRoomForPerson(tx: Tx, sessionId: string) {
     .from(participants)
     .where(and(eq(participants.sessionId, sessionId), isNull(participants.removedAt)));
   if (value >= LIMITS.participantsPerSession) throw new AppError(422, "TABLE_FULL", `This order already has ${LIMITS.participantsPerSession} people.`);
+}
+
+/**
+ * The host hands the order to an active guest (F09). One transaction under the session lock: the old host becomes a
+ * plain guest first and the target is promoted second (one HOST per session is a unique index). The target's pending
+ * claims close, as for a removal: a host can't claim from themself.
+ */
+export async function transferHost(tx: Tx, session: SessionRow, fresh: Actor, targetId: string, rawName?: string): Promise<Applied<{ hostId: string }>> {
+  if (!can(fresh, "host.transfer")) throw forbidden("Only the host can hand over the order.");
+  if (targetId === fresh.participantId) throw new AppError(422, "ALREADY_HOST", "You’re already the host.");
+  const target = await loadTarget(tx, session.id, targetId);
+  if (target.removedAt) throw new AppError(409, "ALREADY_REMOVED", "They were removed from this order.");
+  const name = rawName === undefined ? fresh.displayName : tidyName(rawName, "Type your name (up to 40 characters) so the table knows who handed over.");
+  if (name !== fresh.displayName) await tx.update(participants).set({ displayName: name }).where(eq(participants.id, fresh.participantId));
+  await tx.update(participants).set({ role: "GUEST", cohostAt: null }).where(eq(participants.id, fresh.participantId));
+  await tx.update(participants).set({ role: "HOST", cohostAt: null }).where(eq(participants.id, targetId));
+  await tx.update(entryClaims).set({ status: "REJECTED", resolvedAt: new Date() }).where(and(eq(entryClaims.requestedBy, targetId), eq(entryClaims.status, "PENDING")));
+  await notify(tx, session.id, { type: "host.transferred", subject: { host: name }, recipients: [targetId], dedupKey: `host.transferred:${targetId}:${session.revision + 1}`, actorId: fresh.participantId });
+  return { result: { hostId: targetId }, event: { type: "host.transferred", payload: { fromId: fresh.participantId, toId: targetId } } };
 }

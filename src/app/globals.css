@@ -446,6 +446,18 @@ dialog.sheet {
   -webkit-mask: var(--perf-top);
 }
 
+/* The floating stack sits above drawers so Undo stays reachable in a sheet; its notices (connection, arrivals) stay
+   under sheets as before, so they can't catch taps meant for the sheet. */
+body:has([data-vaul-drawer]) .floating-notices {
+  display: none;
+}
+
+/* Over a drawer the stack moves to the top, onto the overlay: any bottom offset lands on some sheet's controls. */
+body:has([data-vaul-drawer]) [data-toast-stack] {
+  top: calc(env(safe-area-inset-top) + 0.5rem);
+  bottom: auto;
+}
+
 /* Live arrivals: slide down and in (~200 ms), hold, fade up and out (~140 ms). One animation, so nothing has to
    track an exit state. */
 @keyframes arrival-pill {

@@ -21,7 +21,7 @@ export interface TicketActions {
 }
 
 /** A small "Edit" control next to a dish's details (brief 5.12: the host can correct draft entries). */
-function EditButton({ entry, actions, name }: { entry: OverlayEntry; actions: TicketActions; name: string }) {
+export function EditButton({ entry, actions, name }: { entry: OverlayEntry; actions: TicketActions; name: string }) {
   if (!actions.edit) return null;
   return (
     <button

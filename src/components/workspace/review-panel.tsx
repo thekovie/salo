@@ -39,10 +39,12 @@ export function roundSummary(ticket: Pick<TicketSnapshot, "totalItems" | "correc
   return ticket.totalItems === 0 && fixes ? fixes : [items, fixes].filter(Boolean).join(", ");
 }
 
-export function ReviewPanel({ snapshot, entries, ticket, unsaved, notSaved, onBack, onShowWaiter, onConfirm, onRemoveDuplicate }: ReviewPanelProps) {
+export function ReviewPanel({ snapshot, entries, ticket, roundId, unsaved, notSaved, onBack, onShowWaiter, onConfirm, onRemoveDuplicate }: ReviewPanelProps) {
   const isHost = snapshot.me.role === "HOST";
-  const ready = readinessSummary(snapshot);
-  const choosing = snapshot.participants.filter((p) => p.role === "GUEST" && !ready.readyIds.has(p.id));
+  const ready = readinessSummary(snapshot, entries, roundId);
+  const guests = snapshot.participants.filter((p) => p.role === "GUEST");
+  const choosing = guests.filter((p) => !ready.readyIds.has(p.id) && !ready.noOrderIds.has(p.id));
+  const noOrder = guests.filter((p) => ready.noOrderIds.has(p.id));
   const hints = isHost ? findLikelyDuplicates(entries, snapshot.participants) : [];
   const empty = ticket.totalItems === 0 && ticket.corrections.length === 0;
   const blocked = unsaved > 0 || notSaved > 0 || empty;
@@ -64,8 +66,9 @@ export function ReviewPanel({ snapshot, entries, ticket, unsaved, notSaved, onBa
           </Check>
           {ready.total > 0 ? (
             <Check ok={choosing.length === 0 ? true : "wait"}>
-              {ready.ready} of {ready.total} {ready.total === 1 ? "guest" : "guests"} ready
-              {choosing.length ? <span className="text-ink-soft"> · still choosing: {choosing.map((p) => p.displayName).join(", ")}</span> : null}
+              {ready.ready} of {ready.total} ready
+              {choosing.length ? <span className="whitespace-nowrap text-ink-soft"> · still choosing: {choosing.map((p) => p.displayName).join(", ")}</span> : null}
+              {noOrder.length ? <span className="whitespace-nowrap text-ink-soft"> · no order yet: {noOrder.map((p) => p.displayName).join(", ")}</span> : null}
             </Check>
           ) : null}
           {isHost ? (

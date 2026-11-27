@@ -39,8 +39,10 @@ test("hybrid: a guest claims a dish the host recorded for them; duplicate hint; 
   await orderFor(page, "A person", "Rafa");
   await addDish(page, "Chicken Katsu");
   await addDish(page, "Halo-halo");
+  await guest.page.getByRole("button", { name: "My order", exact: true }).click();
   await guest.page.getByRole("button", { name: "I’m ready" }).click();
   await expect(page.getByText("1/1 guest ready")).toBeVisible();
+  await guest.page.keyboard.press("Escape");
 
   // The guest also adds Chicken Katsu: the host sees a possible double order and their readiness resets.
   await addDish(guest.page, "Chicken Katsu");
