@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { buildKkb, kkbText, type KkbInput } from "@/lib/kkb";
 import { billFinal, paidByKey, paymentStatus, paymentTotals } from "@/lib/payments";
@@ -146,8 +145,18 @@ describe("paymentTotals", () => {
     expect(kkbText(buildKkb(withPayments, "h"), "Max's Restaurant", "Tue, Nov 24")).toBe(kkbText(buildKkb(base, "h"), "Max's Restaurant", "Tue, Nov 24"));
   });
 
-  it("the shipped export text keeps the .shots/before baseline shape", () => {
-    const baseline = readFileSync(".shots/before/kkb-export.txt", "utf8");
+  // Copy summary captured before slice 5 (no payments): payments must not change it.
+  it("payments leave the Copy summary text byte-identical to before slice 5", () => {
+    const baseline = [
+      "Max's Restaurant · Tue, Nov 24",
+      "",
+      "Host  ₱800.00 + ₱80.00 service = ₱880.00",
+      "Jun  ₱1,120.00 + ₱112.00 service = ₱1,232.00",
+      "Liza  ₱960.00 + ₱96.00 service − ₱192.00 senior citizen discount = ₱864.00",
+      "",
+      "Total ₱2,976.00",
+      "Made with Salo",
+    ].join("\n");
     const host = entry("Rice", 8, mine("h"));
     const jun = entry("Sisig", 1, mine("jun"));
     const liza = entry("Pata", 1, mine("liza"));
