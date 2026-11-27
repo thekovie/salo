@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { normalizeText } from "@/lib/dish-name";
+import { MENU_INPUT_MAX, MENU_REASONS, parseMenuUrl } from "@/lib/menu-url";
 import { ADJUSTMENT_CATEGORIES, ADJUSTMENT_METHODS, PAYMENT_METHODS } from "@/lib/snapshot";
 import { MAX_EXTRA_RECEIPTS } from "@/lib/receipts";
 import { MAX_SERVICE_CHARGE_CENTAVOS, MAX_UNIT_PRICE_CENTAVOS } from "@/lib/money";
@@ -67,6 +68,22 @@ export const updateEntrySchema = z
   .refine((v) => v.quantity !== undefined || v.variant !== undefined || v.instructions !== undefined || v.attribution !== undefined, "Nothing to change.");
 
 export const renameSessionSchema = z.object({ title: optional(LIMITS.title) });
+
+/** `url: null` removes the link. The parsed (normalised) href replaces the raw input. */
+export const menuLinkSchema = z.object({
+  url: z
+    .string()
+    .max(MENU_INPUT_MAX, MENU_REASONS.tooLong)
+    .nullable()
+    .transform((value, ctx) => {
+      if (value === null) return null;
+      const parsed = parseMenuUrl(value);
+      if (parsed.ok) return parsed.url;
+      ctx.addIssue({ code: "custom", message: parsed.reason });
+      return z.NEVER;
+    }),
+  label: optional(LIMITS.label),
+});
 
 export type AddEntryInput = z.infer<typeof addEntrySchema>;
 export type UpdateEntryInput = z.infer<typeof updateEntrySchema>;

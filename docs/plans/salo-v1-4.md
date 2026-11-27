@@ -15,8 +15,11 @@ Each slice ships as its own branch and squash PR into `dev` (HANDOFF working rul
 | 4 | F05, F06 | Multiple receipts, shared-dish splits | 0015 | landed (PR #54) |
 | 5 | F07 | Payment ledger, derived balances | 0016 | landed (PR #55) |
 | 6 | F08, F09 | My order sheet, host transfer | none (D39) | landed (PR #56) |
-| 7 | F10, F12 | Manifest `id`/`scope`, invite continuity copy, reliability fixes + tests | — | landed (PR pending) |
-| 8 | F11, F13, F14, F16, F17 | Billing flow polish, export options, large-order search/collapse, menu link, creation animation (tail-less table: current mark has a speech-bubble tail, `brand/logo.tsx:3-6`; aligned to the final logo in slice 10) | 0017 | not started |
+| 7 | F10, F12 | Manifest `id`/`scope`, invite continuity copy, reliability fixes + tests | — | landed (PR #57) |
+| 8a | F16 | Menu link: `sessions.menu_url`/`menu_label`, URL validator, View menu on the Order tab | 0017 | landed (PR pending) |
+| 8b | F17 | Creation animation (tail-less table: current mark has a speech-bubble tail, `brand/logo.tsx:14`; aligned to the final logo in slice 10), Turnstile expiry/timeout states | — | not started |
+| 8c | F14 | Large-order navigation: measure a real-guest large order first, keep only what moves the number | — | not started |
+| 8d | F11, F13 | Billing next-step prompts, estimate vs final labels, export options (share `kkb.ts`, `kkb-view.tsx`, `summary-sheet.tsx`) | — | not started |
 | 9 | Phase 9 | Full regression, money property tests, a11y sweep; real phones and pilot stay owner tasks | — | not started |
 | 10 | F15 | Shared Table logo and icon set (last, alone) | — | not started |
 
@@ -1330,7 +1333,7 @@ M6 New host's notice (Updates): "Kovie made you the host." → opens the order.
 
 ## Slice 7: invite continuity and reliability (F10, F12)
 
-Status: landed (PR pending)
+Status: landed (PR #57)
 
 Verify 2026-11-27: checker typecheck/lint/1035 unit/build + 47 touched e2e pass; reviewer SHIPPABLE (fixed: `docs/pwa-invites.md` join line; corrections replay test rewritten to record real corrections); qa SHIPPABLE (7 flows); ui-critic SHIPPABLE, 3 fix-in-loop items fixed and measured (hint code weight 500, no gap before ".", curly apostrophe). Follow-ups in `.shots/follow-ups.md`.
 
@@ -1464,3 +1467,192 @@ Using Salo from your Home Screen? Open it and enter ABCDEF.   ← new (D45)
 M3 Hint at 320: same line, centred, wraps to two lines under "No app or account…".
 
 M2 Join offline: under the name field, "No connection. Your name is still here; try again when you're back online."
+
+## Slice 8a: restaurant menu link (F16)
+
+Status: landed (PR pending)
+
+Verify 2026-11-27: checker typecheck/lint/1244 unit (incl. 148-scenario golden contract `tests/contract-menu-link-golden.test.ts`)/build + touched e2e pass; reviewer SHIPPABLE (fixed: menu step reuses `useDirectSave` with an `offlineMessage` param; zod too-long uses `MENU_REASONS.tooLong`); contract-tester CONTRACT HOLDS; qa SHIPPABLE (8 flows); ui-critic SHIPPABLE, 2 fix-in-loop items fixed and measured (hint `min-h-5`: Link input top 574px in every state; Report link `pr-3`: right edge = icon right edge at 320/375/1280). Follow-ups 1–3 done 2026-11-27 (owner picked all): domain cut from the start, visible "Share the menu link" title on the menu step, rate-limit wait in minutes above 90 s (`waitText`); re-check also cut the Options-row domain from the start and set the step description to `text-sm`. Re-check: checker 1245 unit + menu-link e2e pass, reviewer/qa/ui-critic SHIPPABLE. Note: unit tests share `salo_test`; never run two `pnpm test` at once.
+
+Baseline: `.shots/before/` (21 shots + measure-rows JSON, `heights.json`), script `.shots/s8a-before.mjs` (`OUT=.shots/after BASE=http://localhost:3400 node .shots/s8a-before.mjs`). Port 3300 runs the owner's `next dev` of this repo and Next 16 refuses a second one in the same dir, so the shooter served a copy rsynced to the session scratchpad; re-sync it after the edits. Guest Order tab after End is reached by clicking Order (ended guests land on Rounds).
+
+Slice 8 split into 8a–8d (owner, 2026-11-27: "Split 8a–8d", F16 first). Order after 8a: 8b F17, 8c F14, 8d F11+F13 (assumption; re-ask at each kickoff). Research 2026-11-27 re-verified the Phase 0 audit: migration is `0017` (audit's `0018` stale, D39 dropped `host_transfers`).
+
+### Ask ledger (slice 8a)
+
+Brief F16 (`salo-v1-4-brief.md:1400-1532`).
+
+| # | Owner's words | Planned change | Status |
+|---|---|---|---|
+| A1 | "Add a restaurant menu URL." / "Edit or remove the URL." | Options sheet "Menu link" row → sub-step with URL + label, Save, Remove link (M2) | done |
+| A2 | "See the current URL and its validation status." | Sub-step shows the saved domain and inline validation message as the host types (shared `parseMenuUrl`) | done |
+| A3 | "Optionally provide a short menu label, such as "Main Menu" or "Drinks Menu"." | Optional label, max 40 (`LIMITS.label`); one link per order | done |
+| A4 | "Share the same link with all participants through the session." / "Receive realtime updates when the host changes or removes the link." | `snapshot.session.menu`; event `session.menuSet` → normal SSE refetch | done |
+| A5 | "View the current restaurant menu link." / "Open the menu externally." / "See the destination domain before opening it." | View menu row at the top of the Order tab, domain shown, `target="_blank" rel="noopener noreferrer"` (M1) | done |
+| A6 | "Show a discoverable **View menu** action near the top of the Order screen" / "Avoid adding a permanent navigation tab." / "Do not display empty menu controls when no URL is configured." | Row only when a link exists; no tab; guests see nothing otherwise | done |
+| A7 | "Provide menu management within the host's session options." | `OrderOptionsSheet` (host + open only, `workspace.tsx:522`) | done |
+| A8 | URL validation and safety 1–9 ("server-side", "HTTPS", reject schemes, credentials, localhost/private/encoded IPs, length, plain data, escaped label, no unsafe HTML) | `src/lib/menu-url.ts` `parseMenuUrl`, used by the zod schema server-side and the form hint client-side; DB CHECKs on length | done |
+| A9 | "Rate-limit menu URL changes." | Dedicated limiter, 10 changes / 10 min per participant (Pinned details) | done |
+| A10 | "Apply host-only authorization for add, edit, and removal operations." | Action `session.menu` in `HOST_ONLY` (`permissions.ts:36`), re-checked under the lock (`mutations.ts:57-62`) | done |
+| A11 | "Avoid server-side URL fetching" / no crawl, no OG, no redirects | No outbound request anywhere | done |
+| A12 | Malicious URL detection ("Evaluate optional integration…", "Do not advertise links as "verified safe"") | D4: no reputation service; never say "safe"/"checked"; show the domain | done |
+| A13 | "Provide a way for users to report a suspicious menu URL." | "Report" link for guests: `mailto:` `POLICY_CONTACT` with prefilled subject + URL | done |
+| A14 | "Do not embed… in an iframe" / "Avoid routing… through a Salo-hosted open redirect" / "Open links only through deliberate user interaction" | Plain anchor to the stored URL; no iframe, no `/go?url=`, no auto-open | done |
+| A15 | "No effect on confirmed order history or KKB." / "Existing retention behavior." | Event in `NON_TICKET_EVENTS` (`settlement.ts:16`); columns on `sessions`, so cleanup's cascade is unchanged | done |
+| A16 | Tests list (valid, schemes, credentials, private, IPv6/encoded, malformed/length, unauthorized guest, edit/remove, realtime, safe link, mobile a11y) | Unit `tests/menu-url.test.ts`, contract test, e2e `e2e/menu-link.spec.ts` (+ axe) | done |
+| A17 | Audit: "`PRODUCT.md:22` lists menus out of scope (F16 is a link only; reword)" | Reword PRODUCT.md:22 and README.md:3 menu clauses only (rest of PRODUCT.md:22 is 8d's); docs/api.md, docs/data-model.md, docs/ux-specification.md:15, new docs/contracts/menu-link.md | done |
+
+### Today
+- `sessions` has no menu columns (`schema.ts:40-58`). Last migration `drizzle/0016_payments.sql`.
+- Mutation template: `PATCH /api/sessions/[id]` → `runMutation(type "session.rename")` → `renameSession` checks `can(actor, "session.rename")`, updates, returns `session.renamed` (`api/sessions/[id]/route.ts:15-22`, `server/sessions/rename.ts:10-15`). Client op `{ kind: "rename" }` in the offline queue (`use-session.ts:35,88,112,160`).
+- Snapshot `session` block (`lib/snapshot.ts:10-18`) is filled by `getSnapshot` (`server/sessions/snapshot.ts`); every event ends in a full refetch, so a new field reaches guests with no new realtime code.
+- Per-participant mutation limit 120/min (`limits.ts:8`), too loose for URLs; `createRateLimiter` + `singleton` pattern exists.
+- `OrderOptionsSheet` main step: Your name + Order name form, "How Salo works", "Hand over host", End/Cancel (`order-options-sheet.tsx:126-205`); has steps already (`options`/`confirm`/`handover`).
+- Order tab: two branches, confirmed (`workspace.tsx:643`) and draft (`:675`); `workspace.tsx` is 787 lines.
+- No external `target="_blank"` link in the app; CSP doesn't govern navigation, framing already forbidden (`lib/csp.ts:14-30`).
+- WHATWG parser normalises encoded IPv4 (`2130706433`, `0x7f.1`, `0177.0.0.1`, `127.1`, full-width digits) to dotted form and IDN to punycode (audit `[node]`, `salo-v1-4-audit.md:70`).
+
+### Approach
+- **Validator** `src/lib/menu-url.ts`: `parseMenuUrl(input) → { ok: true, url, domain } | { ok: false, reason }`. Trim; prepend `https://` unless the input matches `/^[a-z][a-z0-9+.-]*:(?!\d)/i` (pinned below); `new URL()`; then reject: protocol ≠ `https:` (D49), username/password, any IP-literal host (v4 after normalisation, any `[v6]`), single-label hosts and `localhost`/`.localhost`/`.local`/`.internal`/`.home.arpa`, total length > 500. Stored value = `url.href` (normalised). `domain` = the full normalised hostname (no `www.` stripping), punycode shown as-is (no Unicode spoofing). Pure, shared by server and client.
+- **Server**: migration `0017_menu_link.sql` adds `sessions.menu_url text`, `sessions.menu_label text`, CHECKs `char_length(menu_url) <= 500`, `char_length(menu_label) <= 40`, `menu_label IS NULL OR menu_url IS NOT NULL`. `setMenuLink(tx, session, actor, input)` in `server/sessions/menu.ts`, Action `session.menu` (host only), event `session.menuSet` (payload `{}`), added to `NON_TICKET_EVENTS` and `docs/realtime.md`. Route: `PUT /api/sessions/[id]/menu` body `{ url: string | null, label?: string | null }` (null url = remove), zod schema refines with `parseMenuUrl`, idempotency key, `menuLimiter` (10 / 10 min per participant, hit inside `setMenuLink`; see Pinned details). Open orders only (D50).
+- **Snapshot**: `session.menu: { url: string; label: string | null; domain: string } | null` (domain derived server-side with the same helper).
+- **Client**: direct save (not the offline queue): the server may reject a URL, and a queued rejection surfaces late. Offline → "No connection. Try again when you're back online." in the sub-step, value kept.
+- **UI**: M1 View menu row (new `menu-link.tsx`, one line in each Order-tab branch of `workspace.tsx`, net ≤ +4 lines). M2 Options sheet row + "menu" step.
+- Rejected: separate `menu_links` table (brief: "small additive change"); Safe Browsing (D4); an interstitial "you're leaving Salo" page (that's an open redirect pattern the brief warns against).
+
+### Pinned details (plan-critic, verified)
+Validator (`src/lib/menu-url.ts`):
+- Scheme: prepend `https://` unless the input matches `/^[a-z][a-z0-9+.-]*:(?!\d)/i`; matching input is parsed as given (`javascript:`, `data:`, `ftp:` get the scheme reason; `https:example.com` normalises). `host:8080/x`, `localhost:3000`, `example.com:8080/x` get the prefix (then fail the port rule).
+- Strip one trailing dot from `hostname` before every host check; store the dotless host (`localhost.`, `foo.local.`, `x.internal.`, `example.com.`).
+- Hostname shape: ≥ 2 labels; each label `/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/` (`xn--` passes); last label not all digits. Rejects `a..b`, `.com`, `-a.com`, `exa_mple.com`, `a`.
+- Port: reject any non-empty `url.port` (`:443` is normalised away by the parser; `:8443` rejected).
+- Length: `href.length <= 500` after normalisation; zod caps raw input at 2048 so a huge body never reaches `new URL`. Test an input under 500 that expands past it.
+- Query and fragment kept. Credentials checked on the parsed URL, so `@` in path/fragment is fine.
+- Reasons and copy (one line under the field, `role="alert"` on submit):
+  - not parseable / no host: "That doesn't look like a web address."
+  - other scheme: "Use a web link that starts with https://."
+  - http (D49): "Use the https:// address of the menu."
+  - credentials: "Remove the name and password from the link."
+  - IP address: "Use the restaurant's web address, not an IP number."
+  - local / single-word / malformed host: "Use the restaurant's public web address."
+  - port: "Use the menu's normal web address (no port number)."
+  - too long: "That link is too long. Try a shorter one."
+  - 429: "Too many changes. Wait N seconds." (N ≤ 90) or "Wait about M minutes." (from `retryAfter`)
+  - offline (`ApiError.isNetwork`): "No connection. Try again when you're back online." (overrides `api-client.ts:36`, nothing is queued)
+  - label too long after tidying: "Keep it under 40 characters."
+
+Server:
+- `menuLimiter` (10 / 10 min) keyed by `actor.participantId`, hit inside `setMenuLink` after `can(actor, "session.menu")` and after the same-value no-op check. Replays return before `apply` (`mutations.ts:44-70`), zod 422s never reach it, so neither counts. In-memory: a later throw doesn't undo a hit.
+- PUT replaces both fields; omitted `label` = null; `url: null` clears the label too (a label with a null url is ignored). Same normalised url+label, or remove with no link → 200, no event, no revision bump (cohost no-op pattern, `docs/api.md:42`).
+- Route stores `parsed.url` (normalised href), never the raw input.
+- Label through `tidyText`, length re-checked after tidying → 422 (same pattern as `tidyName`, `settlement.ts:19-24`).
+- `getSnapshot` returns `menu: null` when `status = 'CLOSED'` (D50), so the URL isn't sent after End; columns stay for retention. Client reads `snapshot.session.menu ?? null`.
+- Migration: columns + three CHECKs in `schema.ts` (style of `sessions_closed_ck`), then `pnpm db:generate --name menu_link` → `drizzle/0017_menu_link.sql`, `meta/0017_snapshot.json`, journal entry. Not hand-written.
+- Files: `src/lib/permissions.ts` (Action union + `HOST_ONLY`), `src/server/limits.ts`, `LIMITS` in `src/server/orders/validation.ts`.
+
+Client / UI:
+- Save via `api()` + `newKey()` (`src/lib/api-client.ts`, like `host-handover.tsx:42`); one key per Save attempt, reused on retry. On success call the sheet's refresh prop (like `onHandoverRefresh`) so the row shows the domain before SSE lands.
+- Focus: entering the menu step focuses the Link input; Back and successful Save return to the main step with focus on the "Menu link" row, which shows the saved domain.
+- Row anchor accessible name: "<label or View menu>, <hostname>, opens in a new tab". Lucide `BookOpen` + `ExternalLink` (sketch emoji are placeholders). Label and domain carry `data-ph-mask` (`workspace.tsx:598`; `privacy/page.tsx:55`).
+- Live insertion: row inserts without animation, not sticky; one layout shift per host change, accepted.
+- Report mailto: `encodeURIComponent` subject and body; body = URL + order name (order name is private data going to `POLICY_CONTACT`, same as the privacy page's own request). Asserted in e2e.
+
+### Reuse
+- `runMutation`, `idempotencyKey`, `readJson`, `handle` (`server/http`), `can`/`HOST_ONLY`, `createRateLimiter` + `singleton`, `optionalText` for the label, `LIMITS.label`, `Drawer` steps in `OrderOptionsSheet`, `Button`, input classes from the Order name field, `POLICY_CONTACT` (`components/policy/policy-page.tsx:5`), e2e helpers `startOrder`/`inviteCode`/`joinAsGuest`/`confirmRound1`/`endOrder`.
+
+### Not doing
+- Reputation lookup, server-side fetch, previews/OG, iframe, redirect endpoint (brief non-goals, D4).
+- Several menu links per order (brief reads as one URL + one label).
+- Report endpoint or report storage (mailto only).
+- Updates notification when the link changes (snapshot refresh is the realtime update).
+- Editing the link after End (D50).
+
+### States
+- No link: nothing renders for anyone (Order tab unchanged); Options row reads "Add a menu link".
+- Link, no label: row "View menu" + domain. Link with label: row shows the label ("Drinks menu") + domain.
+- Long label / long domain at 320: the label truncates at the end; the domain truncates from the start (follow-up 1, owner-picked 2026-11-27) so its end stays visible; full label and domain stay in the accessible name.
+- Host draft and confirmed branches, guest draft and confirmed branches: row is the first thing in the tabpanel.
+- Host editing: empty, typing invalid (inline reason under the field, Save disabled), valid (domain preview "Opens ramennagi.com.ph"), saving, saved (back to main step, row shows domain), server error (inline `role="alert"`), rate-limited (message with seconds), offline.
+- Remove: "Remove link" ghost button in the sub-step when a link exists; guest row disappears live.
+- Guest live: link added/changed/removed while guest is on the Order tab → row updates with no focus jump (if focus was on the removed link, focus moves to the tabpanel).
+- Ended order: row hidden for everyone (D50); management gone with the sheet.
+- Widths 320/375/768/1280, light and dark.
+
+### Decisions
+Owner answers 2026-11-27: D49–D53 = recommended option.
+
+- **D49 [decided: (a) reject with hint] http:// links.** (a) reject with "Use the https:// address of the menu."; (b) silently upgrade to https. Recommend (a): brief "Allow only HTTPS destinations by default"; upgrading changes the destination the host chose without telling them.
+- **D50 [decided: (a) hidden after End] After End.** (a) link hidden and not editable once ended (management is open-only today, `workspace.tsx:522`); (b) guests keep seeing it after End. Recommend (a): the menu serves ordering, and ending freezes ordering.
+- **D51 [decided: M1a inline row] View menu layout (M1).** M1a inline row at the top of the Order tab: book icon, "View menu" / label, domain, external icon; guests also get a small "Report" link. M1b compact chip that opens a drawer with domain, Open menu, Report. Recommend M1a: one tap to the menu with the domain visible before the tap (brief "See the destination domain before opening it").
+- **D52 [decided: M2a row + sub-step] Menu management layout (M2).** M2a a "Menu link" row in the main options step that opens a "menu" sub-step (like Hand over host). M2b URL + label fields inside the existing name form, one Save. Recommend M2a: the name form posts to a different endpoint, and the URL needs its own validation, error and Remove states.
+- **D53 [decided: (a) Options row only] Host's first contact with the feature.** (a) Options row only; (b) Options row plus a host-only line on the Order tab while no link exists ("Add the restaurant's menu link"). Recommend (a): brief "Do not display empty menu controls when no URL is configured" and "Provide menu management within the host's session options". Tension: owner's standing rule that new features need an entry point where users first meet them.
+- Mobile scope: carried from D6 (responsive + native feel; new UI matches the baseline: 16 px inputs, `inputMode="url"`, 44 px targets).
+
+### Assumptions
+- Build choices accepted 2026-11-27 (within plan): empty-string url → 422 (only `null` removes); input > 2048 → too-long reason client and server; link input `type=text inputMode=url` placeholder `https://`, label placeholder "Drinks menu"; sub-step heading `sr-only` (back button carries "Menu link"); `Applied.event` may be `null` in `runMutation` for the no-op path (records the key, no event, no revision bump).
+- Missing scheme → `https://` prepended (hosts paste "ramennagi.com.ph/menu").
+- Every IP-literal host rejected, public ones too (no real menu lives on a bare IP; one rule covers all encodings).
+- Length cap 500 chars for the stored URL; label 40.
+- Rate limit 10 changes per 10 minutes per participant (only the host can change it; a new host after handover gets a fresh quota); generic mutation limit still applies.
+- "Report" mailto subject `Suspicious menu link`, body has the URL and the order name; guests only (the host set it).
+- No `rel="noreferrer"` downside: the restaurant doesn't learn the visitor came from Salo, which is fine.
+- No new cookie or storage, so `/cookies` is unchanged.
+
+### Done when
+- `pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm e2e` pass; `pnpm db:generate` leaves `drizzle/` clean.
+- Unit `tests/menu-url.test.ts`: valid https URLs (path, query, IDN → punycode, missing scheme), rejects `http:`, `javascript:`, `data:`, `file:`, `intent:`, custom schemes, `https://user:pw@x.com`, `localhost`, `127.0.0.1`, `2130706433`, `0x7f.1`, `0177.0.0.1`, `127.1`, full-width digits, `[::1]`, `[::ffff:127.0.0.1]`, `10.x`, `192.168.x`, `169.254.x`, public IP, single-label host, `.local`; normalised, not rejected: `https:example.com` and `https:/\evil.com` (stored as the parsed `https://…/` href), `https://example.com\@evil.com` (lands on example.com, domain shown is example.com), whitespace/tab, > 500 chars, empty.
+- Contract test: host set/edit/remove; guest 403; invalid 422; closed order refused; 11th change in 10 min → 429; snapshot carries `menu`; `session.menuSet` doesn't make a confirmed round stale.
+- E2E `e2e/menu-link.spec.ts`: host adds link → guest sees row live with domain; link has `target=_blank` and `rel` containing `noopener noreferrer`; host edits label, then removes → guest row gone; invalid URL shows inline reason; ended order hides the row; axe light/dark on the Order tab with the row and on the sub-step.
+- Also: `tests/permissions.test.ts` (`session.menu` host-only); `tests/db-integrity.test.ts` (three CHECKs); validator cases from Pinned details (scheme regex, trailing dot, hostname shape, ports, post-normalisation length); guest 403 and idempotent replay don't count against the host's limiter; same-value PUT emits no event; closed-order snapshot `menu === null`.
+- Manual: shots of every state above at 320/375/768/1280 vs `.shots/before/`.
+
+### Skills
+- `security-review` (untrusted URL input), `database-migrations` (0017 + snapshot), `impeccable` + `.impeccable/surfaces/src-app.md` (Operate surface), `frontend-a11y` (link names, live removal focus), `mobile-native` (url keyboard, 16 px input). No `.claude/skills/` in the repo.
+
+### You need to do (slice 8a)
+- [ ] Apply migration `0017_menu_link.sql` to production when the PR deploys (same as earlier migrations).
+
+### Mockups (slice 8a, text sketch)
+M1a Order tab, guest, 375 (row is new; everything below unchanged):
+```
+[ Order ] [ People ] [ Rounds ]
+┌──────────────────────────────────────────┐
+│ 📖 View menu                          ↗  │
+│    ramennagi.com.ph                      │
+└──────────────────────────────────────────┘
+                              Report link    ← guests only, text-sm, right-aligned
+┌ ticket: Round 1 ─────────────────────────┐
+│ ...                                      │
+```
+With label: `📖 Drinks menu ↗` / `ramennagi.com.ph`. Whole row is the anchor (min-h-12, rounded-xl, bg-paper).
+
+M1b (alternative) chip opens a drawer:
+```
+[ 📖 Menu ]                       ← chip at top of Order tab
+Drawer: "Restaurant menu" / "Opens ramennagi.com.ph in a new tab"
+        [ Open menu ↗ ]  Report link
+```
+
+M2a Options sheet, host, 375:
+```
+Order options                            [✕]
+Your name [Kovie          ]
+Order name [Ramen Nagi, Friday]
+[            Save            ]
+📖 Menu link            ramennagi.com.ph ›     ← or "Add a link" when empty
+🧭 How Salo works       30-second tour
+🤝 Hand over host       Pick a new host
+- - - - - - - - - - - - - - - - - - - - - -
+All done? …  [ End order ]
+```
+"menu" step:
+```
+← Menu link
+Paste the restaurant's menu link. Everyone in the order can open it.
+Link  [https://ramennagi.com.ph/menu    ]   (inputMode=url, 16px)
+      Opens ramennagi.com.ph                ← or the reason, e.g. "Use the https:// address of the menu."
+Label (optional) [Drinks menu     ]
+[            Save link            ]
+[           Remove link           ]   ← ghost, only when a link exists
+```
+M2b (alternative): the two fields appended inside the name form above its Save.

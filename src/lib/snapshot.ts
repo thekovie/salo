@@ -15,6 +15,8 @@ export interface SessionSnapshot {
     joinCode: string;
     closedAt: string | null;
     expiresAt: string;
+    /** The restaurant menu link; null when none, and after End (D50). */
+    menu?: { url: string; label: string | null; domain: string } | null;
   };
   me: { participantId: string; role: "HOST" | "GUEST"; cohost: boolean; displayName: string };
   rounds: { id: string; number: number; status: "DRAFT" | "CONFIRMED"; confirmedAt: string | null }[];

@@ -1,5 +1,6 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { personKey } from "@/lib/adjustments";
+import { parseMenuUrl } from "@/lib/menu-url";
 import { sharedPriceKey, type PaymentMethod, type SessionSnapshot } from "@/lib/snapshot";
 import type { Db } from "@/server/db/client";
 import { adjustmentShares, adjustments, confirmedRoundSnapshots, correctionSettlements, dishes, entryClaims, entryPayers, entrySettlements, orderBatches, orderEntries, orderGroupMembers, orderGroups, participantRoundReadiness, participants, payments, receiptPeople, receipts, rounds, servedCounts, sessions, sharedPrices } from "@/server/db/schema";
@@ -11,6 +12,12 @@ import type { TicketSnapshot } from "@/lib/ticket";
 import type { Actor } from "@/lib/permissions";
 
 const iso = (date: Date | null) => (date ? date.toISOString() : null);
+
+/** The menu link as clients see it: hidden once the order is closed (D50); the columns stay for retention. */
+function menuOf(session: typeof sessions.$inferSelect): SessionSnapshot["session"]["menu"] {
+  const parsed = session.status === "OPEN" && session.menuUrl ? parseMenuUrl(session.menuUrl) : null;
+  return parsed?.ok ? { url: parsed.url, label: session.menuLabel, domain: parsed.domain } : null;
+}
 
 /**
  * The authoritative state of a session at one revision. Read in a REPEATABLE READ transaction so the revision and the
@@ -75,6 +82,7 @@ export async function getSnapshot(db: Db, actor: Actor): Promise<SessionSnapshot
           joinCode: session.joinCode,
           closedAt: iso(session.closedAt),
           expiresAt: session.expiresAt.toISOString(),
+          menu: menuOf(session),
         },
         me: { participantId: actor.participantId, role: actor.role, cohost: me?.cohostAt != null, displayName: me?.displayName ?? actor.displayName },
         rounds: roundRows.map((r) => ({ id: r.id, number: r.roundNumber, status: r.status, confirmedAt: iso(r.confirmedAt) })),
