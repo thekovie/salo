@@ -10,9 +10,9 @@ import type { Applied, SessionRow } from "@/server/mutations";
 import { loadCorrections } from "./rounds";
 import type { ServingInput } from "./validation";
 
-/** The host's served tally for one line of a confirmed round. The change is a delta; the result is clamped to 0..expected. */
-export async function updateServed(tx: Tx, session: SessionRow, actor: Actor, input: ServingInput): Promise<Applied<{ served: number; revision: number }>> {
-  if (!can(actor, "serving.update")) throw forbidden("Only the host can mark food as served.");
+/** The served tally for one line of a confirmed round. The change is a delta; the result is clamped to 0..expected. */
+export async function updateServed(tx: Tx, session: SessionRow, actor: Actor, input: ServingInput): Promise<Applied<{ served: number; revision: number; applied: boolean }>> {
+  if (!can(actor, "serving.update")) throw forbidden("Only the host and co-hosts can mark food as served.");
   const roundRows = await tx.select({ id: rounds.id, status: rounds.status }).from(rounds).where(eq(rounds.sessionId, session.id));
   const round = roundRows.find((r) => r.id === input.roundId);
   if (!round) throw new AppError(404, "ROUND_NOT_FOUND", "That round isn’t in this order.");
@@ -33,7 +33,10 @@ export async function updateServed(tx: Tx, session: SessionRow, actor: Actor, in
   const where = and(eq(servedCounts.sessionId, session.id), eq(servedCounts.roundId, input.roundId), eq(servedCounts.lineKey, input.lineKey));
   const [current] = await tx.select().from(servedCounts).where(where).for("update");
   const before = Math.min(current?.served ?? 0, expected);
-  const served = Math.max(0, Math.min(expected, before + input.delta));
+  const stale = input.expectedServed !== before;
+  const served = stale ? before : Math.max(0, Math.min(expected, before + input.delta));
+  // A stale tap changes nothing: the reply carries the count the sender missed.
+  if (stale) return { result: { served, revision: current?.revision ?? 0, applied: false }, event: { type: "serving.updated", payload: { roundId: input.roundId, actorId: actor.participantId } } };
   const revision = (current?.revision ?? 0) + 1;
   if (current) await tx.update(servedCounts).set({ served, revision, updatedBy: actor.participantId, updatedAt: new Date() }).where(where);
   else await tx.insert(servedCounts).values({ sessionId: session.id, roundId: input.roundId, lineKey: input.lineKey, served, revision, updatedBy: actor.participantId });
@@ -48,5 +51,5 @@ export async function updateServed(tx: Tx, session: SessionRow, actor: Actor, in
       actorId: actor.participantId,
     });
   }
-  return { result: { served, revision }, event: { type: "serving.updated", payload: { roundId: input.roundId } } };
+  return { result: { served, revision, applied: true }, event: { type: "serving.updated", payload: { roundId: input.roundId, actorId: actor.participantId } } };
 }

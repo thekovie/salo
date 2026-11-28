@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { addDish, inviteCode, joinAsGuest, openDetail, startOrder } from "./support/helpers";
+import { addDish, inviteCode, joinAsGuest, openDetail, startOrder, openKkb } from "./support/helpers";
 
 // Every screen at 320 and 390 px for a crowding/density review. Skipped unless UX_REVIEW=1.
 test.skip(!process.env.UX_REVIEW, "set UX_REVIEW=1");
@@ -85,7 +85,7 @@ for (const [label, viewport] of sizes) {
     await shot(page, "13e-dish-picker");
     await page.keyboard.press("Escape");
     await page.getByRole("tab", { name: /Order/ }).click();
-    await page.getByRole("button", { name: "Enter receipt prices (KKB)" }).click();
+    await openKkb(page);
     await expect(page.getByRole("dialog", { name: "Who ordered what" })).toBeVisible();
     await shot(page, "13f-kkb-receipt-check");
     await page.keyboard.press("Escape");

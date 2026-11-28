@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { hashToken, newToken } from "@/server/auth/credentials";
 import { resolveActor } from "@/server/auth/actor";
@@ -29,4 +30,10 @@ export async function addGuest(db: Db, sessionId: string, displayName = "Guest")
 export function add(db: Db, actor: Actor, input: Record<string, unknown>, idempotencyKey = key()) {
   const parsed = addEntrySchema.parse(input);
   return runMutation(db, actor, { idempotencyKey, type: "entry.add" }, (tx, s) => addEntry(tx, s, actor, parsed));
+}
+
+/** The stored served count of one line (0 when no row): what a client that saw the table as it is would send as `expectedServed`. */
+export async function storedServed(db: Db, sessionId: string, roundId: string, lineKey: string): Promise<number> {
+  const rows = (await db.execute(sql`SELECT served FROM served_counts WHERE session_id = ${sessionId} AND round_id = ${roundId} AND line_key = ${lineKey}`)) as unknown as { served: number }[];
+  return rows[0]?.served ?? 0;
 }

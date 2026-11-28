@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { groupServed, trackerLines } from "@/lib/serving";
-import { applyTap, settle, type ServedEdit } from "@/hooks/use-served-edits";
+import { applyTap, fromStoredServed, settle, toStoredServed, type ServedEdit } from "@/hooks/use-served-edits";
 
-const edit = (over: Partial<ServedEdit> = {}): ServedEdit => ({ unsent: 0, sending: 0, key: null, failed: null, committedRevision: null, ...over });
+const edit = (over: Partial<ServedEdit> = {}): ServedEdit => ({ unsent: 0, sending: 0, key: null, failed: null, committedRevision: null, seen: 0, expected: 0, ...over });
 
 describe("served taps", () => {
   it("stops counting a sent delta once the snapshot holds the revision the POST returned", () => {
@@ -17,10 +17,29 @@ describe("served taps", () => {
   });
 
   it("drops an edit that nets to zero, but not one that is in flight or failed", () => {
-    expect(applyTap(edit({ unsent: 1 }), -1)).toBeNull();
-    expect(applyTap(undefined, 0)).toBeNull();
-    expect(applyTap(edit({ sending: 2, key: "k" }), 0)).toMatchObject({ sending: 2 });
-    expect(applyTap(edit({ failed: "no", sending: 1, key: "k" }), 1)).toMatchObject({ unsent: 1, failed: "no" });
+    expect(applyTap(edit({ unsent: 1 }), -1, 0)).toBeNull();
+    expect(applyTap(undefined, 0, 0)).toBeNull();
+    expect(applyTap(edit({ sending: 2, key: "k" }), 0, 0)).toMatchObject({ sending: 2 });
+    expect(applyTap(edit({ failed: "no", sending: 1, key: "k" }), 1, 0)).toMatchObject({ unsent: 1, failed: "no" });
+  });
+});
+
+describe("served precondition", () => {
+  it("takes the seen count from the first unsent tap of a batch and keeps it for the rest", () => {
+    const first = applyTap(undefined, 1, 3)!;
+    expect(first.seen).toBe(3);
+    expect(applyTap(first, 1, 4)).toMatchObject({ unsent: 2, seen: 3 });
+  });
+
+  it("starts a new seen count when a batch is sent and the next tap lands", () => {
+    const inFlight = edit({ sending: 1, key: "k", expected: 3, seen: 3 });
+    expect(applyTap(inFlight, 1, 4)).toMatchObject({ unsent: 1, seen: 4, expected: 3 });
+  });
+
+  it("stops counting a batch the server did not apply once the snapshot holds the revision it returned", () => {
+    const refused = edit({ sending: 1, key: "k", committedRevision: 12 });
+    expect(settle(refused, 11).sending).toBe(1);
+    expect(settle(refused, 12).sending).toBe(0);
   });
 });
 
@@ -59,5 +78,37 @@ describe("served grouping", () => {
 
   it("keeps history rows in the fully served group", () => {
     expect(groupServed(tracker).done.some((r) => r.line.history)).toBe(true);
+  });
+});
+
+describe("served persistence", () => {
+  const line = (over: Partial<ServedEdit> = {}) => ({ ...edit(over), roundId: "r1", lineKey: "sisig" });
+
+  it("keeps unsent, failed and unanswered sends, and drops accepted or empty ones", () => {
+    const kept = toStoredServed([
+      line({ unsent: 1 }),
+      line({ sending: 2, key: "k", expected: 1 }),
+      line({ sending: 1, key: "k2", failed: "no" }),
+      line({ sending: 1, key: "k3", committedRevision: 5 }),
+      line(),
+    ]);
+    expect(kept.map((e) => [e.unsent, e.sending, e.key])).toEqual([
+      [1, 0, null],
+      [0, 2, "k"],
+      [0, 1, "k2"],
+    ]);
+  });
+
+  it("round-trips what it stores, with the key and expected count of an in-flight send", () => {
+    const stored = toStoredServed([line({ unsent: 1, seen: 2 }), line({ sending: 2, key: "k", expected: 1 })]);
+    expect(fromStoredServed(JSON.stringify(stored))).toEqual(stored);
+  });
+
+  it("drops unreadable, empty and keyless in-flight entries", () => {
+    expect(fromStoredServed(null)).toEqual([]);
+    expect(fromStoredServed("{nope")).toEqual([]);
+    expect(fromStoredServed('{"a":1}')).toEqual([]);
+    const bad = [line({ unsent: -1 }), line({ sending: 1 }), line(), { ...line({ unsent: 1 }), roundId: 5 }];
+    expect(fromStoredServed(JSON.stringify(bad))).toEqual([]);
   });
 });

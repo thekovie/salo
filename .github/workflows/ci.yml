@@ -64,6 +64,20 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium webkit
       - run: pnpm e2e
+      # The runner ships a PostgreSQL 16 client; pg_dump must match the 17 service.
+      - name: Install PostgreSQL 17 client
+        run: |
+          sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-client-17
+          echo /usr/lib/postgresql/17/bin >> "$GITHUB_PATH"
+      - name: Backup and restore drill
+        run: scripts/backup-restore-drill.sh
+        env:
+          PGHOST: localhost
+          PGPORT: "5433"
+          PGUSER: salo
+          SALO_DB: salo
       - if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

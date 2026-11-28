@@ -21,7 +21,7 @@ export function ArrivalPills({ arrivals, onSelect }: { arrivals: Arrival[]; onSe
           onClick={() => onSelect(a)}
           className="arrival-pill pointer-events-auto inline-flex min-h-9 max-w-full cursor-pointer items-center gap-2 rounded-full bg-saffron-wash py-1 pr-3.5 pl-1 text-sm text-saffron-ink shadow-ticket ring-1 ring-saffron/40"
         >
-          <span aria-hidden className="inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-saffron font-display text-sm text-ink">
+          <span aria-hidden className="inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-saffron font-display text-sm text-on-saffron">
             {a.who.trim().charAt(0).toUpperCase() || "?"}
           </span>
           <span className="truncate">

@@ -151,6 +151,25 @@ describe("service charge", () => {
     await expect(price(host, dish.result.entryId, { expectedRevision: 0, unitPriceCentavos: 1 })).rejects.toMatchObject({ code: "SESSION_CLOSED" });
   });
 
+  it("after End the host can still price, a guest gets 403, and a cancelled order refuses billing (409)", async () => {
+    const { host, sessionId } = await newSession(db);
+    const ana = await addGuest(db, sessionId, "Ana");
+    const dish = await add(db, ana, { dishName: "Katsu", quantity: 1, attribution: { type: "INDIVIDUAL" } });
+    await confirm(host);
+    await run(host, (tx, s) => closeSession(tx, s, host));
+    const afterEnd = (actor: Actor, unitPriceCentavos: number) =>
+      runMutation(db, actor, { idempotencyKey: key(), type: `entry.settle:${dish.result.entryId}`, allowClosed: true }, (tx, s) => setEntrySettlement(tx, s, actor, dish.result.entryId, entrySettlementSchema.parse({ expectedRevision: 0, unitPriceCentavos })));
+    await expect(afterEnd(ana, 100)).rejects.toMatchObject({ status: 403 });
+    await expect(afterEnd(host, 100)).resolves.toMatchObject({ replayed: false });
+
+    const cancelled = await newSession(db);
+    const cancelledDish = await add(db, cancelled.host, { dishName: "Rice", quantity: 1 });
+    await run(cancelled.host, (tx, s) => closeSession(tx, s, cancelled.host));
+    await expect(
+      runMutation(db, cancelled.host, { idempotencyKey: key(), type: `entry.settle:${cancelledDish.result.entryId}`, allowClosed: true }, (tx, s) => setEntrySettlement(tx, s, cancelled.host, cancelledDish.result.entryId, entrySettlementSchema.parse({ expectedRevision: 0, unitPriceCentavos: 1 }))),
+    ).rejects.toMatchObject({ status: 409, code: "SESSION_CLOSED" });
+  });
+
   it("writes an event for connected browsers", async () => {
     const { host, sessionId } = await newSession(db);
     const out = await charge(host, { expectedRevision: 0, centavos: 500 });

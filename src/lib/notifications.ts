@@ -1,6 +1,6 @@
 import { formatPeso } from "./money";
 
-export type NotificationType = "round.confirmed" | "round.opened" | "dish.unavailable" | "order.correctionTold" | "price.defaultSet" | "food.served" | "guests.ready" | "order.ended";
+export type NotificationType = "round.confirmed" | "round.opened" | "dish.unavailable" | "order.correctionTold" | "price.defaultSet" | "food.served" | "guests.ready" | "order.ended" | "participant.cohostSet" | "participant.cohostRevoked" | "payment.recorded" | "payment.needsReview" | "host.transferred";
 
 type Subject = Record<string, string | number | boolean | null | undefined>;
 
@@ -27,12 +27,15 @@ export type NotificationTarget = "order" | "served" | "rounds" | "kkb";
 export function notificationTarget(type: NotificationType): NotificationTarget {
   switch (type) {
     case "food.served":
+    case "participant.cohostSet":
       return "served";
     case "dish.unavailable":
     case "order.correctionTold":
     case "order.ended":
       return "rounds";
     case "price.defaultSet":
+    case "payment.recorded":
+    case "payment.needsReview":
       return "kkb";
     default:
       return "order";
@@ -62,9 +65,19 @@ export function notificationText({ type, subject: s }: Pick<NotificationView, "t
     case "food.served":
       return `${str(s.label)} is all served`;
     case "guests.ready":
-      return `Everyone is ready for round ${num(s.roundNumber)}`;
+      return `Everyone who’s ordering is ready for round ${num(s.roundNumber)}`;
     case "order.ended":
       return s.cancelled ? "The host cancelled the order" : "The host ended the order";
+    case "participant.cohostSet":
+      return `${str(s.host)} made you a co-host. You can mark food as served.`;
+    case "participant.cohostRevoked":
+      return `${str(s.host)} stopped your co-host role.`;
+    case "payment.recorded":
+      return `${str(s.host)} recorded ${formatPeso(num(s.centavos))} from you`;
+    case "host.transferred":
+      return `${str(s.host)} made you the host.`;
+    case "payment.needsReview":
+      return `${str(s.name)}’s claim left a ${formatPeso(num(s.centavos))} payment paid to themself. Fix it on KKB.`;
   }
 }
 

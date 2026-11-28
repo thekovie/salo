@@ -1,23 +1,36 @@
 "use client";
 
 import { Check, ChevronDown } from "lucide-react";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useRowFocusFallback } from "@/hooks/use-row-focus-fallback";
 import type { ServedEdit } from "@/hooks/use-served-edits";
 import { focusIsLost } from "@/lib/focus";
-import { groupServed, type ServedRow, type Tracker } from "@/lib/serving";
+import type { SessionSnapshot } from "@/lib/snapshot";
+import { SEARCH_FROM } from "@/lib/dish-name";
+import { groupServed, visibleServed, type ServedRow, type Tracker } from "@/lib/serving";
 import { Stepper } from "./stepper";
 
 interface ServedSectionProps {
   tracker: Tracker;
-  /** The host while the order is open; everyone else (and an ended order) only reads. */
+  /** The host and co-hosts while the order is open; everyone else (and an ended order) only reads. */
   canEdit: boolean;
+  /** Host only, order open: corrections (Change…). */
+  canChange: boolean;
+  /** The co-host sees a note; the host sees a hint while nobody is a co-host yet. */
+  me: SessionSnapshot["me"];
+  people: SessionSnapshot["participants"];
+  onOpenPeople: () => void;
   edits: Record<string, ServedEdit>;
-  bump: (roundId: string, lineKey: string, delta: number, immediately?: boolean) => void;
+  bump: (roundId: string, lineKey: string, delta: number, seen: number, immediately?: boolean) => void;
   retry: (roundId: string, lineKey: string) => void;
   /** Host: open the correction sheet on this line. */
   onChange: (roundId: string, lineKey: string) => void;
+  /** Held by the workspace so they survive Change… → Rounds → back. */
+  query: string;
+  onQuery: (query: string) => void;
+  showAll: boolean;
+  onShowAll: (showAll: boolean) => void;
 }
 
 /** Above this many fully served dishes the group starts collapsed. */
@@ -25,14 +38,22 @@ const COLLAPSE_ABOVE = 5;
 
 const rowKey = (row: ServedRow) => `${row.roundId}|${row.line.key}`;
 
-/** Food tracker (F06): what has arrived per round and dish. Waiting food first with the host's steppers, fully served below. */
-export function ServedSection({ tracker, canEdit, edits, bump, retry, onChange }: ServedSectionProps) {
+/** Food tracker (F06): what has arrived per round and dish. Waiting food first with steppers for the host and co-hosts, fully served below. */
+export function ServedSection({ tracker, canEdit, canChange, me, people, onOpenPeople, edits, bump, retry, onChange, query, onQuery, showAll, onShowAll }: ServedSectionProps) {
+  const id = useId();
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const [doneOpen, setDoneOpen] = useState<boolean | null>(null);
   const followKey = useRef<string | null>(null);
+  // Mirrors followKey for rendering: an undone row past the cap stays shown so focus can land on it.
+  const [pinned, setPinned] = useState<string | null>(null);
 
   const { waiting, done } = groupServed(tracker);
   const rows = [...waiting, ...done];
+  const searchable = rows.length >= SEARCH_FROM;
+  const shownGroups = visibleServed({ waiting, done }, searchable ? query : "", showAll, (row) => Boolean(edits[rowKey(row)]) || rowKey(row) === pinned, (row) => Boolean(edits[rowKey(row)]?.failed));
+  const searching = shownGroups.matches !== null;
+  // The count the row stood on in the snapshot, plus a batch already sent: what the server will compare.
+  const seenOf = (row: ServedRow) => row.line.shown + (edits[rowKey(row)]?.sending ?? 0);
   const shownOf = (row: ServedRow) => {
     const e = edits[rowKey(row)];
     return Math.max(0, Math.min(row.line.expected, row.line.shown + (e?.sending ?? 0) + (e?.unsent ?? 0)));
@@ -58,6 +79,7 @@ export function ServedSection({ tracker, canEdit, edits, bump, retry, onChange }
   const follow = (target: EventTarget) => {
     const row = (target as HTMLElement).closest<HTMLElement>("[data-serve-key]");
     followKey.current = row?.dataset.serveGroup === "done" ? (row.dataset.serveKey ?? null) : null;
+    if (followKey.current) setPinned(followKey.current);
   };
 
   if (rows.length === 0) return null;
@@ -74,10 +96,10 @@ export function ServedSection({ tracker, canEdit, edits, bump, retry, onChange }
       </p>
     ) : null;
   const stepper = (row: ServedRow) => (
-    <Stepper value={shownOf(row)} min={0} max={row.line.expected} label={`${row.line.label} served`} onChange={(next) => bump(row.roundId, row.line.key, next - shownOf(row))} />
+    <Stepper value={shownOf(row)} min={0} max={row.line.expected} label={`${row.line.label} served`} onChange={(next) => bump(row.roundId, row.line.key, next - shownOf(row), seenOf(row))} />
   );
   const changeButton = (row: ServedRow) =>
-    row.line.expected > 0 ? (
+    canChange && row.line.expected > 0 ? (
       <Button variant="outline" onClick={() => onChange(row.roundId, row.line.key)}>
         Change…<span className="sr-only"> {row.line.label}, round {row.number}</span>
       </Button>
@@ -90,7 +112,7 @@ export function ServedSection({ tracker, canEdit, edits, bump, retry, onChange }
     return (
       <li key={rowKey(row)} data-serve-row data-serve-group="waiting" data-serve-key={rowKey(row)} className="py-2.5">
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3">
-          <p className="font-semibold">{line.label}</p>
+          <p className="font-semibold break-words">{line.label}</p>
           {canEdit ? <div className="col-start-2 row-start-1">{stepper(row)}</div> : null}
           <p className="col-span-full flex flex-wrap items-baseline gap-x-2 text-sm text-ink-soft">
             {tag(row)}
@@ -100,12 +122,12 @@ export function ServedSection({ tracker, canEdit, edits, bump, retry, onChange }
                 ? `✓ Served ${shown}`
                 : `${shown} of ${line.expected} served · ${line.expected - shown} waiting`}
           </p>
-          {line.people ? <p className="col-span-full text-sm text-ink-soft">{line.people}</p> : null}
+          {line.people ? <p className="col-span-full text-sm text-ink-soft break-words">{line.people}</p> : null}
         </div>
         {canEdit ? (
           <div className="mt-1 flex flex-wrap gap-2">
             {!isDone ? (
-              <Button variant="outline" onClick={() => bump(row.roundId, line.key, line.expected - shown, true)}>
+              <Button variant="outline" onClick={() => bump(row.roundId, line.key, line.expected - shown, seenOf(row), true)}>
                 <Check className="size-5" aria-hidden /> All served<span className="sr-only">: {line.label}</span>
               </Button>
             ) : null}
@@ -132,7 +154,7 @@ export function ServedSection({ tracker, canEdit, edits, bump, retry, onChange }
     const head = (
       <>
         <span className="flex items-baseline justify-between gap-3">
-          <span className="min-w-0 font-semibold">
+          <span className="min-w-0 font-semibold break-words">
             {line.label}
             {line.history ? null : <span className="tally ml-1.5 text-tomato-ink">×{line.expected}</span>}
           </span>
@@ -172,12 +194,24 @@ export function ServedSection({ tracker, canEdit, edits, bump, retry, onChange }
       <h2 id="served-h" tabIndex={-1} className="text-lg">
         Served
       </h2>
+      {me.cohost && canEdit ? <p className="mt-1 text-sm text-ink-soft">You’re a co-host: you can mark food as served.</p> : null}
       <p role="status" aria-live="polite" className="mt-0.5 text-ink-soft" data-testid="served-summary">
         {left === 0 ? `All ${expected} served. Kain na!` : `${served} of ${expected} served · ${left} waiting`}
       </p>
       <div role="progressbar" aria-label="Food served" aria-valuemin={0} aria-valuemax={expected} aria-valuenow={served} className="mt-2 h-1.5 overflow-hidden rounded-full bg-ink/10">
         <div className="h-full origin-left rounded-full bg-ok transition-transform duration-200 motion-reduce:transition-none" style={{ transform: `scaleX(${expected ? served / expected : 0})` }} />
       </div>
+      {searchable ? (
+        <div className="mt-3">
+          <label htmlFor={`${id}-q`} className="text-sm font-semibold">
+            Find a dish
+          </label>
+          <input id={`${id}-q`} type="search" value={query} onChange={(e) => onQuery(e.target.value)} className="mt-1 min-h-11 w-full rounded-xl border-[1.5px] border-input bg-ticket px-3 text-base [&::-webkit-search-cancel-button]:appearance-none" />
+          <p role="status" aria-live="polite" className="mt-1 text-sm text-ink-soft">
+            {shownGroups.matches === null ? "" : shownGroups.matches === 0 ? "No dish matches." : `${shownGroups.matches} ${shownGroups.matches === 1 ? "dish matches" : "dishes match"}`}
+          </p>
+        </div>
+      ) : null}
       <div
         {...focus}
         onFocus={(event) => {
@@ -187,22 +221,40 @@ export function ServedSection({ tracker, canEdit, edits, bump, retry, onChange }
         // Safari does not focus a tapped button, so a tap on a Fully served row counts too.
         onClickCapture={(event) => follow(event.target)}
       >
-        {waiting.length > 0 ? (
+        {shownGroups.waiting.length > 0 ? (
           <div className="mt-3">
             <h3 className="text-xs font-semibold tracking-wide text-ink-soft uppercase">Waiting</h3>
-            <ul className="divide-y divide-ink/10">{waiting.map(waitingRow)}</ul>
+            <ul id={`${id}-waiting`} className="divide-y divide-ink/10">
+              {shownGroups.waiting.map(waitingRow)}
+            </ul>
+            {shownGroups.capped ? (
+              <Button variant="outline" className="mt-2 w-full" aria-expanded={showAll} aria-controls={`${id}-waiting`} onClick={() => onShowAll(!showAll)}>
+                {showAll ? "Show fewer" : `Show all ${waiting.length} waiting dishes`}
+              </Button>
+            ) : null}
           </div>
         ) : null}
-        {done.length > 0 ? (
+        {/* Matches show in a plain list: a <details> forced open would desync if tapped closed mid-search. */}
+        {searching && shownGroups.done.length > 0 ? (
+          <div className="mt-3">
+            <h3 className="text-xs font-semibold tracking-wide text-ink-soft uppercase">Fully served</h3>
+            <ul className="divide-y divide-ink/10">{shownGroups.done.map(doneRow)}</ul>
+          </div>
+        ) : shownGroups.done.length > 0 ? (
           <details open={doneIsOpen} onToggle={(event) => event.currentTarget.open !== doneIsOpen && setDoneOpen(event.currentTarget.open)} className="mt-3">
             <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 text-xs font-semibold tracking-wide text-ink-soft uppercase [&::-webkit-details-marker]:hidden">
-              <span>Fully served ({done.length})</span>
+              <span>Fully served ({shownGroups.done.length})</span>
               <ChevronDown className={`size-4 ${doneIsOpen ? "rotate-180" : ""}`} aria-hidden />
             </summary>
-            <ul className="divide-y divide-ink/10">{done.map(doneRow)}</ul>
+            <ul className="divide-y divide-ink/10">{shownGroups.done.map(doneRow)}</ul>
           </details>
         ) : null}
       </div>
+      {canChange && !people.some((p) => p.cohost) && people.some((p) => p.role === "GUEST") ? (
+        <button type="button" onClick={onOpenPeople} className="mt-3 min-h-11 w-full cursor-pointer text-left text-sm text-ink-soft hover:text-ink">
+          Busy table? Make a guest a co-host so they can help. →
+        </button>
+      ) : null}
     </section>
   );
 }

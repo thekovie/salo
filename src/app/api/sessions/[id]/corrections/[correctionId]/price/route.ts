@@ -16,6 +16,6 @@ export async function PUT(request: Request, { params }: Params) {
     const actor = await requireActor(id);
     const key = idempotencyKey(request);
     const input = await readJson(request, correctionPriceSchema);
-    return ok(await runMutation(getDb(), actor, { idempotencyKey: key, type: `correction.price:${correctionId}` }, (tx, s) => setCorrectionPrice(tx, s, actor, correctionId, input)));
+    return ok(await runMutation(getDb(), actor, { idempotencyKey: key, allowClosed: true, type: `correction.price:${correctionId}` }, (tx, s) => setCorrectionPrice(tx, s, actor, correctionId, input)));
   });
 }

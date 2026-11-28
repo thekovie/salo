@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { addDish, inviteCode, joinAsGuest, openDetail, orderFor, startOrder } from "./support/helpers";
+import { addDish, inviteCode, joinAsGuest, openDetail, orderFor, startOrder, openKkb } from "./support/helpers";
 
 async function confirmRound(page: Page) {
   await page.getByRole("button", { name: "Review order" }).click();
@@ -46,7 +46,7 @@ test("KKB: price while ordering, price from the receipt, bill a shared dish, spl
   await confirmRound(page);
 
   // The host enters the receipt's prices from "What's next?".
-  await page.getByRole("button", { name: "Enter receipt prices (KKB)" }).click();
+  await openKkb(page);
   const sheet = page.getByRole("dialog", { name: "Who ordered what" });
   await expect(sheet.getByRole("tab", { name: "KKB" })).toHaveAttribute("aria-selected", "true");
   await expect(sheet.getByRole("region", { name: /your share/ })).toContainText("₱240.00");

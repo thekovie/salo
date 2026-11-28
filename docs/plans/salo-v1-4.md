@@ -1,0 +1,2514 @@
+# Salo v1.4: billing, co-hosts, continuity (plan)
+
+Owner's brief, kept in full: [`salo-v1-4-brief.md`](salo-v1-4-brief.md). Phase 0 audit: [`salo-v1-4-audit.md`](salo-v1-4-audit.md). Baseline screenshots: `.shots/before/` (git-ignored; v1.3 shots archived in `.shots/v1-3/`).
+
+Each slice ships as its own branch and squash PR into `dev` (HANDOFF working rules). One slice per session: `/clear`, then `/workflow:kickoff slice N of docs/plans/salo-v1-4.md`. Later slices get their own research, decisions and text sketch when they start; the cross-cutting decisions below are settled now because they shape migrations.
+
+## Slices
+
+| Slice | Brief | Content | Migration | Status |
+|---|---|---|---|---|
+| 0 | Phase 0 | Audit (`salo-v1-4-audit.md`) + this plan | — | done (decisions answered 2026-11-23) |
+| 1 | F01 + F11 (pricing part) | Price status in What's next, quick-entry Prices sheet, draft persistence, guest "so far" label | none | landed (PR #51) |
+| 2 | F02, F03 | Receipt adjustments, allocation methods A–E, adjusted vs actual totals | 0013 | landed (PR #52) |
+| 3 | F04 (+F12 lock fix) | Co-hosts, `can()` capability map, role re-check under lock, serving precondition | 0014 | landed (PR #53) |
+| 4 | F05, F06 | Multiple receipts, shared-dish splits | 0015 | landed (PR #54) |
+| 5 | F07 | Payment ledger, derived balances | 0016 | landed (PR #55) |
+| 6 | F08, F09 | My order sheet, host transfer | none (D39) | landed (PR #56) |
+| 7 | F10, F12 | Manifest `id`/`scope`, invite continuity copy, reliability fixes + tests | — | landed (PR #57) |
+| 8a | F16 | Menu link: `sessions.menu_url`/`menu_label`, URL validator, View menu on the Order tab | 0017 | landed (PR #58) |
+| 8b | F17 | Creation animation (tail-less table: current mark has a speech-bubble tail, `brand/logo.tsx:14`; aligned to the final logo in slice 10), Turnstile expiry/timeout states | — | landed (PR #59) |
+| 8c | F14 | Large-order navigation: measure a real-guest large order first, keep only what moves the number | — | landed (PR #60) |
+| 8d | F11, F13 | Billing next-step prompts, estimate vs final labels, export options (share `kkb.ts`, `kkb-view.tsx`, `summary-sheet.tsx`) | — | landed (PR #61) |
+| 9 | Phase 9 | Full regression, money property tests, a11y sweep; real phones and pilot stay owner tasks | — | landed (PR #62) |
+| 10 | F15 | Shared Table logo and icon set (last, alone) | — | landed (PR pending) |
+
+## Ask ledger
+
+| # | Owner's words | Planned change | Slice | Status |
+|---|---|---|---|---|
+| L1 | "Begin with Phase 0. Do not implement the entire v1.4 brief as one unreviewed change." | Audit + plan only this session; slice 1 waits for the gate | 0 | done |
+| L2 | "Before coding, produce: A technical gap assessment. A UI/UX audit report. A feature-to-existing-component mapping. A proposed database and API change plan. A prioritized implementation sequence. A regression-risk assessment." (§3.3) | Audit §1–§6 | 0 | done (browser part §2a from capture) |
+| L3 | "Clearly distinguish observations verified through code inspection, browser testing, and real-device testing." (§3.3) | `[code]` / `[node]` / `[browser]` / `[unverified]` labels; no device claims | 0 | done |
+| L4 | "Review at minimum: 320px 360px 375px 390px 430px Tablet Desktop" (§3.2) | Baseline at 320/375/430/768/1280 with geometry; 360 and 390 added in slice 1's verify (before and after) | 0, 1 | partial |
+| L5 | "Include an assessment of menu URL security and the existing Turnstile creation flow." (addendum) | Audit F16 + F17 sections | 0 | done |
+| L6 | "The host should see: Pricing completeness. Number of unpriced preparations. A clearly labeled **Enter prices** action. Direct access to unresolved prices. A clear indication when pricing is complete." (F01) | Entry point per D7 ("Enter prices · 3 left"), What's next row, KKB tab button; complete: "All prices in" | 1 | done |
+| L7 | "Implement a compact quick-entry interface… Prioritize unpriced preparations. Display dish names and variants. Display quantities. Allow inline price entry." (F01) | Prices sheet: one row per dish + size, unpriced first, quantity, inline ₱ field | 1 | done |
+| L8 | "Reuse existing shared-price defaults. Respect per-entry overrides. Show inherited prices clearly." (F01) | Row saves the table price (`setSharedPrice`); lines with their own price keep it and show "2 have their own price" | 1 | done |
+| L9 | "Preserve incomplete values when connectivity fails. Show save and conflict states." (F01) | Typed values kept per row (and across closing the sheet, D9), Saving / Saved / Not saved · Try again / "Changed on another phone" | 1 | done |
+| L10 | "Do not require prices before confirming orders." / "Pricing reminders do not interrupt ordering." (F01) | Nothing before confirm; no toasts or banners; row only inside What's next and KKB | 1 | done |
+| L11 | "Guests can identify whether their KKB is incomplete." (F01) | Short dock label shows incompleteness (D11); today it drops "so far" (`kkb.ts:363`) | 1 | done |
+| L12 | "Treat pricing and settlement as one connected workflow… not a mandatory wizard." (F11) | Slice 1: price step; full sequence in slice 8 | 1, 8 | done (8d) |
+| L13 | F02 "Receipt Discounts and Adjustments" incl. "The restaurant's final receipt is authoritative… must not subtract that discount again" | Adjusted total and receipt total shown separately; discrepancy never forced to zero | 2 | planned (slice 2 section) |
+| L14 | F03 "Proportional / Equal / Individual / Manual / Unallocated" | Allocation methods over `allocate` | 2 | planned (slice 2 section) |
+| L15 | F04 "Introduce an optional **Co-host** role" | Co-host flag (D2), serving capability, lock re-check | 3 | not started |
+| L16 | F05 "Allow one dining session to record multiple restaurant receipts." | `receipts` | 4 | planned (slice 4 section) |
+| L17 | F06 "Allow the host to allocate a shared item's cost among selected participants." | Split payers | 4 | planned (slice 4 section) |
+| L18 | F07 "Introduce optional settlement tracking" | Payments ledger | 5 | not started |
+| L19 | F08 "Provide a convenient **My order** review" | My order sheet | 6 | not started |
+| L20 | F09 "Introduce an explicit host-transfer workflow." | Atomic transfer | 6 | not started |
+| L21 | F10 "PWA Deep Linking and Invite Continuity" | Manifest + guidance, accurate platform docs | 7 | not started |
+| L22 | F12 "Offline and Realtime Reliability Improvements" | Scenario tests + targeted fixes | 3, 7 | not started |
+| L23 | F13 "Completed-Session Export" | Optional export sections (8d full record) | 8 | done |
+| L24 | F14 "Large-Order Navigation and Usability" | Measured first (slice 8c): ticket collapse, Waiting cap, Served search, People collapse | 8c | planned |
+| L25 | F16 "Restaurant Menu Link Sharing & URL Safety" | Menu link (D4) | 8 | not started |
+| L26 | F17 "Animated Room Creation and Bot-Verification Experience" | Table animation in `BotCheck` | 8 | not started |
+| L27 | F15 "This feature must be implemented **last**" | Slice 10, alone | 10 | not started |
+| L28 | §8.5 "Conduct a real dining pilot… Do not fabricate usability results." | Owner task; never reported as done by the workflow | 9 | owner |
+
+## Today (slice 1)
+
+- Post-confirm What's next card (host, open order): "Add more (round n)" and "End the order" outline buttons, then a ghost "Enter receipt prices (KKB)" (`workspace.tsx:619-640`). It opens the Summary drawer on the KKB tab.
+- KKB tab completeness line: "5 of 8 dishes priced · Show the 3 without a price" scrolls to the first unpriced row (`kkb-view.tsx:184-197`, `showFirstUnpriced` `:173`). Counting unit: distinct dishes, priced only when every line resolves (`kkb.ts:282-295`).
+- Pricing is one line at a time through `PriceEditor` (`price-editor.tsx`, 243 lines): "Every Chicken Katsu (Large) here" sets the table price (`TablePrice`, `:19-28`), "Only this line" sets an override. Saves via `useDirectSave` + `useRetryOnReconnect` (`use-direct-save.ts:21-66`); conflict = 409 with keep/adopt (`price-editor.tsx:60-75`).
+- Table prices: `shared_prices` keyed session + dish + size (`schema.ts:405`), endpoint used by `setSharedPrice` (`settlement.ts:89`, host only, `price.default`).
+- Guest dock: `myShareLabel` → `shortShareLabel` under 430 px drops "so far" (`kkb.ts:353-363`).
+
+## Approach (slice 1)
+
+A **Prices sheet** (bottom drawer, host only) listing one row per dish + size that appears in **confirmed** rounds, unpriced rows first, each with an inline ₱ field that sets the table price. Opened from the entry point chosen in D7 and from the KKB tab completeness line. No schema or API change.
+
+Pinned details (plan-critic, verified):
+- **Endpoint.** `PUT /api/sessions/[id]/prices` (`prices/route.ts:11` → `setSharedPrice`, `settlement.ts:88`) with `{dishId, variant, unitCentavos, expectedRevision}`; `expectedRevision = snapshot.settlement.defaults[tableKey]?.revision ?? 0` (`kkb.ts:153`; a cleared price keeps its row, `schema.ts:402`). `clearEntryId` omitted, so own prices are never touched. Idempotency type `price.default:<dishId>|<variant>` → one `useDirectSave` per row (`PriceRow` component). After a save the row re-bases to the returned revision, otherwise its next save reads as a conflict (`PriceEditor` avoids this by closing; rows stay mounted).
+- **Replacement lines** (D10): per the owner's answer, either their own rows via `PUT /api/sessions/[id]/corrections/[id]/price`, or a link to them in KKB.
+- **Counts.** `priceCompleteness` counts preparations (dish + size + notes, plus one per replacement, `consolidate.ts:39`, `kkb.ts:200`), the KKB tab's existing unit (v1.3 A18, unchanged). The sheet and the new entry points count **sheet rows still needing a price** ("3 prices left"), computed by the same pure helper that builds the rows, so the dock, What's next and the sheet header always agree.
+- **Blank.** Blank on a priced row removes the table price (as `PriceEditor`: "Blank removes the table price"); blank on an unpriced row does nothing.
+- **Copy** reuses `PriceEditor` (`price-editor.tsx:196-231`): conflict "Someone changed this just now to ₱X. Your amount is still here." + Use theirs / Keep mine; error "Not saved. {message}" + Try again; plus "Saving…" / "Saved".
+- **No layout shift.** Row order is frozen while the sheet is open (as `startOpen`, `kkb-view.tsx:44`); re-sorted on reopen. Order: unpriced first, then by first confirmed appearance (round, then ticket order). `inputMode="decimal"`, `enterKeyHint="next"` moves to the next unpriced row, last row "done".
+- **Focus.** From KKB the sheet stacks over the Summary drawer (`summary-sheet.tsx:110`); closing returns focus to the opener. If the opener became text (pricing complete), focus goes to the nearest heading (`#what-next`, or the KKB completeness line). One close control (✕), as the Summary drawer (`summary-sheet.tsx:128`).
+- **Drafts (D9a).** `sessionStorage` key `salo:prices:<sessionId>` = `{[tableKey]: {text, baseRevision}}`; cleared per row on save; a restored value whose `baseRevision` is stale opens in the conflict state. Listed on `/cookies` (`src/app/cookies/page.tsx:15-19`).
+- **Files.** New `src/components/workspace/prices-sheet.tsx` (sheet + `PriceRow`) and `price-status.tsx` (entry row/label); pure `tablePriceRows()` in `src/lib/kkb.ts` shared with `kkb-view.tsx`'s `tableFor`; `workspace.tsx` (781/800 lines) gets only one `useState` and the openers.
+- **Specs to update.** Five specs click "Enter receipt prices (KKB)": `e2e/shared-prices.spec.ts:34,82`, `kkb.spec.ts:49`, `reconnect-retry.spec.ts:19`, `receipt-check.spec.ts:25`, `density-review.spec.ts:88`. The host KKB tab keeps "Show the n without a price" beside the new "Enter prices" (v1.3 A18 jump stays), so `receipt-check.spec.ts:27-38` assertions hold.
+
+Rejected: inline price fields directly on the stamped ticket (crowds the waiter view and the ticket stays price-free by design, D6 v1.3).
+
+## Reuse
+- `priceCompleteness` (counts) and `buildKkb` lines (quantities, own-price detection) from `kkb.ts`.
+- `TablePrice` building logic in `kkb-view.tsx` (dish + size, lines that follow it, live revision): move to a pure helper in `src/lib/kkb.ts` (e.g. `tablePriceRows(kkb, snapshot)`) shared by `KkbView` and the new sheet, not copied.
+- `useDirectSave`, `useRetryOnReconnect`, `parsePeso`/`toPesoInput`/`formatPeso`, existing `Drawer` component, `Button`.
+- Conflict copy from `PriceEditor`.
+
+## Not doing (slice 1)
+- No price prompts before confirm, no toasts, no banners outside What's next / KKB.
+- Guests don't get the Prices sheet (they price their own lines in KKB as today).
+- Per-line overrides stay in the KKB tab's `PriceEditor`; the sheet only sets table prices.
+- No service charge or receipt fields in the sheet (they stay in KKB; slice 8 joins the flow).
+
+## States (slice 1)
+| State | After |
+|---|---|
+| No confirmed round | No price row anywhere (unchanged) |
+| Confirmed, nothing priced | Entry point (D7): "Enter prices · 8 left"; What's next row "8 prices left" + **Enter prices** |
+| Partly priced | "Enter prices · 3 left" / "3 prices left" + **Enter prices** |
+| All priced | Dock back to "My share · ₱X"; What's next row "All prices in ✓" (text, no button) |
+| Later round in draft | Dock entry point still shows (it renders whenever a round is confirmed, `workspace.tsx:139`); What's next is hidden as today |
+| Order ended | Unchanged today (What's next hidden, KKB read-only); D1 decides whether pricing stays editable after End, built in slice 2 |
+| Sheet: row saving / saved / failed offline / conflict | "Saving…" / "Saved" / "Not saved. {message}" + Try again (auto-retries on reconnect) / "Someone changed this just now to ₱X. Your amount is still here." + Use theirs / Keep mine |
+| Sheet: restored unsaved value on reopen | Field holds the typed value, "Not saved" + Try again |
+| Sheet: row where some lines have their own price | "2 of 5 have their own price" under the name; field sets the price for the rest |
+| Sheet: row where every line has its own price | In the priced part, "Own prices" instead of a field |
+| Sheet: all priced | Header "All prices in"; every row shows its amount, editable |
+| Sheet: long dish names, 30 rows, 320 | Names wrap under the field-free column; field keeps its width; sheet scrolls |
+| Guest and host dock < 430 px, incomplete | D11 wording; must stay one row at 320 and 360 (`e2e/slice8-measure.spec.ts`) |
+| Widths | 320, 360, 375, 390, 430, 768, 1280; light and dark |
+
+## Decisions
+
+Owner answers 2026-11-23: D1, D2, D3, D4, D7, D9, D10, D11 = recommended option. D5 is asked at slice 5's kickoff. D6 and D8 are carried as assumptions (responsive + native feel; rows per dish + size).
+
+- **D1 [decided: (a) billing editable after End via `allowClosed`] Billing after End the order** (cross-cutting, affects slices 2, 4, 5). Options: (a) allow billing changes (prices, service charge, receipt, adjustments, payments) on ended orders via the existing `allowClosed` path (`mutations.ts:77`), order content stays frozen, retention unchanged at 7 days; (b) keep billing before End only. Recommend (a): discounts and separate receipts arrive with the bill, after the meal (brief F05 "usually happens after ordering, when the waiter prepares the final bill").
+- **D2 [decided: (a) `participants.cohost_at` flag] Co-host model** (slice 3). (a) nullable `participants.cohost_at` mapped to capabilities in `permissions.ts`, role column untouched; (b) new `COHOST` role value (rewrites three CHECKs and the one-host index logic); (c) capabilities table. Recommend (a): only `serving.update` is ever grantable (brief §6 "host should remain the only participant with full administrative authority"), and the one-host invariant stays DB-enforced (`schema.ts:90`).
+- **D3 [decided: (a) count precondition, second tap refreshes] Concurrent serving** (slice 3). (a) client sends the count it saw with the delta; the server applies only if it still matches, else returns the current count and the stepper updates; (b) keep plain deltas clamped. Recommend (a): (b) double-counts when two co-hosts tap for the same plate (`serving.ts:34-37`).
+- **D4 [decided: (a) no reputation service in v1] Menu link reputation check** (slice 8). (a) none in v1: strict URL validation, show the domain, report link via the existing policy mailto, never say "safe"; (b) Google Safe Browsing lookup, fail-open with an "unchecked" state. Recommend (a): no outbound dependency, no URL sharing with a third party; the brief allows "evaluate optional".
+- **D5 Payment status visibility** (slice 5, open). (a) everyone sees everyone's paid / partly paid / unpaid (matches today: every member sees every price); (b) guests see only their own. Recommend (a) for consistency with `sessions/snapshot.ts:59-95`; (b) needs a per-viewer snapshot pattern.
+- **D6 Mobile scope.** Responsive + native feel (carry v1.3): all baseline items are present (audit, Mobile baseline); new UI matches them. Add `overscroll-behavior-y: contain` on `body` only if the owner wants pull-to-refresh suppressed (assumption: no).
+- **D7 [decided: M2c dock + What's next + KKB] Price entry point placement** (slice 1). M2c: host's dock button reads "Enter prices · 3 left" while dishes are unpriced (opens the Prices sheet), back to "My share ₱X" when complete; plus the row in What's next and KKB. M2a: What's next row + KKB only. M2b: M2a + a slim row at the top of the Order tab. Recommend M2c: What's next sits ~1,345 px down at 375 with only 6 dishes (audit B2), while the dock is always visible after confirm and already hosts the share button (`workspace.tsx:139,706`); it never interrupts ordering (no banner, no toast).
+- **D8 Prices sheet unit** (slice 1). (a) one row per dish + size (table price, same unit as completeness and v1.3 D2); (b) one row per line incl. notes. Recommend (a): matches `shared_prices` and "A shared preparation price correctly propagates to eligible entries".
+- **D9 [decided: (a) sessionStorage drafts per order] Unsaved typed prices** (slice 1). (a) keep typed-but-unsaved values per row in `sessionStorage` for the order, restored with "Not saved" when the sheet reopens; (b) keep them only while the sheet is open. Recommend (a): the brief asks to "Preserve incomplete values when connectivity fails", and closing the sheet is common at a table.
+
+- **D10 [decided: (a) replacements get their own rows] Replacement lines in the sheet** (slice 1). (a) unpriced replacements get their own rows with a ₱ field (corrections price endpoint), so the sheet can reach "All prices in"; (b) the sheet sets table prices only and shows "1 replacement — price it in KKB →". Recommend (a): completeness counts them (`kkb.ts:200`) and the brief asks for "Direct access to unresolved prices".
+- **D11 [decided: (a) "Share so far ₱X", fallback "So far ₱X"] Dock label under 430 px when incomplete** (slice 1). (a) "Share so far ₱1,240", measured not to wrap at 320; fallback "So far ₱1,240" if it does; (b) keep "Share ₱1,240" plus a "~". Recommend (a): brief "Guests can identify whether their KKB is incomplete"; #47 shortened the label only to keep one row.
+
+- **D12 [decided 2026-11-23 after build: add "Edit prices"]** Once all priced, "All prices in · Edit prices" (What's next) and "All n dishes priced · Edit prices" (KKB, host) reopen the sheet. Also kept, owner-approved: Keep mine saves at once; untouched rows follow other devices; all-own-price rows show "Own prices" with no field.
+
+## Assumptions
+- KKB tab's "x of y dishes priced" stays as is (v1.3 unit); new entry points count sheet rows ("prices left").
+- Sheet rows come from confirmed rounds only; draft-round dishes are priced in KKB as today.
+- Save on Enter / next or on leaving the field; no Save button per row.
+- 360 and 390 px weren't in the Phase 0 capture; slice 1's verify shoots before/after at 360 and 390 too (before = `dev` as is).
+- Later slices' file-level plans are written at each slice's kickoff (audit §3–§4 give the map).
+- Owner tasks from v1.3 (real phones, pilot, backups) stay open in HANDOFF and are not repeated here.
+
+## Done when (slice 1)
+- `pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm e2e` pass.
+- Unit: `tablePriceRows` ordering (unpriced first), own-price counts, quantities; `shortShareLabel` keeps "so far" / "no prices yet".
+- E2E (new `e2e/quick-prices.spec.ts`): host confirms, What's next shows "0 of n", enters three prices in the sheet without closing it, guest's share updates live, an override line keeps its price; offline save shows Not saved and retries on reconnect; reopening the sheet restores an unsaved value; conflict from a second host tab; axe light/dark on the sheet.
+- Manual: shots of every state above at 320/375/430/768/1280.
+
+## Skills
+- `impeccable` + `.impeccable/surfaces/src-app.md`: the Operate surface and ticket world.
+- `frontend-a11y` / `accessibility`: sheet focus, labelled inputs, live save status.
+- `mobile-native`: decimal keypad, field above the keyboard in a drawer.
+- `react-testing` is not applicable (no component test setup); tests are unit (pure helpers) + Playwright.
+
+## You need to do
+- [x] Review the Phase 0 audit (`docs/plans/salo-v1-4-audit.md`) and the slice table.
+- [x] (carried from v1.3) Real-phone checks: done during v1.3.
+- [ ] (carried from v1.3) KKB pilot: after all v1.4 slices land.
+- Backups: deferred by owner (2026-11-23).
+
+## Mockups (slice 1, text sketch)
+
+Labels: M1 = What's next row, M2 = Prices sheet, M3 = row states, M4 = KKB tab line, M5 = dock (D7 option M2c).
+
+M1a What's next, partly priced (host, 375):
+```
+┌ What's next? ───────────────────────────────┐
+│ [ + Add more (round 2) ] [ ✓ End the order ] │
+│ ──────────────────────────────────────────── │
+│ ₱ 3 prices left          [ Enter prices ]    │
+└──────────────────────────────────────────────┘
+```
+M1b Nothing priced: `│ ₱ 8 prices left          [ Enter prices ]    │`
+M1c All priced: `│ ✓ All prices in                  Edit prices │` (D12)
+
+M2a Prices sheet, partly priced (drawer, 375):
+```
+┌ Enter prices ─────────────────────────── ✕ ┐
+│ 3 prices left · a price covers every order │
+│ of that dish and size                      │
+│ NEEDS A PRICE                              │
+│ Chicken Katsu (Large)    ×3   ₱[______]    │
+│ Iced tea                 ×5   ₱[______]    │
+│ Sinigang                 ×2   ₱[______]    │
+│   1 of 2 has its own price                 │
+│ Pork (replaces Beef)     ×1   ₱[______]    │  ← D10 (a)
+│ PRICED                                     │
+│ Garlic rice              ×6   ₱[ 45.00]    │
+│ Pancit (Small)           ×2   Own prices   │
+└────────────────────────────────────────────┘
+```
+M2b All priced: header `All prices in`; rows as PRICED above, all editable.
+M2c 320, long name:
+```
+│ Crispy pata with extra   ×1   ₱[______] │
+│ garlic and atchara                      │
+```
+
+M3 Row states (copy from `PriceEditor`):
+```
+│ Iced tea  ×5  ₱[ 60.00]  Saving…                         │
+│ Iced tea  ×5  ₱[ 60.00]  Saved                           │
+│ Iced tea  ×5  ₱[ 60.00]  Not saved. No connection.       │
+│                          [ Try again ]                   │
+│ Iced tea  ×5  ₱[ 60.00]  Not saved   [ Try again ]       │  ← restored on reopen
+│ Iced tea  ×5  ₱[ 60.00]  Someone changed this just now   │
+│                          to ₱65.00. Your amount is still │
+│                          here. [ Use theirs ] [ Keep mine ]│
+```
+
+M4 KKB tab (host): `5 of 8 dishes priced · Show the 3 without a price · Enter prices`; all priced: `All 8 dishes priced · Edit prices` (D12); guests unchanged.
+
+M5 Dock after confirm (D7 M2c), host:
+```
+│ [ ₱ Enter prices · 3 left ] [ Review order ] │  ← unpriced (replaces the share button)
+│ [ My share · ₱1,240 ]       [ Review order ] │  ← all priced
+```
+M5 guest under 430 (D11 a), 320:
+```
+│ [ Share so far ₱325 ] │   │ [ Share · no prices yet ] │
+```
+
+---
+
+## Slice 2: receipt adjustments and allocation (F02, F03)
+
+Status: landed (PR #52)
+
+Research brief (2026-11-23, researcher) cited below; baseline in `.shots/before/` (seed: `.shots/before/seed.mjs`, index `README.md`; slice 1 shots moved to `.shots/v1-4-slice1/`). Pre-existing, seen in baseline: "Show the 2 without a price" overflows the right edge in `kkb-long-names-320` (not this slice's scope unless verify flags it).
+
+### Ask ledger (slice 2)
+
+Brief F02 and F03 quoted from `salo-v1-4-brief.md:249-381`.
+
+| # | Owner's words | Planned change | Status |
+|---|---|---|---|
+| S2.1 | "Support: Fixed-amount discounts. Percentage-based discounts where the applicable basis is known. Additional charges. Credits and other adjustments. Optional adjustment descriptions." | Adjustment = discount or extra charge; amount in ₱ or %; credits are discounts with category Other; optional note (`LIMITS.label`) | done |
+| S2.2 | "Suggested categories: Senior citizen, PWD, Privilege card, Promotion, Other. Categories are descriptive labels, not automatic eligibility determinations." | Category picker, label only, no rules attached | done |
+| S2.3 | "The restaurant's final receipt is authoritative. If the host enters a final receipt total that already includes a discount, Salo must not subtract that discount again." | Receipt total is never reduced; it is compared with the adjusted total | done |
+| S2.4 | "Separate: 1. Original calculated subtotal. 2. Recorded adjustments. 3. Calculated adjusted total. 4. Actual restaurant receipt total. 5. Reconciliation discrepancy." / "Calculated and actual totals remain independently visible." | Receipt check shows five rows (M2) | done |
+| S2.5 | "Never silently force a discrepancy to zero." | Difference chip unchanged in kind; no auto-balancing adjustment | done |
+| S2.6 | "Do not store senior/PWD identification numbers, images, or supporting documents." | Note field is free text ≤ label limit; hint says not to type ID numbers; no uploads | done |
+| S2.7 | "Host can record and edit adjustments." | Host-only add / edit / remove, also after End (D1) | done |
+| S2.8 | "Adjustments affect final KKB only when explicitly allocated." | "Decide later" (E) changes no one's share; shares read "so far" | done |
+| S2.9 | "All calculations use integer centavos." / "Distribute rounding remainders deterministically." | Percent stored as basis points; shares via existing `allocate` (largest remainder, ties by key) | done |
+| S2.10 | "Historical orders and original prices remain intact." / "Preserve original per-person subtotals." | Adjustments are separate rows; food subtotal and service share stay on each card, adjustment is its own line | done |
+| S2.11 | F03 A–E: "Proportional… Equal… Individual… Manual… Unallocated" | Five "Who gets it" options (M3) | done |
+| S2.12 | "Never allocate a larger discount than the eligible amount without explicit handling." / "Do not create negative payable balances by accident." | D15a: flagged, card unchanged, counts in adjusted total, shares "so far" | done |
+| S2.13 | "Display how each discount affects each participant." / "Participants can see the adjustments affecting their share." | Line on each affected card (M4) + preview in the sheet; guests see the block read-only | done |
+| S2.14 | "Distinguish discount beneficiaries from the people paying the final bill." | Card line reads "Senior citizen discount for Lola"; who actually paid the restaurant is slice 5 (F07) | done |
+| S2.15 | "Final allocations reconcile with the applicable restaurant total." / "Changing allocation methods does not duplicate the discount." / "No hidden discount redistribution occurs." | Shares always sum to the adjustment (unit tests); one row per adjustment, method is a field, so switching replaces, never adds | done |
+| S2.16 | "An unresolved adjustment is visibly marked incomplete." | Block row "Not assigned yet", dock + Copy summary say "so far" | done |
+| S2.17 | D1 (decided): billing editable after End via `allowClosed` | Prices, Bill to, service charge, receipt total, adjustments editable by the host on an ended order; order content stays frozen | done |
+
+### Today
+
+- Per-person card (`KkbSection`, `kkb.ts:46-65`): `pricedCentavos` (food), `serviceCentavos`, `totalCentavos` (null until a service charge is allocated, `kkb.ts:203-227,229-254`). Footer rows "Food subtotal / Service charge / Total with service charge" (`kkb-view.tsx:302-340`).
+- Service charge: allocated by food with exact largest remainder `allocate` (`kkb.ts:261-271`, returns zeros on zero weight); blocked by unpriced / unbilled shared / pending / zero food (`kkb.ts:234-243`).
+- Receipt: `saloTotal = food + charge` (`kkb.ts:304`), `reconcile` compares only (`kkb.ts:310-317`); `ReceiptCheckBlock` rows Food in Salo / Service charge / Salo total / Receipt total (`receipt-check-block.tsx:70-83`; host edits the receipt via `AmountEditor`) + difference chip (`:29-60`).
+- Storage: `sessions.service_charge_*`, `sessions.receipt_total_*` (`schema.ts:52-56`); PUT routes `service-charge`, `receipt-total` via `runMutation` + revision CAS (`settlement.ts:138-153`); 409 conflict copy (`settlement.ts:24`). Latest migration `0012_receipt_total`; `*_same_session` trigger pattern `drizzle/0007_settlement.sql:43-64`.
+- Closed orders: `runMutation` refuses unless `allowClosed` (`mutations.ts:77`); no route passes it. UI edits only while open (`kkb-view.tsx:40,75,77,163-165`, `workspace.tsx:143`). Banner "This order has ended. Nothing can be changed." (`workspace.tsx:566`).
+- Exports: `kkbText` prints `food + service = total` per person (`kkb.ts:322-351`); Items text/PNG and waiter ticket are price-free and stay so.
+- No adjustments, no percent helper, no property tests (`package.json` has no fast-check).
+
+### Approach
+
+Store only what the host typed; compute every share in a pure module, like prices and the service charge.
+
+- **Migration 0013** (`drizzle/0013_adjustments.sql`):
+  - `adjustments`: `id uuid` (client-generated, so create is idempotent), `session_id` (cascade), `direction` (`discount` | `charge`), `category` (`senior` | `pwd` | `privilege` | `promo` | `other`), `note` text nullable, `amount_centavos` int nullable, `percent_bps` int nullable (`num_nonnulls = 1`; 1–10000 bps; amount 1–99,999,999), `method` (`proportional` | `equal` | `individual` | `manual` | `unallocated`), `revision ≥ 1`, `created_at`, `updated_by` (set null), `updated_at`, `session_idx`.
+  - `adjustment_shares`: `adjustment_id` (cascade), `session_id`, `participant_id` nullable, `bill_to_label` nullable (`num_nonnulls = 1`, same keys as Bill to, `schema.ts:376`), `amount_centavos` nullable (manual only). Rows = the selected people; `*_same_session` trigger on adjustment + participant.
+  - Percent is allowed only with `proportional` / `equal` / `individual` (basis known, D14); CHECK enforces.
+- **API** (host only, new `adjustment.set` action in `permissions.ts` HOST_ONLY, `allowClosed: true`):
+  - `PUT /api/sessions/[id]/adjustments/[adjustmentId]` body `{expectedRevision, direction, category, note, amountCentavos | percentBps, method, shares: [{participantId | billToLabel, amountCentavos?}]}`; `expectedRevision 0` creates. Replaces share rows in the same transaction. zod schema in `validation.ts`; shares bounded by `LIMITS.participantsPerSession`; manual shares must sum to the amount (server-checked, it is pure input).
+  - `DELETE /api/sessions/[id]/adjustments/[adjustmentId]` body `{expectedRevision}`.
+  - Events `adjustment.set`, `adjustment.removed`, both added to `NON_TICKET_EVENTS` (`settlement.ts:15`) with a test like `tests/serving.test.ts:99`.
+  - Idempotency types `adjustment.set:<id>` / `adjustment.remove:<id>`.
+- **Snapshot**: `settlement.adjustments: SnapshotAdjustment[]` (with shares) in `getSnapshot` (`sessions/snapshot.ts:36`) and `EMPTY_SETTLEMENT` (`lib/snapshot.ts:70`).
+- **Math** (`src/lib/adjustments.ts`, pure, called at the end of `buildKkb`):
+  - Order: food → service charge on original food (unchanged) → adjustments. Each card gains `adjustments: {id, label, centavos}[]` (signed: discount negative) and its `totalCentavos` becomes food + service + adjustments.
+  - Gate: an adjustment applies only when the table has no unpriced, unbilled or pending lines (the service charge's blockers, extracted into one shared `billBlockers()` so both use it). While blocked it shows "Waiting for prices" and changes no share. When the service charge is unset or ₱0, totals are food + adjustments.
+  - Amount: fixed, or `round(percent × basis)` where basis = the selected people's food (D14), half-up on centavos.
+  - Shares: proportional = `allocate(amount, selected food)`; equal = `allocate(amount, equal weights)`; individual = all to one; manual = stored amounts; unallocated = none (table-level only).
+  - Over-limit (D15) and zero-food beneficiaries flagged per adjustment; never clamped silently.
+  - Kkb gains `adjustedTotal` (= `saloTotal` + all adjustments incl. unallocated) and `unresolved` (any adjustment unallocated, waiting or flagged).
+- **Reconcile**: `reconcile` compares the receipt with `adjustedTotal` when adjustments exist, else `saloTotal` (unchanged behaviour). The receipt itself is never changed. This is the double-discount guard: a receipt that already includes the discount matches the adjusted total.
+- **UI** (new files; `workspace.tsx` is 787/800 lines):
+  - `adjustments-block.tsx`: "Discounts and extras" block in the KKB tab between Service charge and Receipt check (M1). Host: rows with Edit + "Add discount or charge". Guests: same rows, read-only. Empty + guest: hidden.
+  - `adjustment-sheet.tsx`: Drawer form (M3) with Save / Remove, conflict state as `AmountEditor` (`amount-editor.tsx:56-70`), `useDirectSave` + `useRetryOnReconnect`.
+  - Card footer line per adjustment (M4); "Total with service charge" becomes "Total" when the card has an adjustment.
+  - `ReceiptCheckBlock` rows (M2).
+  - `myShareLabel`: "so far" while `unresolved`. `kkbText`: adjustment terms per person and an "Not assigned" line.
+- **D1 build**: `allowClosed: true` on prices, line price, correction price, Bill to (`entries/[id]/settlement`), service charge, receipt total and adjustment routes; the KKB edit gates and `hostPricing` drop `isOpen` for the host; ended banner copy becomes "This order has ended. The host can still fix prices and the bill until {date}." (date from `expiresAt`; retention is `CLOSED_RETENTION_DAYS`, `env.ts:13`) Ordering, serving and readiness stay refused on closed orders.
+
+Rejected: storing computed shares (stale when a price changes, audit §4); recomputing the service charge on discounted food (changes everyone's service share when one person gets a discount; the receipt's service amount is what the host types).
+
+### Pinned details (plan-critic, verified)
+
+**Math**
+- Adjustments apply after `withCharge` on every charge state. Unset or ₱0 service (`kkb.ts:231-232` return early, totals null): `totalCentavos = food + adjustments` once an adjustment touches the card, `serviceCentavos` stays null; footer shows Food subtotal, adjustment lines, "Total" (no Service row). "Total with service charge" only when a service share exists and the card has no adjustment.
+- Cap (D15) = the person's food + service share when the charge is allocated, else food. Checked per person against the running total in creation order, so two discounts on one person are capped together; editing an earlier one can flag a later one.
+- Percent: `bps × basis / 10000` in BigInt, half-up to the centavo; basis = sum of the selected people's food. Proportional / equal then split the rounded amount with `allocate`, so a share isn't exactly p% of that person's food; row text "10% of selected food" (individual: "20% of Lola's food").
+- Zero weight: proportional where every selected person has ₱0 food is flagged "has no food" before `allocate` (which returns zeros, `kkb.ts:264`). A ticked ₱0-food person on any method is flagged.
+- `adjustedTotal` = `saloTotal` + every applied or flagged adjustment (flagged per D15) + unallocated; waiting adjustments are not counted (chip already "incomplete"). `unresolved` = any unallocated, waiting or flagged → dock and Copy summary "so far"; `myShareLabel`'s `totalCentavos != null` branch (`kkb.ts:358`) adds "so far" when `unresolved`.
+- Waiting gate applies to every adjustment, fixed ₱ individual included: deliberate, same rule as the service charge.
+- Typed-name beneficiaries: `bill_to_label` stored tidied; matched to cards with `normalizeText` (`kkb.ts:133`), never `toLowerCase` (the `payers` list's `n:${title.toLowerCase()}` key, `kkb-view.tsx:49`, is fixed to match). On claim approval (`people.ts:151`) shares with that label become `participant_id` in the same transaction; until then a label with no card is flagged "has no food".
+
+**Storage / API**
+- `LIMITS.adjustmentsPerSession = 20` (new, `validation.ts:4-19`); 21st create → 400.
+- `adjustment_shares.participant_id` FK without cascade (participants are soft-removed); a removed person's share stays and is flagged.
+- Audit §4's nullable `receipt_id` is left to slice 4 (0015). 0013 is additive; rollback = drop both tables.
+- DELETE of a missing id → 404 `ADJUSTMENT_NOT_FOUND`; stale `expectedRevision` → 409; PUT `expectedRevision 0` on an existing id → 409; an id from another session → 404.
+- After End, `setEntrySettlement` refuses a non-host price edit with 403 (guests can price their own lines while open, `settlement.ts:35`).
+- `price.defaultSet` notifications (`settlement.ts:126`) keep firing after End, unchanged.
+- Cancelled orders are also `CLOSED` (`workspace.tsx:82`): billing routes with `allowClosed` require at least one confirmed round, else 409; cancelled banner unchanged.
+
+**D1 siblings** (same copy, date from `expiresAt`)
+- `workspace.tsx:566` banner uses `{date}`. `order-options-sheet.tsx:89,179` and `guide-steps.ts:100` are shown before End (no deletion date yet), so they keep "for 7 days" / "for a week" and add "The host can still fix prices and the bill." (built 2026-11-23). `guide-scenes.tsx:147` sample card and `privacy/page.tsx:74` unchanged.
+- Host entry after End: KKB StatusStrip and dock "Enter prices · n left" (`hostPricing` drops `sessionOpen`, `workspace.tsx:143`); `kkb-view.tsx:118,165` gates drop `isOpen` for the host. `needsName` (`:114`) unchanged. What's next stays open-only.
+- New refusal tests: guest price after End 403; billing on a cancelled order 409.
+
+**Copy**
+- Row title: `{category} {discount|charge}` + ` for {names}` / ` for everyone`; note is the second line. Other with a note: the note is the title ("Corkage charge for everyone"); Other without note: "Other charge". Card line uses the same title minus " for {me}" (M4: "Senior citizen discount").
+- `kkbText` per person: `Lola  ₱920.00 + ₱92.00 service − ₱184.00 senior citizen discount = ₱828.00`; final "Total ₱X" = `adjustedTotal`; "Total not final" list (`kkb.ts:342-347`) gains "an adjustment isn't assigned". No adjustments → output byte-identical to today (`e2e/kkb.spec.ts:77`, `e2e/receipt-check.spec.ts:59-62`, `.shots/before/kkb-export.txt`).
+- Credits: hint under category Other: "Credit? Choose Discount, Other."
+- Remove: hidden on a new adjustment; inline "Remove this? [Yes, remove] [Keep]" (no undo).
+
+### Reuse
+- `allocate` (`kkb.ts:261`) for proportional and equal; service-charge blockers extracted, not copied.
+- Route + mutation pattern from `service-charge` / `setEntrySettlement` (`settlement.ts:47-60,138-144`); trigger pattern from `0007_settlement.sql`.
+- `Drawer`, `Button`, `useDirectSave`, `useRetryOnReconnect`, `parsePeso` / `formatPeso`, conflict copy from `AmountEditor`, payer list `payers` (`kkb-view.tsx:47-53`) for "Who gets it" (filtered to people with food).
+- `PricesSheet` (`prices-sheet.tsx`) as the drawer layout template.
+
+### Not doing
+- Statutory senior/PWD math (VAT exemption etc.): the host types the receipt's amount or a %.
+- Who actually paid the restaurant (slice 5, F07); multiple receipts (slice 4).
+- Extending retention for post-close edits (stays 7 days after End).
+- Notifications for adjustments.
+- Adjustments on Items text / PNG, waiter ticket, invite (stay price-free).
+- Property-based tests (slice 9); slice 2 adds targeted sum-conservation unit tests.
+
+### States
+
+| State | After |
+|---|---|
+| No adjustments | Block shows only "Add discount or charge" (host); hidden for guests; receipt check unchanged (4 rows) |
+| One allocated discount | Block row; affected cards show the line and new Total; receipt check 6 rows: Food, Service charge, Salo total, Discounts and extras, Adjusted total, Receipt total + chip |
+| Extra charge | Same, "+₱" and "Corkage" note |
+| Percent, basis known | Row shows "20% of Lola's food · ₱184.00" |
+| Waiting (unpriced / unbilled / pending) | Row "Waiting for prices"; no card changes; chip uses existing incomplete copy |
+| Decide later (E) | Row "Not assigned yet"; adjusted total includes it; cards unchanged; dock and Copy summary "so far" |
+| Over the limit (D15) | Row flagged with the reason; behaviour per D15 |
+| Manual shares don't add up | Save disabled, "₱20.00 left to assign" in the sheet |
+| Selected person later removed / has no food | Flagged like over-limit ("Ana has no food on the bill") |
+| Sheet: saving / saved / failed offline / conflict | As `AmountEditor`: Saving… / closes on save / "Not saved. {message}" + Try again / "Changed just now…" + Use theirs / Keep mine |
+| Ended order, host | KKB fully editable for billing (prices, Bill to, service, receipt, adjustments); banner copy changed |
+| Ended order, guest | Read-only as today, sees adjustments |
+| Guest, open order | Read-only rows and card lines |
+| Widths | 320, 360, 375, 390, 430, 768, 1280; light and dark; sheet at 320 with keyboard |
+
+### Decisions
+
+Owner answers 2026-11-23: D13–D16 = recommended option.
+
+- **D13 [decided: (a) own block + drawer] Where adjustments are entered.** (a) "Discounts and extras" block in the KKB tab between Service charge and Receipt check, editing in a drawer (M1 + M3); (b) rows inside the Receipt check block itself. Recommend (a): the receipt block is a comparison everyone reads (`receipt-check-block.tsx:70-83`); a separate block keeps it five clean rows (S2.4) and follows the Service charge block pattern (`service-charge-block.tsx`).
+- **D14 [decided: (a) selected people's food] Percentage basis.** (a) % of the selected people's food subtotal (service excluded); (b) % of the whole table's food + service. Recommend (a): a senior/PWD discount covers that person's consumption, a privilege card selects the whole table, and food is the unit `allocate` already weights by.
+- **D15 [decided: (a) flag, keep in adjusted total] Share bigger than a person's total.** (a) flag it; it changes no card until fixed but still counts in the adjusted total (the receipt already includes it), shares read "so far"; (b) flag it and leave it out of the adjusted total too (chip then reads "less on the receipt"); (c) cap at the person's total and move the rest to "Not assigned". Recommend (a): brief "without explicit handling" and "Never silently force a discrepancy to zero"; (c) moves money silently ("No hidden discount redistribution").
+- **D16 [decided: (a) category visible to all] Category visible to the whole table.** (a) everyone sees "Senior citizen discount for Lola" (the snapshot is shared; brief "Participants can see the adjustments affecting their share"); (b) guests see "Discount for Lola" without the category. Recommend (a) with the sheet hint "Everyone at the table sees this"; (b) needs a per-viewer snapshot (audit §1, `sessions/snapshot.ts:59-95`).
+
+### Assumptions
+- Mobile scope: responsive + native feel (D6 carried). New inputs `text-base`, `inputMode="decimal"`.
+- Service charge stays allocated on original food; adjustments apply after it.
+- Credits = discount with category Other and a note.
+- Equal / proportional pick from people with food (active participants + typed names, `kkb-view.tsx:47-53`); groups and the table aren't beneficiaries.
+- Remainders: `allocate`'s ties by key; percent rounds half-up to the centavo.
+- Adjustments ordered by creation time.
+- D1 scope covers prices (D1's wording: "prices, service charge, receipt, adjustments, payments") and Bill to (not named in D1, but an unbilled shared dish blocks the service charge and every adjustment, `kkb.ts:237`, and the host couldn't clear it after End); tests asserting `SESSION_CLOSED` on those routes flip (`tests/settlement.test.ts:149-151`, `receipt-total.test.ts:83-86`, `contract-receipt-total.test.ts:504-516` C03/C04, `contract-table-prices.test.ts:407-413` T24) and their contract docs update.
+
+### Done when
+- `timeout 900 pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm e2e` pass (Postgres via `pnpm db:up`).
+- Unit (`tests/adjustments.test.ts`): each method's shares sum to the amount; percent rounding; over-limit flag; waiting gate; unallocated keeps cards unchanged; switching method replaces (one adjustment); `reconcile` uses adjusted total; `kkbText` and `myShareLabel` "so far".
+- Contract (`tests/contract-adjustments.test.ts` + `docs/contracts/adjustments.md`): create, edit, conflict 409, delete, guest 403, closed order allowed, cross-session participant rejected by trigger, manual sum mismatch 400, idempotent replay, `NON_TICKET_EVENTS` keeps Confirm fresh.
+- E2E (`e2e/adjustments.spec.ts`): host adds a senior discount for one guest, guest's card and dock update live; receipt that includes the discount matches; Decide later shows "so far"; host edits after End; axe light/dark on the sheet. Existing `receipt-check.spec.ts` / `kkb.spec.ts` stay green (no-adjustment output unchanged).
+- Manual: shots of every state above.
+
+### Skills
+- `impeccable` + `.impeccable/surfaces/src-app.md`: Operate surface, ticket world.
+- `database-migrations`: 0013 + triggers (hand plpgsql after `--> statement-breakpoint`, `pnpm db:generate`).
+- `backend-patterns`: route handlers; read `node_modules/next/dist/docs/` per AGENTS.md.
+- `frontend-a11y` / `accessibility`: radio groups, labelled amount fields, live save status.
+- `mobile-native`: decimal keypad, drawer above keyboard.
+
+### You need to do
+- [ ] After merge, the first app start runs migration 0013 (watch logs, HANDOFF line 51).
+
+### Mockups (slice 2, text sketch)
+
+M1 KKB tab, "Discounts and extras" block (host, 375):
+```
+┌ Discounts and extras ─────────────────────────┐
+│ Senior citizen discount for Lola   −₱184.00   │
+│   20% of her food                    [Edit]   │
+│ Promotion for everyone             −₱150.00   │
+│   split by what each ordered         [Edit]   │
+│ Corkage                            +₱200.00   │
+│   ⚠ Not assigned yet                 [Edit]   │
+│ [ + Add discount or charge ]                  │
+└───────────────────────────────────────────────┘
+```
+M1 empty, host (owner-approved after build): hint "Senior or PWD discount, a promo, or a charge the receipt shows." above the Add button.
+M1 guest: same rows without [Edit] and the add button.
+M1 waiting: `│ Promotion for everyone  −10%  ⚠ Waiting for prices │`
+M1 over limit (D15a): `│ ⚠ ₱500.00 is more than Ana's ₱320.00. Not on her share yet. │`
+
+M2 Receipt check with adjustments:
+```
+│ Food in Salo                     ₱2,340.00 │
+│ Service charge                     ₱234.00 │
+│ Salo total                       ₱2,574.00 │
+│ Discounts and extras              −₱134.00 │
+│ Adjusted total                   ₱2,440.00 │
+│ Receipt total               [ ₱2,440.00 ]  │
+│ ✓ Matches the receipt.                     │
+```
+
+M3 Adjustment sheet (drawer, 375):
+```
+┌ Add discount or charge ──────────────────── ✕ ┐
+│ ( • Discount )( Extra charge )                 │
+│ Reason  [ Senior citizen  ▾ ]                  │
+│ Note    [ ____________ ]  optional             │
+│         Everyone at the table sees this.       │
+│         Don't type ID numbers.                 │
+│ Amount  ( • ₱ [ 184.00 ] )  ( % [ __ ] )       │
+│ Who it applies to                              │
+│ ( • ) One person        [ Lola ▾ ]             │
+│ (   ) Split by what each ordered               │
+│ (   ) Split equally                            │
+│ (   ) Exact amounts                            │
+│ (   ) Decide later                             │
+│ ── Effect ──                                   │
+│ Lola   ₱1,012.00 → ₱828.00                     │
+│ [ Save ]                          [ Remove ]   │
+└────────────────────────────────────────────────┘
+```
+M3 split / equal: people checklist (all with food ticked by default) under the chosen option; Effect lists each person.
+M3 exact amounts:
+```
+│ Lola  ₱[ 100.00 ]   Ana  ₱[  34.00 ]   │
+│ ₱20.00 left to assign    [ Save ] (disabled) │
+```
+
+M4 Card footer (Lola):
+```
+│ Food subtotal                    ₱920.00 │
+│ Service charge                    ₱92.00 │
+│ Senior citizen discount         −₱184.00 │
+│ Total                            ₱828.00 │
+```
+
+M3 % mode: `Amount ( ₱ ) ( • % [ 10 ] )  = ₱234.00 of selected food ₱2,340.00`; Effect lists each person's before → after.
+M3 waiting: Effect reads "Waiting for prices. Shares show once every dish has a price." Save still allowed.
+M3 edit: title "Edit discount" / "Edit charge"; [Remove] shown; tapping it → `Remove this? [ Yes, remove ] [ Keep ]`.
+M3 Other: under Reason, "Credit? Choose Discount, Other."
+
+M6 Ended banner (host and guest): `This order has ended. Everyone can still look at the tickets until Nov 30. The host can still fix prices and the bill.`
+
+M5 Dock while unresolved: `[ My share so far · ₱828 ]` / short `[ Share so far ₱828 ]`.
+
+## Slice 3: co-hosts and safe serving (F04, F12 lock fix)
+
+Status: landed (PR #53)
+
+Research brief (2026-11-23, researcher) cited below; baseline in `.shots/before/` (slice 2 shots moved to `.shots/v1-4-slice2/`). D2 (`participants.cohost_at`) and D3 (count precondition) are already decided. Pre-existing, seen in baseline: at 320 long guest names wrap to 3–4 lines and squeeze the Ready chip (chip text wraps) in `people-host-long-names-320`; the "Kain na!" toast covers a row above the dock there. Not this slice's scope unless D17's control makes it worse.
+
+### Ask ledger (slice 3)
+
+Brief F04 quoted from `salo-v1-4-brief.md:382-440`, F12 scenarios from `:762-800`.
+
+| # | Owner's words | Planned change | Status |
+|---|---|---|---|
+| S3.1 | "Introduce an optional **Co-host** role. Co-hosts assist with food tracking but do not receive complete administrative privileges." | `participants.cohost_at`; `can()` grants a co-host `serving.update` only | done |
+| S3.2 | Permission table: co-host "Update serving quantities: Yes", "Undo serving updates: Yes"; "Confirm rounds / Correct confirmed orders / Manage participants / Manage billing adjustments / Assign co-hosts / End session: No" | Co-host gets the stepper and All served; "Change…" (corrections, `round.open`) stays host-only; every other host check unchanged | done |
+| S3.3 | "The host can: Promote guests to co-hosts. Revoke co-host permissions. View which participants are co-hosts." | People tab card: "· co-host" mark (everyone sees it), host control "Make co-host" / "Stop co-host" (D17) | done |
+| S3.4 | "Co-hosts can: Mark portions as served. Update partial-serving quantities. Undo incorrect serving updates. View serving progress." | Same Served section as the host (stepper ±, All served, done rows reopen); undo = stepping down, as today | done |
+| S3.5 | "Implement explicit capability checks such as `serving.update`." / "Enforce permissions in server-side mutations." | `can(actor, "serving.update")` with a `cohost` actor field; server is the authority | done |
+| S3.6 | "Revalidate capabilities on every write." / "Ensure revoked co-hosts cannot continue updating food." / F12 "Host revokes a co-host while an update is pending." | `runMutation` re-reads role + `cohost_at` under the session lock and hands the fresh actor to `apply` (all mutations, not only serving) | done |
+| S3.7 | "Handle simultaneous serving changes atomically." / F12 "Two co-hosts mark the same dish served simultaneously." | D3: request carries `expectedServed`; mismatch applies nothing and returns the current count | done |
+| S3.8 | "Clamp served quantities to valid bounds." | Kept (`serving.ts:36`) | done |
+| S3.9 | "Preserve idempotency on retries." | Unchanged replay path (`mutations.ts:59-75` runs before `apply`), retry keeps key and its original seen count | done |
+| S3.10 | "Record the actor responsible for serving updates when practical." | Already: `served_counts.updated_by` + `mutation_records.actor_id`; add `actorId` to the `serving.updated` event payload. No UI | done |
+| S3.12 | D19 (owner): hint for the host | M4 line in the host's Served section | done |
+| S3.11 | F12 potential events "Co-host assigned. Co-host revoked." / Phase 3 "Realtime status propagation." | Events `participant.cohostSet` / `participant.cohostRevoked` (refetch makes it live); notification to that person per D18 | done |
+
+### Today
+
+- `can()` is a flat host-only set; `serving.update` is in `HOST_ONLY` (`src/lib/permissions.ts:31-36`). Actor resolved before the transaction (`auth/actor.ts:13-46`); routes close over it (`serving/route.ts:11,16`).
+- `runMutation` locks the session and re-checks only `removedAt` (`mutations.ts:51-57`), so a write queued behind a role change lands with the old role (audit F12 gap).
+- Serving: `updateServed` checks `can` (`serving.ts:15`), clamps `before = min(stored, expected)` and applies the delta (`:35-36`); `served_counts.revision` written, never checked (`:37`). Two taps for the same plate both land.
+- Client: `src/hooks/use-served-edits.ts` coalesces taps (300 ms, `:7`), POSTs `{roundId, lineKey, delta}` with a key (`:56-62`), retries same key on Try again / `online` (`:89-93`). Edits are in memory only.
+- UI: `ServedSection canEdit={isHost && sessionOpen}` (`workspace.tsx:233`) gates stepper, All served, done-row reopen and "Change…" together (`served-section.tsx:79-151`).
+- People tab card heading shows "(you)" and "· host" (`people-view.tsx:138-143`); host's right cluster has the Ready pill, item count and a `UserX` icon opening `RemoveGuestSheet` (`:144-162`).
+- Snapshot participants are `{id, displayName, role}`, `me` is `{participantId, role, displayName}` (`sessions/snapshot.ts:73-76`, `lib/snapshot.ts:16,21`). Any SSE event refetches the snapshot (`use-session.ts:292-293`).
+- Latest migration `0013_adjustments`.
+
+### Approach
+
+- **Migration 0014** (`drizzle/0014_cohosts.sql`): `participants.cohost_at timestamptz NULL`; CHECK `cohost_at IS NULL OR (role = 'GUEST' AND removed_at IS NULL)`. Additive; rollback drops the column. `docs/data-model.md` line. (`notifications.type` is plain text, `schema.ts:462`: no CHECK to change.)
+- **Permissions**: `Actor.cohost?: boolean` (optional so test literals compile); `can(actor: Pick<Actor,"role"|"cohost">)` returns true for `serving.update` when `actor.cohost`. New action `cohost.set` in `HOST_ONLY` (brief §6's `participant.cohost.assign/revoke`, adapted to one action). `resolveActor` selects `cohostAt`. Client: `canServe = can(snapshot.me, "serving.update") && sessionOpen`, so the capability map stays the single source; `canEditEntry` (`workspace.tsx:310`) is the only other client caller and needs nothing.
+- **Lock re-check (F12)**: per D20. `runMutation` selects `{removedAt, role, cohostAt}` under the lock and builds `fresh = {...actor, role, cohost}`. Replay still runs first (a replay is an earlier legitimate write).
+- **Assign / revoke**: `PUT /api/sessions/[id]/participants/[pid]/cohost` body `{cohost: boolean}`, modelled on `participants/[pid]/remove/route.ts`; host only, not on closed orders. Target loaded `FOR UPDATE` like `loadGuest` (`people.ts:182-192`) but: host → 409 `NOT_A_GUEST`, removed → 409 `ALREADY_REMOVED` (else the CHECK would 500), unknown → 404. Same value → 200 no-op, same event type, no notification. Key type `participant.cohost:<pid>`. Events `participant.cohostSet` / `participant.cohostRevoked` (payload ids only), both in `NON_TICKET_EVENTS` (`settlement.ts:15`) so the host's pending Confirm stays fresh. `removeParticipant` clears `cohost_at` in the same `UPDATE` as `removed_at` (`people.ts:~208`, required by the CHECK); `restoreParticipant` (`people.ts:226`) leaves it null, so Undo gives a plain guest.
+- **Notifications (D18)**: `NotificationType` (`lib/notifications.ts:3`) gains `participant.cohostSet` / `participant.cohostRevoked`; cases in the exhaustive `notificationText` (`:35-58`); `notificationTarget` cohostSet → `"served"`, cohostRevoked → `"order"`. Recipients `[pid]`; subject carries the host's display name; dedup key `cohost:<pid>:<session.revision+1>` (a re-assign after a revoke must notify again; `notify` is `onConflictDoNothing`). Rows in `docs/contracts/notifications.md` + `tests/contract-notifications.test.ts`.
+- **Client assign / revoke**: per D21. Queued path = new `Op` kind `setCohost {participantId, name, cohost}` in `use-session.ts` (union `:48`, `OP_KINDS` `:87`, `request()` `:137` PUT, `describeOp()` `:183`: "Make {name} a co-host" / "Stop {name}'s co-host role"). Control component `cohost-toggle.tsx` (button + its busy/error text); `workspace.tsx` (794/800 lines) gets only prop plumbing.
+- **Serving precondition (D3)**: `servingSchema` gains required `expectedServed` (int ≥ 0). `updateServed` checks `can(fresh, "serving.update")` and compares `expectedServed` with the clamped `before`. Result shape `{served, revision, applied}` (`revision` = the served row's, 0 if none; `applied: true` also on a clamped no-op, V13). Mismatch → `{served: before, revision, applied: false}`; `served_counts` and notifications untouched; `runMutation` still writes session revision +1, one `serving.updated` event and the mutation record (so a replay returns the same `applied: false`). This is not a refusal; the contract doc says so. Event payload gains `actorId`. Forbidden copy: "Only the host and co-hosts can mark food as served."
+- **Client hook** (`src/hooks/use-served-edits.ts`): `bump` gains a `seen` argument; `ServedSection` passes `row.line.shown + (edit?.sending ?? 0)` (server count the row stood on, counting a batch in flight). The hook stores `seen` on the edit when its first unsent tap lands (`unsent` 0 → non-zero) and sends it as `expectedServed`; later taps in the same 300 ms batch don't change it; a retry keeps key and `seen`; the next batch takes `seen` from its own first tap, never from a response. Response at `data.result.applied` (`ok()` wraps `{result, revision, replayed}`, `http.ts:15`). On `applied: false`: await `refresh()` as on success, then clear `sending`, `unsent`, key; no `failed`, no flash of the stale count. Hook signature `useServedEdits(sessionId, refresh, revision, canServe)`: when `canServe` turns false, or a serving POST returns 403, drop all edits and timers (no stuck "Couldn't save this" row).
+- **UI**:
+  - `workspace.tsx`: `canServe` to `ServedSection` `canEdit`; new prop `canChange = isHost && sessionOpen` gates both `changeButton` call sites (`served-section.tsx:~75,~140`).
+  - People card (M1): "· co-host" after the name for everyone; host control per D17, gated like `onRemoveGuest` (`people-view.tsx:152`: participant bucket, GUEST, not removed).
+  - Co-host: D18 notification + M3 note at the top of their Served section (shown while `me.cohost` and the section renders). Host: M4 quiet line at the bottom of the Served section when the order is open, no co-host and ≥1 active guest; not dismissible; its link calls `onOpenPeople` → `setView("people")`.
+  - Snapshot: `participants[].cohost`, `me.cohost` (boolean; `snapshot.ts:~23` selects `cohostAt`, `me.cohost` from that row, not the actor); `everyone()` (`lib/snapshot.ts:119`) sets `cohost:false` for removed people; `PersonBucket.cohost`. Literals in `tests/overlay.test.ts:24`, `tests/guide.test.ts:7,10` updated.
+- **Copy siblings**: `docs/ux-specification.md:59,78` ("host's steppers" → host and co-hosts); `docs/api.md:46` role column "host or co-host" + new PUT row, `docs/realtime.md:12`, `docs/security.md` role line, `docs/contracts/serving.md` write rule; code comments `served-section.tsx:14,28`, `src/hooks/use-served-edits.ts:34`. `invite-sheet.tsx:122` and `workspace.tsx:217,656` stay true, unchanged.
+
+Rejected: a `COHOST` role value (D2); 409 on precondition mismatch (rolls back cleanly but the client needs a second round trip to learn the count; D3 says the stepper updates from the reply).
+
+### Reuse
+- `RemoveGuestSheet` trigger styling and `onRemoveGuest` gating (`workspace.tsx:687`) for the co-host control; `remove/route.ts` for the route shape.
+- Existing notification center (`notify`, `notifications-drawer.tsx`) for D18; SSE refetch for live updates.
+- `trackerLines` `shown` (`serving.ts:100`) as the seen count; `tests/helpers/session.ts` actor builders extended with a co-host helper.
+
+### Not doing
+- Any co-host capability beyond serving (confirm, corrections, people, billing, End stay host-only).
+- Host transfer (slice 6), co-host cap (bounded by participant limit), persisting serving edits across reload (slice 7 F12), a serving history / "marked by" UI.
+- Analytics events for co-hosts (brief asks none).
+- Guide copy changes (`guide-steps.ts:73` stays; the People control and D18/D19 are the prompts).
+
+### States
+
+| State | After |
+|---|---|
+| Host, People tab, guest | "· co-host" absent; control per D17 "Make co-host" |
+| Host, People tab, co-host | "Jun · co-host"; control "Stop co-host" |
+| Guest / co-host viewing People | "· co-host" mark, no controls |
+| Order ended | Marks stay; no controls (assign/revoke refused on closed orders) |
+| Co-host, Served section, open | M3 note on top; stepper, All served, done rows reopen; no "Change…" |
+| Co-host, order ended / no confirmed round | Read-only / section hidden, as guests today |
+| Plain guest | Unchanged read-only |
+| Two co-hosts tap the same plate | One lands; the other's row snaps to the new count, no error |
+| Revoked while a tap is pending | Write refused under the lock; controls disappear on refetch; no stuck "Couldn't save" row; notification per D18 |
+| Removed co-host, then Undo | Back as plain guest |
+| Assign/revoke saving / failed | Button "Saving…" (queued or waiting, D21) and keeps its place; a refused write shows the error text under the button and re-enables it; tapping again retries (new key) |
+| Host Served section, no co-host, guests present | M4 line "Busy table? Make a guest a co-host so they can help. →"; hidden once anyone is co-host, with no guests, or after End |
+| Tab opened before deploy (no `expectedServed`) | 422, failed row; accepted for this release |
+| Long names, 320 | Heading wraps; control 44 px on its own line under the heading (D17 a) |
+| Widths | 320, 360, 375, 390, 430, 768, 1280; light and dark |
+
+### Decisions
+
+Owner answers 2026-11-23: D17 (a), D18 (b) notification + M3 note, D19 (b) quiet hint line, D20 (a), D21 (a). M3 confirmed as sketched.
+
+- **D17 [decided: (a) own-line button] Where the host makes a co-host.** (a) Text button on its own line under the card heading, host only: "Make co-host" / "Stop co-host" (M1a); (b) replace the `UserX` icon with one "Manage Jun" sheet holding Make co-host + Remove (M1b); (c) a "Co-hosts" list with switches in the Order options sheet (M1c). Recommend (a): the right cluster is already full at 320 (pill + items + remove, `people-view.tsx:144-162`), a labelled button is clearer than a new icon, and it sits beside the "· co-host" mark the brief asks the host to see; (b) adds a tap to Remove; (c) hides it from where people are listed.
+- **D18 [decided: (b) notification + M3 note] How a new co-host finds out.** (a) Notification-center item to that person only: "{Host} made you a co-host. You can mark food as served." / "{Host} stopped your co-host role." (no M3 note); (b) (a) + M3 permanent note above their Served section; (c) M3 note only. Recommend (a): brief §7 lists "Co-host assigned / revoked" events, the notification is the first-use prompt, and a permanent note pushes steppers down at 320 (plan-critic).
+- **D19 [decided: (b) quiet non-dismissible line] Hint for the host in the Served section** (M4). (a) none, the People control is the entry point; (b) one quiet, non-dismissible line when no co-host and ≥1 guest, links to People. Recommend (a): no ask justifies it and it would show on every visit (plan-critic); the memory rule is met by the People control where people are managed.
+- **D20 [decided: (a) serving uses fresh, other writes ROLE_CHANGED guard] Scope of the lock re-check.** (a) `runMutation` passes `fresh` as an optional third `apply` argument; only `updateServed` uses it now; every other write throws 403 `ROLE_CHANGED` when `fresh.role !== actor.role` (covers slice 6's transfer in a few lines); (b) sweep all ~25 `apply` callers to use `fresh`. Recommend (a): same guarantee ("Revalidate capabilities on every write"), no behaviour change elsewhere this slice, ~25 fewer route edits.
+- **D21 [decided: (a) queued like remove] Offline co-host change.** (a) Queued like remove (`use-session.ts:87`), "Saving…" until reconnect, same key retries; (b) direct call that fails fast with "Not saved. Try again". Recommend (a): consistent with remove and ready; an offline host can't reach the server either way, and the server enforces the revoke the moment it lands.
+
+### Assumptions
+- Mobile scope: responsive + native feel (D6 carried); controls 44 px, no hover-only behaviour.
+- Precondition mismatch is a 200 `applied: false`, not 409 (Approach).
+- A tab opened before deploy sends no `expectedServed` and gets 422 (failed row) until reload; accepted.
+- `expectedServed` is required; the only clients are ours and `scripts/contract/serving-http.mjs` (updated).
+- Removing a co-host clears the role; Undo restores a plain guest.
+- No limit on co-hosts.
+- Co-hosts count as guests for readiness ("Ready / Still choosing", `people.ts:33`).
+- Assign/revoke refused on ended orders (no `allowClosed`).
+
+### Done when
+- `timeout 900 pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm e2e` pass (Postgres via `pnpm db:up`).
+- Unit: `tests/permissions.test.ts` co-host matrix (only `serving.update` true); `served-edits` helper: seen count, `applied:false` adoption, drop on revoke.
+- Contract (`tests/contract-serving.test.ts` + `docs/contracts/serving.md`): K01-K05 / V02-V04 / V13 / I02-I03 rewritten for the precondition; new rows: co-host 200, revoked co-host 403, demotion between `requireActor` and lock refused, mismatch returns current count with `served_counts` and notifications untouched (revision +1 and one event, as pinned), retry of a stale batch applies nothing, actorId in payload. New `tests/contract-cohosts.test.ts` + `docs/contracts/cohosts.md`: assign, revoke, idempotent same value, guest 403, target host 409 `NOT_A_GUEST`, removed 409 `ALREADY_REMOVED`, unknown 404, re-assign after revoke notifies again, closed 409, removal clears, events keep Confirm fresh.
+- E2E (`e2e/cohosts.spec.ts`): host makes Jun co-host, Jun sees the note and steppers live, marks one served, host sees it; Liza (guest) still read-only; host revokes, Jun's controls vanish; two co-host tabs tap the same plate, count ends at one; axe light/dark on People and Served. `food-tracker.spec.ts` stays green.
+- Manual: shots of every state above.
+
+### Skills
+- `impeccable` + `.impeccable/surfaces/src-app.md`: Operate surface.
+- `database-migrations`: 0014 (`pnpm db:generate`).
+- `backend-patterns` + `contract-first`: route, contract docs; read `node_modules/next/dist/docs/` per AGENTS.md.
+- `frontend-a11y` / `accessibility`: button names ("Make Jun a co-host"), live status.
+- `mobile-native`: 44 px targets.
+
+### You need to do
+- [ ] After merge, the first app start runs migration 0014 (watch logs).
+
+### Mockups (slice 3, text sketch)
+
+M1a People card, host, 375 (D17 a):
+```
+┌──────────────────────────────────────────────┐
+│ Jun · co-host        [✓ Ready] 3 items  (⊗)  │
+│ [ Stop co-host ]                             │
+│ Sisig ×2 · Halo-halo                         │
+└──────────────────────────────────────────────┘
+┌──────────────────────────────────────────────┐
+│ Liza          [◷ Still choosing] 2 items (⊗) │
+│ [ Make co-host ]                             │
+│ Chicken Inasal ×2                            │
+└──────────────────────────────────────────────┘
+```
+M1b (D17 b): right cluster `[✓ Ready] 3 items (⋯)`; ⋯ opens "Jun" sheet: `[Make co-host]` `[Remove from the order]`.
+M1c (D17 c): Order options sheet section "Co-hosts · can mark food served" with a switch per guest.
+
+M2 People card, guest or co-host viewing: `Jun · co-host   [✓ Ready] 3 items` (no buttons).
+
+M3 Co-host's Served section, 375:
+```
+Served
+You're a co-host: you can mark food as served.
+Sisig                              [ − 1 + ]
+1 of 2 served · 1 waiting
+[ ✓ All served ]
+```
+(no "Change…")
+
+M4 Host's Served section footer (D19 a): `Busy table? Make a guest a co-host so they can help. →`
+
+D18 notifications: "Ana made you a co-host. You can mark food as served." / "Ana stopped your co-host role."
+
+## Slice 4: multiple receipts and shared-dish splits (F05, F06)
+
+Status: landed (PR #54)
+
+Research brief (2026-11-24, researcher) cited below; baseline in `.shots/before/` (seed `.shots/before/seed.mjs`, index `README.md`; slice 3 shots moved to `.shots/v1-4-slice3/`). Pre-existing, seen in baseline: on a payer's card the tag "table price · from Whole table" wraps to two lines at 375 (`kkb-shared-billed-375`); at 320 long names make each Bill to chip wrap to 2 lines and "Billed to Maria Concepcion dela Cruz-Villanueva" runs 4 lines (`kkb-long-names-320`); the session header title button is 25 px next to 44 px buttons (geometry finding in every shot). Not this slice's scope unless the new UI makes them worse.
+
+### Ask ledger (slice 4)
+
+Brief F05 and F06 quoted from `salo-v1-4-brief.md:449-530`.
+
+| # | Owner's words | Planned change | Status |
+|---|---|---|---|
+| S4.1 | "Allow one dining session to record multiple restaurant receipts." | Host adds extra receipts beside the existing one, which becomes "Main receipt" once there are two | done |
+| S4.2 | "Each receipt should support: Optional descriptive label. Actual total amount. Associated participants or relevant allocations. Recorded adjustments. Reconciliation status." | Receipt = label (optional, ≤ 40) + typed total + who it covers (D22) + the adjustments on those people (derived, listed) + its own match / more / less chip | done |
+| S4.3 | "Example: Main table receipt, Senior citizen receipt, PWD receipt" | Label hint "e.g. Senior citizen receipt" | done |
+| S4.4 | "The receipts should be created when needed, not before ordering." | "Add another receipt" lives only in the Receipt check block (after a confirmed round, as today); nothing before ordering | done |
+| S4.5 | "Never double-count the same item or payment obligation." | A person can be on one extra receipt only (DB unique + picker disables people already covered); Main = everything not on an extra receipt | done |
+| S4.6 | "Never assume a separate receipt automatically belongs entirely to one participant." | Receipts never change anyone's share; they only compare. A receipt can cover several people | done |
+| S4.7 | "Keep unassigned amounts visible." | Main receipt shows what it carries, incl. "Decide later" adjustments; an extra receipt whose people have nothing on the bill is flagged | done |
+| S4.8 | "Ensure total receipt amounts reconcile with participant obligations." | Per-receipt chip + "All receipts ₱X · Salo ₱Y" summary row when there are two or more | done |
+| S4.9 | "Preserve the standard single-receipt workflow as the default." / "Avoid building a complete billing-group engine…" | No extra receipts → block, labels, chip and Copy summary byte-identical to today; receipts cover people, not lines | done |
+| S4.10 | "Allow the host to allocate a shared item's cost among selected participants." | Bill to gains "Split equally" across picked people (D23) | done |
+| S4.11 | "Initially support: Equal division. Selected participants. Explicit payer assignment. Custom amounts may be implemented if necessary…" | Equal split among selected people; explicit payer = today's one-person Bill to; custom amounts per D24 | done |
+| S4.12 | "Preserve the original source order. Do not change the waiter ticket." | Split stored in settlement only; tickets, Items text/PNG, confirmed snapshots untouched (`lib/snapshot.ts:39-44`) | done |
+| S4.13 | "Separate who submitted the order from who pays." | Origin row stays in its shared section tagged "Split 3 ways: Jun, Liza, Ana"; each payer card shows its share "from Whole table" | done |
+| S4.14 | "Prevent duplicate billing." | One-person Bill to and split are mutually exclusive on the same settlement row (one revision); shares sum to the line subtotal | done |
+| S4.15 | "Recalculate shares when the item's price changes." | Only the set of people is stored; shares derived in `buildKkb` | done |
+| S4.16 | "Handle cancellation and replacement correctly." | Shares follow the effective line (quantity corrections, replacement price); Bill to / split also offered on replacement lines (fixes today's hole, `kkb-view.tsx:78`) | done |
+| S4.17 | "Use deterministic rounding." | `allocate` with equal weights (largest remainder, ties by payer key) | done |
+| S4.18 | "Shared-cost allocation must also be compatible with receipt discounts." / "…does not automatically establish eligibility for a statutory discount." | Split shares count as the payer's food (service weight, proportional / % basis, D15 cap), like Bill to today; discounts still pick people explicitly, never from dish payers | done |
+
+### Today
+
+- **Receipt**: one `sessions.receipt_total_centavos` + `receipt_total_revision` (`schema.ts:57-58`); `PUT /receipt-total` (`receipt-total/route.ts:9-17`, `allowClosed`) → `setReceiptTotal` (`settlement.ts:159-166`); snapshot `settlement.receiptTotal` (`sessions/snapshot.ts:110`, `lib/snapshot.ts:67,91`). `reconcile(kkb, centavos)` compares with `kkb.adjustedTotal` after the incomplete / pending / waiting gates (`kkb.ts:316-324`). `ReceiptCheckBlock` (`receipt-check-block.tsx`, 97 lines): Food in Salo / Service charge / Salo total (`:80-82`), Discounts and extras + Adjusted total when any (`:83-84`), host `AmountEditor` "Receipt total (₱)" + chip (`:87-90`), chip copy `:29-40`. Mounted once at `kkb-view.tsx:166`. `kkbText` never mentions the receipt (contract S08).
+- **Bill to**: per entry, whole line, one payer: `entry_settlements.bill_to_participant_id | bill_to_label` (`schema.ts:366-382`, one-payer CHECK `:381`), `PUT /entries/[id]/settlement` (`allowClosed`, key `entry.settle:<id>`) → `setEntrySettlement` (`settlement.ts:34-74`): host only, shared lines only (422 for personal), person must be active. Body `entrySettlementSchema` (`validation.ts:108-116`).
+- **Math**: `buildKkb` routes a billed shared line twice: counted on the payer card (`billedFrom`), listed uncounted in the shared section (`billedTo`) (`kkb.ts:113-129`). `billBlockers` treats any shared line without `billedTo` as `unbilled`, which blocks the service charge and every adjustment (`kkb.ts:242-251`, used `:134,260`). Service charge and adjustments weight by `pricedCentavos` (`kkb.ts:261-268`, `adjustments.ts:71,82,87`).
+- **Picker**: radio chips "No one yet / Host (you) / Jun / Liza" in the inline `PriceEditor` fieldset "Bill to" (`price-editor.tsx:197-210`), copy "The whole dish goes to one person…" (`:200`); offered when `isHost && line.billable && !line.correctionId && !draft` (`kkb-view.tsx:78`). `billKeyOf` lower-cases labels (`price-editor.tsx:45`) while `payers` uses `normalizeText` (`kkb-view.tsx:51`): preselection can miss for a label that differs only by NFKC/whitespace.
+- **Replacement hole**: a replaced shared line keeps routing by the source entry's Bill to (`kkb.ts:118`), the server accepts Bill to on it, but the UI hides Bill to on replacement lines (`!line.correctionId`), so a shared dish swapped before billing blocks the service charge forever.
+- **Typed names**: claim approval adopts adjustment-share labels (`people.ts:151` → `adoptLabelShares`, `adjustments.ts:99-111`) only once the label has no food left; `labelHasFood` already counts `entry_settlements.bill_to_label` (`adjustments.ts:95`), so Bill to labels never need adopting.
+- `workspace.tsx` is at 800/800 lines; `kkb.ts` 449, `kkb-view.tsx` 415, `price-editor.tsx` 243, `schema.ts` 535. Latest migration `0014_cohosts`.
+
+### Approach
+
+Store only who and what the host typed; derive every share and expected total in pure code, as slices 1–2.
+
+- **Migration 0015** (`drizzle/0015_receipts_splits.sql`, additive; rollback drops the three tables):
+  - `entry_payers`: `entry_id` (FK `order_entries`, cascade), `session_id` (cascade), `participant_id` nullable (FK, no cascade: participants are soft-removed), `bill_to_label` nullable (tidied, ≤ 40), `num_nonnulls = 1`; unique `(entry_id, participant_id)` and `(entry_id, bill_to_label)`; `*_same_session` trigger on entry + participant (pattern `0007_settlement.sql:43-64`). Rows exist only for a split (≥ 2 people).
+  - `receipts`: `id uuid` (client-generated), `session_id` (cascade), `label` nullable (≤ 40), `total_centavos` nullable (0 … `MAX_SERVICE_CHARGE_CENTAVOS`, same cap as the receipt total), `revision ≥ 1`, `created_at`, `updated_by` (set null), `updated_at`, `session_idx`.
+  - `receipt_people`: `receipt_id` (cascade), `session_id`, `participant_id` | `bill_to_label` (`num_nonnulls = 1`); unique `(session_id, participant_id)` and `(session_id, bill_to_label)` so a person sits on one extra receipt at most (S4.5); same-session trigger.
+  - The main receipt stays the existing `sessions.receipt_total_*` (no backfill; R01-R05, V01 and `docs/contracts/receipt-total.md` stay valid). No `adjustments.receipt_id` (audit §4 idea dropped: adjustments reach a receipt through the people they apply to).
+- **Split API**: extend `PUT /entries/[id]/settlement`: `entrySettlementSchema` gains `splitAmong: [{participantId} | {label}]` (2 … `LIMITS.participantsPerSession`, distinct), mutually exclusive with `billTo` (zod refine). Setting `splitAmong` clears `bill_to_*` and replaces `entry_payers`; setting `billTo` (incl. null) deletes `entry_payers`; both bump the one `entry_settlements.revision` (so switching modes can't race). Same checks as Bill to (host, shared line, typed labels tidied). Duplicates by `personKey` (participantId, or `normalizeText` of the label) → 422 "Pick each person once" before insert (else `allocate`'s Map collapses keys and shares stop summing); DB backstop unique on `(entry_id, lower(bill_to_label))`. Newly added people must be active (404 `PERSON_NOT_FOUND`, as `settlement.ts:44`); a person already in the stored set may stay, and the editor lists them ticked "(left)" so the host can untick. Same two rules for receipt people (unique `(session_id, lower(bill_to_label))`). Same event `entry.settled`, same key type.
+- **Receipts API** (host only, existing `receipt.set` action, `allowClosed: true`, `assertBillable`):
+  - `PUT /api/sessions/[id]/receipts/[receiptId]` `{expectedRevision, label, totalCentavos, people: [{participantId}|{label}]}`, `expectedRevision 0` creates; people ≥ 1; replaces `receipt_people` in the transaction; a person already on another receipt → 409 `ALREADY_ON_RECEIPT` (unique violation mapped, never 500); `LIMITS.receiptsPerSession = 10` next to `adjustmentsPerSession` (`validation.ts:21`); 11th → 400 `TOO_MANY_RECEIPTS`. `totalCentavos` nullable: Save works with a blank total.
+  - `DELETE …/receipts/[receiptId]` `{expectedRevision}`; missing → 404 `RECEIPT_NOT_FOUND`; stale → 409.
+  - Events `receipt.set`, `receipt.removed` in `NON_TICKET_EVENTS` with the `tests/serving.test.ts:102` assertion (event names `receipt.set` / `receipt.removed` deliberately match the `receipt.set` action; docs say so). Keys `receipt.set:<id>` / `receipt.remove:<id>`.
+  - Claim approval: `labelHasFood` also counts `entry_payers.bill_to_label` (a typed name that is a split payer is never adopted); `adoptLabelShares` also adopts `receipt_people` labels. If the claimant already sits on an extra receipt (any, incl. the same one), delete the label row instead of updating it (else the unique → 500).
+- **Snapshot**: `settlement.entries[id].splitAmong?: {participantId, label}[]`, optional and omitted when there is no split (keeps `tests/settlement.test.ts:41` `toEqual` and typed fixtures valid); `settlement.receipts: SnapshotReceipt[]` (with people), ordered by `created_at`; `EMPTY_SETTLEMENT` (`lib/snapshot.ts:91`) and the literal at `tests/guide.test.ts:37` gain `receipts: []`.
+- **Split math** (`buildKkb` loop, helper in new `src/lib/splits.ts` so `kkb.ts` stays small): a shared line with `splitAmong` (and no Bill to) pushes one copy per payer with `subtotalCentavos = allocate(subtotal, equal weights by payer key)`, `billedFrom: origin.title`, `splitWays: n`; the origin keeps one listed, uncounted line with `billedTo` = the names. So `pricedCentavos`, service weight, adjustment basis, D15 cap and `foodCentavos` all follow with no further change (shares sum to the subtotal). An **unpriced** split line: payer copies keep `unpricedUnits` and `status: partial` on their own card (each card honestly shows "no price"; `toSection` never counts the `billedTo` origin, `kkb.ts:215-218`), and every bill-wide sum dedupes by `entryId`: `billBlockers` units and pending (`kkb.ts:245,248`), `kkbText` "Not yet settled" (one line under the origin title, `kkb.ts:349-353`) and its reasons. `priceCompleteness` already dedupes (`kkb.ts:292`). Server rejects `splitAmong` < 2 after de-duplication (422); a cancelled line (`quantity ≤ 0`, `kkb.ts:206`) keeps inert rows. A split with a removed person keeps their share on their "(left)" card, as Bill to does today.
+- **Receipt math** (new pure `src/lib/receipts.ts`, `reconcile` untouched): `reconcileReceipts(kkb, mainTotal, receipts)` → per receipt `{id, label, covers: names, expectedCentavos, adjustments: titles, state}` where expected = Σ covered cards' `totalCentavos ?? pricedCentavos` + the signed `shares` of **flagged** adjustments for its people (D15 flagged ones count in `adjustedTotal`, `adjustments.ts:115`, but not on cards; they keep `shares`, `:117`); Main expected = `adjustedTotal` − Σ extras' expected (so "Decide later" adjustments and anyone not covered land on Main). Same gates as `reconcile` (incomplete / pending / waiting) for every receipt; an extra receipt with no total → "Enter the total"; a covered person with no card or ₱0 → flagged "Ana has nothing on the bill". Overall: Σ receipt totals vs `adjustedTotal` when every total is entered.
+- **UI** (new files; `workspace.tsx` untouched: everything rides on the snapshot already passed to `KkbView`):
+  - `ReceiptCheckBlock`: no extra receipts → exactly today's markup and copy, plus a quiet "Add another receipt" button for the host. Unlabelled extras read "Receipt 2", "Receipt 3"… by `created_at`. With extras every chip says "on this receipt" (Main included); single-receipt copy "on the receipt" untouched (`e2e/receipt-check.spec.ts:46,55`). Covers line: names, "Host, Jun and 4 more" past 3 (`names`, `adjustments.ts:51`). Main with no total shows today's "Enter the receipt total…" (`receipt-check-block.tsx:97`). With extras → M1: one card per receipt (Main first), each with Salo's expected amount for it, its total field (Main keeps the existing `AmountEditor` "Receipt total (₱)" path; extras open the sheet), its chip; then the "All receipts" row. Region name "Check against the receipt" kept.
+  - `receipt-sheet.tsx`: drawer (M2) label, who it covers (checklist of people with food; people on another receipt disabled with "on Senior citizen receipt"), total, Save / Remove with inline confirm, conflict and offline states as `AmountEditor` / `AdjustmentSheet`.
+  - `split-picker.tsx` inside `PriceEditor`'s Bill to fieldset (D23 a): chips stay as today; a last option "Split equally…" mounts (not merely shows: `e2e/kkb.spec.ts:62` uses a strict `getByText("JD")`) a checklist of payers and the live "₱260.00 each" line. Copy line changes to "One person pays, or split it equally." Hidden when `payers.length < 2`. Save disabled below 2 with "Pick at least 2 people." A line already split opens on "Split equally…" with its people ticked; `billChanged` (`price-editor.tsx:85`) includes a change of the set and `adoptLatest` (`:72-76`) resets it; the table-price path's `expectedEntryRevision` (`:110`) bumps for it too.
+  - Replacement lines (D25): `lineProps` passes the entry's `billTo`, `splitAmong` and `settlement.entries[entryId].revision` for the bill part (today it hands correction lines `billTo: null`, `kkb-view.tsx:70-72`); the editor sends the price to `/corrections/:id/price` and Bill to / split to `/entries/:entryId/settlement` (today all goes to the correction route, `price-editor.tsx:92-99`). Two saves; a conflict on either keeps what was typed.
+  - Rows: origin "Split 3 ways: Jun, Liza, Ana" (replacing "Billed to …"; the origin line also carries `splitWays`, since `billedTo` is only a names string and `LineRow`, `kkb-view.tsx:379`, must tell split from Bill to). Payer copy: title `Crispy Pata ×{qty}`, sub-line `₱390.00 of ₱780.00 · split 3 ways · from Whole table` (no fraction glyphs); its action button reads the share; the editor on it is the same entry's editor. Unpriced: `No price yet · split 3 ways · from Whole table`. Check at 320 and 375 (baseline already wraps the shorter tag at 375). Footer "Everything here is billed to someone." counts splits as billed.
+  - `kkbText`: split shares appear inside each person's total (food sum), no new line; no receipt lines (S08 kept). Unbilled reason copy unchanged.
+- **Docs**: `docs/api.md` (settlement row, receipts rows), `docs/data-model.md:29,62` + KKB section, `docs/ux-specification.md:63-64` (also drop the stale "Read-only after the order ends"), `docs/realtime.md:12` events, new `docs/contracts/receipts.md`, `docs/contracts/table-prices.md` or the settlement contract for split rows, `docs/contracts/adjustments.md` D1 table (new routes).
+
+Rejected: line-level receipt assignment (`entry_settlements.receipt_id`): exact item membership, but it is the billing-group engine the brief says to avoid and reopens per-receipt service and adjustment math. A separate split route: two revisions on one line would let Bill to and a split both land (S4.14).
+
+### Reuse
+- `allocate` for split shares; `bucketOf` / `payerOfBillTo` key scheme (`p:<id>`, `n:<normalized>`) for split payers and receipt people.
+- `payers` list (`kkb-view.tsx:48-54`) for the split checklist and the receipt's "who it covers".
+- `adoptLabelShares` / `labelHasFood` (`adjustments.ts:90-111`) extended for `receipt_people` and `entry_payers`; `personKey` (`adjustments.ts:40`) for duplicate checks.
+- Route + revision pattern from `adjustments/[adjustmentId]/route.ts` and `server/orders/adjustments.ts:34-92`; trigger pattern from `0013_adjustments.sql`.
+- `Drawer`, `Button`, `AmountEditor`, `useDirectSave` + `useRetryOnReconnect`, `parsePeso`/`formatPeso`, `AdjustmentSheet` layout and Remove confirm.
+
+### Not doing
+- Uneven splits, portions or exact amounts (D24), per-receipt service charge (the host types the session's total service across receipts), labelling the Main receipt, line-level receipt membership.
+- Receipt lines in Copy summary, Items text/PNG, waiter ticket, invite.
+- Who actually paid (slice 5), rotating the odd-centavo winner across dishes.
+- Notifications for receipts or splits.
+
+### States
+
+| State | After |
+|---|---|
+| No extra receipts | Receipt check exactly as today + host "Add another receipt" (guests: unchanged) |
+| Two receipts, both matching | M1: Main + Senior citizen receipt cards with ✓ chips; "All receipts ₱3,054.00 · Salo ₱3,054.00 ✓" |
+| Extra receipt, no total yet | Its card: "Enter the total"; overall row hidden until every total is in |
+| One receipt more / less | Its chip "₱120.00 more on this receipt. Not split."; others unaffected |
+| Blocked (unpriced / pending / waiting / unbilled) | Every receipt shows today's incomplete copy once (block-level), no per-receipt chips |
+| Covered person has nothing on the bill | Receipt card flag "Ana has nothing on the bill" |
+| "Decide later" adjustment with extras | Main card line "Not assigned: Corkage +₱200.00" |
+| Flagged (D15) discount for a covered person | Counted on that person's receipt, not Main |
+| Receipt sheet: saving / failed offline / conflict / remove confirm / person on another receipt | As `AdjustmentSheet`; disabled checkbox "on Senior citizen receipt" |
+| 11th receipt | Add button hidden at the limit; server 400 |
+| Guest, open or ended | Read-only cards and chips, no Add / edit |
+| Split picker: choosing people | Checklist; "₱260.00 each" (or "₱260.34 or ₱260.33 each" when it doesn't divide); Save disabled below 2, "Pick at least 2 people."; option hidden with < 2 payers; left person in set ticked "(left)" |
+| Split, unpriced dish | Origin "Split 3 ways…"; each payer card shows "No price yet · split 3 ways…"; blockers / Copy summary count the dish once |
+| Split, priced | Payer cards each show their share; origin row uncounted; service charge unblocked |
+| Price changes / quantity corrected / replaced | Shares recompute live; replacement line offers Bill to / split |
+| Switch split → one person → split | One mode at a time; never both on cards |
+| Payer later removed | Their share stays on the "(left)" card, as Bill to today |
+| Ended order, host | Receipts and splits editable (D1); guest read-only |
+| Long names, 320 | Split checklist rows wrap under the box; receipt card title wraps; no horizontal scroll |
+| Widths | 320, 360, 375, 390, 430, 768, 1280; light and dark; sheets at 320 with keyboard |
+
+### Decisions
+
+Owner answers 2026-11-24: D22–D26 = recommended option. M1, M2, M3a and M4 confirmed as sketched. Follow-up 2 (owner, 2026-11-24): a receipt a name claim leaves covering nobody is kept with its total and flagged "Covers nobody yet. Tap the pencil to pick who." (guest: "Covers nobody yet."), no chip. After build (owner): "Split equally…" stays visible on an already-split dish even with fewer than 2 active payers, so the host can see and fix it.
+
+- **D22 [decided: (a) people it covers] What an extra receipt is tied to.** (a) The people it covers (optional label + total + people); Salo's expected amount = their cards; Main = everyone else (M1); (b) total only: sum of all receipt totals vs Salo's adjusted total, no per-receipt check; (c) line-level: each dish assigned to a receipt. Recommend (a): the brief asks for "Associated participants" and per-receipt "Reconciliation status", which (b) can't give; (c) is the "billing-group engine" the brief says to avoid; (a) reuses card totals that already include splits, service share and that person's discounts (`kkb.ts:261-268`, `adjustments.ts:71`).
+- **D23 [decided: (a) inside Bill to] Where the split lives.** (a) Inside the existing Bill to fieldset: chips as today plus "Split equally…" revealing a checklist (M3a); (b) separate "Split…" action on the row opening a drawer (M3b). Recommend (a): one place decides who pays, one revision (S4.14); the e2e `platter.getByText("JD")` chip click (`e2e/kkb.spec.ts:62`) keeps working because the one-person chips are unchanged and the checklist is hidden until chosen.
+- **D24 [decided: (a) equal only] Unequal splits.** (a) Equal only this slice; (b) equal + optional portions per person (Jun 2, Liza 1), stored as small integers and fed to `allocate`'s weights, so shares still recalc when the price changes; (c) exact ₱ amounts. Recommend (a): the brief lists equal division first and "Custom amounts may be implemented if necessary"; (b) is the safe upgrade if the owner wants it now; (c) goes stale when the price changes (slice 2 rejected stored shares). Note: Bill to is per entry and whole, so without (b)/(c) one platter ×1 can't be split unevenly.
+- **D25 [decided: (a) offer it] Bill to / split on replacement lines.** (a) Offer it (two saves: price to the correction route, payer to the entry route); (b) leave replacement lines without Bill to as today. Recommend (a): brief "Handle cancellation and replacement correctly"; today a shared dish swapped before billing blocks the service charge forever (`kkb-view.tsx:78`, `kkb.ts:118`).
+- **D26 [decided: (a) fix] Pre-existing picker bug.** (a) Fix `billKeyOf` to use `normalizeText` while editing `price-editor.tsx` (one line; a typed payer like "Ana " vs "ana" today opens with no chip selected); (b) leave it. Recommend (a): same file, same key scheme the split needs.
+- **D6 Mobile scope** carried: responsive + native feel (assumption, below).
+
+### Assumptions
+- Mobile scope: responsive + native feel (D6 carried); inputs `text-base`, `inputMode="decimal"`, 44 px targets; mobile baseline re-audited 2026-11-24, nothing regressed.
+- Split shares count as the payer's food for service weight, % basis and the D15 cap, the same as a whole-dish Bill to today.
+- Odd centavos go by `allocate`'s key order (same as the service charge); at most ₱0.01 per dish.
+- Groups and the whole table can't be covered by a receipt or be split payers; people and typed names can.
+- The service charge stays one session amount; the host types the total across receipts. A senior receipt with a different service line shows as more/less, never hidden.
+- Main receipt is labelled "Main receipt" only once an extra receipt exists; not editable.
+- Pre-existing, same file, approved (D26): `billKeyOf` lower-cases labels instead of `normalizeText` (`price-editor.tsx:45` vs `kkb-view.tsx:51`).
+
+### Done when
+- `timeout 900 pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm e2e` pass (Postgres via `pnpm db:up`).
+- Unit (`tests/splits.test.ts`, `tests/receipts.test.ts`): shares sum to the subtotal for 2–7 people and odd centavos; unpriced 3-way split: `billBlockers` units = quantity and `kkbText` has one "Not yet settled" line; duplicate label (Ana/ana) rejected; left person kept in a split edit; flagged-adjustment attribution to the receipt; price change and quantity correction recompute; split + service charge + proportional discount sums hold; Main = adjusted − extras; covered-nothing flag; no extras → `reconcile` result unchanged; `kkbText` byte-identical with no splits (`.shots/before/kkb-export.txt`).
+- Contract: `tests/contract-receipts.test.ts` + `docs/contracts/receipts.md` (create, edit, conflict 409, delete 404, guest 403, closed allowed, cancelled 409, person on two receipts 409, limit 400, cross-session trigger, idempotent replay, events keep Confirm fresh); split rows in the settlement contract (split ≥ 2, billTo + split 422 (repo validation status), personal line 422, newly added removed person 404, kept left person 200, duplicate person 422, switch modes bumps one revision, replacement line Bill to via entry route); claim approval with the claimant already on another receipt does not 500. `contract-billing-after-end` route list gains receipts.
+- E2E (`e2e/receipts-splits.spec.ts`): host splits Crispy Pata among Jun and Liza, both cards and the guest's dock update live, service charge unblocks; host adds a Senior citizen receipt for Liza, Main and Senior chips match (split-scenario amounts with the 20% discount: Host ₱880.00, Jun ₱1,232.00, Liza ₱864.00, adjusted ₱2,976.00; Main ₱2,112.00); guest read-only; host edits after End; axe light/dark on both sheets. Existing `kkb.spec.ts`, `receipt-check.spec.ts`, `adjustments.spec.ts` stay green.
+- Manual: shots of every state above.
+
+### Skills
+- `impeccable` + `.impeccable/surfaces/src-app.md`, `DESIGN.md`, `PRODUCT.md`: Operate surface, ticket world.
+- `database-migrations`: 0015 (hand plpgsql after `--> statement-breakpoint`, `pnpm db:generate`).
+- `backend-patterns` + `contract-first`: routes, contract docs; read `node_modules/next/dist/docs/` per AGENTS.md.
+- `frontend-a11y` / `accessibility`: checkbox group with a legend, labelled amounts, live save status.
+- `mobile-native`: decimal keypad, drawer above the keyboard.
+
+### You need to do
+- [ ] After merge, the first app start runs migration 0015 (watch logs).
+
+### Mockups (slice 4, text sketch)
+
+M1 Receipt check with an extra receipt (host, 375; amounts from the baseline seed, Crispy Pata billed whole to Jun):
+```
+┌ Check against the receipt ────────────────────┐
+│ Food in Salo                       ₱2,880.00  │
+│ Service charge                       ₱288.00  │
+│ Salo total                         ₱3,168.00  │
+│ Discounts and extras                −₱114.00  │
+│ Adjusted total                     ₱3,054.00  │
+│ ┌ Main receipt ──────────────────────────────┐│
+│ │ Host, Jun · Salo ₱2,541.00                 ││
+│ │ Receipt total (₱)   [ 2,541.00 ]           ││
+│ │ ✓ Matches the receipt.                     ││
+│ └────────────────────────────────────────────┘│
+│ ┌ Senior citizen receipt ──────────── [Edit] ┐│
+│ │ Liza · Salo ₱513.00                        ││
+│ │ Senior citizen discount                    ││
+│ │ Receipt total                    ₱513.00   ││
+│ │ ✓ Matches the receipt.                     ││
+│ └────────────────────────────────────────────┘│
+│ All receipts ₱3,054.00 · Salo ₱3,054.00  ✓    │
+│ [ + Add another receipt ]                     │
+└───────────────────────────────────────────────┘
+```
+M1 Decide later with extras: Main card gains `│ Not assigned: Corkage            +₱200.00 │`.
+M1 no extras: today's block unchanged + `[ + Add another receipt ]` (host only).
+M1 guest: same cards without the field, [Edit] and Add.
+
+M2 Receipt sheet (drawer, 375; same seed as M1):
+```
+┌ Add a receipt ────────────────────────────── ✕ ┐
+│ Label   [ Senior citizen receipt ]  optional   │
+│ Who it covers                                  │
+│ [✓] Liza                         ₱513.00       │
+│ [ ] Jun                          ₱1,661.00     │
+│ [ ] Host (you)                   ₱880.00       │
+│ Receipt total (₱)  [ 513.00 ]                  │
+│ Salo has ₱513.00 for Liza.                     │
+│ Everyone else stays on the main receipt.       │
+│ [ Save ]                            [ Remove ] │
+└────────────────────────────────────────────────┘
+```
+M2 person on another receipt: `[–] Ana   on PWD receipt` (disabled).
+
+M3a Bill to with split (inside the price editor, 375):
+```
+│ Bill to                                         │
+│ One person pays, or split it equally.           │
+│ ( No one yet ) ( Host (you) ) ( Jun ) ( Liza )  │
+│ ( • Split equally… )                            │
+│   [✓] Jun   [✓] Liza   [ ] Host (you)           │
+│   ₱390.00 each                                  │
+│ [ Save ]                                        │
+```
+M3b (D23 b): row actions `[ Bill to… ] [ Split… ]`; Split opens a drawer with the same checklist.
+
+M4 Payer card line and origin row:
+```
+Jun
+│ Sisig ×2                             ₱580.00 │
+│ Crispy Pata ×1                       ₱390.00 │
+│   ₱390.00 of ₱780.00 · split 2 ways · from Whole table │
+Whole table · settle at the table
+│ Crispy Pata          Split 2 ways: Jun, Liza │  (greyed, uncounted)
+```
+
+## Slice 5: payment tracking (F07)
+
+Status: landed (PR #55)
+
+Verify 2026-11-27: reviewer, contract-tester (43/44 + G41 known), qa, ui-critic all SHIPPABLE; follow-ups in `.shots/follow-ups.md`: 1 and 3 done (chip column measured; "of ₱Y" hidden when ₱0), 2 resolved by the addendum below.
+
+Research brief (2026-11-24, researcher) cited below; plan-critic pass applied (2026-11-24). Baseline in `.shots/before/` (seed `.shots/before/seed.mjs`, index `README.md`); slice 4 shots moved to `.shots/v1-4-slice4/`, incl. its `follow-ups.md`. Seeded: order A final (Crispy Pata split Jun/Liza, Liza senior −₱192, "Senior citizen receipt" for Liza, Jun co-host), order C with one unpriced dish, order B 7 long names. Pre-existing, seen in baseline: header title button 25 px next to 44 px buttons (all 26 geometry findings); split sub-line wraps at 375; "Add another receipt" sits at the viewport bottom at 375; ended-order cards start collapsed. Not this slice's scope.
+
+### Ask ledger (slice 5)
+
+Brief F07 quoted from `salo-v1-4-brief.md:531-579`; §5.1 "Payment: Money already paid toward an obligation" (`:984`), §5.2 "Sum of recorded payments. Remaining outstanding balances." and "an unpriced dish must never be treated as a free dish", §6 `settlement.record`, §7 "Payment status updated" + "Notifications should be meaningful, targeted, and non-redundant."
+
+| # | Owner's words | Planned change | Status |
+|---|---|---|---|
+| S5.1 | "Introduce optional settlement tracking after billing amounts are finalized." | Nothing shows until the host records a payment (no chips, no block); the only new control before that is the host's "Record payment" on cards with a share. Recording before the bill is final: D29 | done |
+| S5.2 | "Support: Unpaid / Partially paid / Paid" | Derived per person, never stored: chip (icon + words) "Unpaid" / "Partly paid" / "Paid" | done |
+| S5.3 | "Allow the authorized host to record: Payment amount. Payer. Recipient or payee, when relevant. Optional payment method. Optional note." | "Record payment" drawer from a person's card (payer = that card); amount, Paid to (D27), method toggles, note ≤ 40 | done |
+| S5.4 | "Show: Total obligation. Amount paid. Remaining balance." | Card footer: existing total row, then "Paid" + payment lines, then "Left to pay"; Payments block with table-wide Collected and Left to pay | done |
+| S5.5 | "Do not reset recorded payments if a bill changes. Instead, recalculate the remaining balance." | Payments are rows of their own; balance computed on render from `buildKkb`; a bill drop below paid shows "Overpaid ₱X" | done |
+| S5.6 | "Avoid allowing ordinary guests to mark themselves paid without an explicit authorization mechanism." | `settlement.record` host-only (co-hosts too are refused) in `can()`, server-checked; guests see no record or delete control | done |
+| S5.7 | "No GCash or Maya integration. No payment processing. No stored card information. No bank-account management." | Method is a label only; no links, numbers or accounts | done |
+| S5.8 | §7 "Payment status updated" / "meaningful, targeted, and non-redundant" | D30 (a) notify, D31 (a) retract on delete | done |
+| S5.9 | D5 (slice 0) "Payment status visibility" | D28 (a) everyone sees everyone | done |
+
+### Today
+- No payment concept in `src` (audit `salo-v1-4-audit.md:28`); the only "payments" text is the privacy page ("no accounts, no ads and no payments", `src/app/privacy/page.tsx:15`).
+- Obligation = `KkbSection.totalCentavos ?? pricedCentavos` (`kkb.ts:73-74`; fallback used at `receipts.ts:63`). `totalCentavos` = food + service share + adjustments, null while no service charge and no adjustment (`kkb.ts:280-294`, `adjustments.ts:128`). Splits and Bill to are folded into the payer's food (`kkb.ts:118-141`, `splits.ts:25-32`).
+- `buildKkb` runs on the client only (`kkb-view.tsx:43`, `receipt-sheet.tsx:35`, `adjustment-sheet.tsx:46`, `workspace.tsx:141`); the server can't tell who has a share or what is left.
+- Card keys `p:<participantId>` / `n:<normalizeText(label)>` (`kkb.ts:153-160`) = `personKey` (`adjustments.ts:40`). Removed people keep a "(left)" card (`snapshot.ts:133-136`); typed names have a card only while they have food (`adjustments.ts:88-98`); claim approval re-keys labels in `adoptLabelShares` (`adjustments.ts:101-125`, `people.ts:159`). `resolvePeople` 404s a newly added removed participant (`person-refs.ts:22-26`).
+- "Not final" pieces: `priceCompleteness` (`kkb.ts:308-321`), `billBlockers` (`kkb.ts:265-274`), charge `unset`/`blocked` (`kkb.ts:276-295`), `kkb.unresolved` (`adjustments.ts:128`).
+- Cards: `Card` / `SummaryAmount` / `Footer` (`kkb-view.tsx:257-354`, file 435 lines). The Total row prints only with a service charge or adjustment (`kkb-view.tsx:322-340`), else the footer ends at "Food subtotal" / "Priced subtotal". One mount (`summary-sheet.tsx:163`), same view open and ended.
+- Delete confirms: billing sheets use an in-sheet "Yes, remove / Keep" row (`adjustment-sheet.tsx:364`, `receipt-sheet.tsx:229`); Undo toasts exist only for draft edits (`workspace.tsx:291-321`); DESIGN.md:48 "Confirm questions stay centred dialogs"; `ConfirmDialog` in `confirm-dialog.tsx`. DESIGN.md:20 "Status, always with an icon and words".
+- Snapshot identical for every viewer except `me` and notifications (`sessions/snapshot.ts:18-142`).
+- Mutations: `runMutation` (`mutations.ts:44-107`); `can()` + `HOST_ONLY` (`permissions.ts:12-40`); receipts route/server fn (`receipts.ts:21-62`, 409 on an existing id via `expectedRevision` `:30`, 404 for another session's id `:29`); `useDirectSave` reuses the idempotency key only for an identical request (`use-direct-save.ts:28`); events join `NON_TICKET_EVENTS` (`settlement.ts:16`); `docs/realtime.md:12` lists events.
+- Notifications: `notify()` excludes the actor and dedups (`server/notifications.ts:25-40`), `source` + delete-by-source exists (`:25-60`); text renders from `subject` only (`lib/notifications.ts:44`); target defaults to "order" (`:30-32`); `notifications.type` has no CHECK (`schema.ts:466`).
+- Latest migration `drizzle/0015_receipts_splits.sql` (generated DDL + hand plpgsql same-session triggers `:63-96`); tables cascade from `sessions` (`schema.ts:20-23`), so cleanup (`maintenance/cleanup.ts:13-16`) covers a new table.
+
+### Approach
+- **Migration 0016 `payments`**: `id uuid` (client-minted), `session_id` cascade, payer `participant_id | label` (`num_nonnulls = 1`, label 1–40), payee `payee_participant_id | payee_label` (both null = Restaurant; never both set), `amount_centavos` CHECK 1…99,999,999, `method text null` CHECK in (`cash`,`gcash`,`maya`,`bank`,`other`), `note text null` CHECK 1–40, `created_at`, `created_by` participant. Same-session trigger for the three participant FKs, as 0015. Index `(session_id)`.
+- **Routes**: `PUT /api/sessions/[id]/payments/[paymentId]` creates; `DELETE` (no body) removes. Host only (`settlement.record` in `HOST_ONLY`), `allowClosed: true`, `assertBillable` (cancelled → 409). Idempotency: the client mints the id when the drawer opens and keeps it until saved; an existing id in this session → 200 no-op if the body matches, else 409 `CONFLICT`; an id in another session → 404 (as `receipts.ts:29`). DELETE of an unknown id → 404.
+- **Validation** (no card check, the server has no KKB): payer `participantId` must belong to this session, removed allowed; payer label via `tidyName` (≤ 40). Payee: an active participant (newly added removed → 404 `PERSON_NOT_FOUND`), a typed label taken as typed (as receipts), or null. Payee == payer (same `personKey`) → 422 "Pick someone else". Limit `LIMITS.paymentsPerSession = 200`. No revision: payments are never edited.
+- **Events** `payment.recorded` / `payment.deleted` (ids only) in `NON_TICKET_EVENTS` and `docs/realtime.md`; key types `payment.set:<id>` / `payment.delete:<id>`.
+- **Snapshot**: `settlement.payments: {id, payer: PersonRef, payee: PersonRef | null, amountCentavos, method, note, createdAt}[]`, oldest first; `EMPTY_SETTLEMENT` and `tests/guide.test.ts:37` gain `payments: []`.
+- **Math** (new pure `src/lib/payments.ts`):
+  - `billFinal(kkb)` (table-wide, not tied to End): `priceCompleteness` priced = total, `billBlockers` empty, no pending change, `charge.state` is `none` or `allocated`, `!kkb.unresolved`. Receipt more/less doesn't block.
+  - `paymentStatus(section, paid, final)`: obligation = `totalCentavos ?? pricedCentavos`. Cards with status `none`/`empty` or obligation 0 → no chip, no Left row (paid rows still show). Else paid 0 → Unpaid; final and paid ≥ obligation → Paid (overpaid = paid − obligation when > 0); else Partly paid. Not final never says "Paid"; its balance reads "Left to pay so far".
+  - `paymentTotals(kkb, payments)`: Collected = all payments incl. orphans; Of = sum of obligations over non-shared cards with a share; Left to pay = sum of per-person `max(0, left)` (an overpayment never hides someone else's debt). Orphans = payments whose payer key has no card.
+- **Claim**: `adoptLabelShares` re-keys payer and payee labels to the claimant (plain UPDATE; payments have no uniqueness).
+- **UI** (`kkb-view.tsx` + new `payment-sheet.tsx` + `payments-block.tsx`; `kkb-view.tsx` stays < 500 lines):
+  - Chip: in `SummaryAmount`'s row after the amount, non-shared cards with a share only, shown once the order has ≥ 1 payment. Icon + words (lucide, e.g. circle / circle-half / circle-check), tokens from DESIGN.md. At 320 it wraps under the amount, right-aligned; the heading never overflows.
+  - Footer: after the last amount row (Total, or Food/Priced subtotal when there is no Total) add "Paid ₱X", one line per payment ("₱500 · GCash · to Ana · note"; host gets a 44 px lucide trash button named "Delete ₱500 payment from Jun"), then "Left to pay ₱Y" / "Overpaid ₱Y" / "Left to pay so far ₱Y". Host: full-width secondary "Record payment" at the end of every card with a share (incl. the host's own), from the start.
+  - Delete: `ConfirmDialog` (danger), title "Delete ₱500 payment from Jun?", confirm "Delete"; `onConfirm` returns the server message so the dialog stays open on failure (offline: "You're offline. Try again when you're back."). No Undo.
+  - Record drawer: title "Record payment from Jun", line "₱628 left of ₱1,128" (or "so far"); amount prefilled with what's left, empty when nothing is left or obligation unknown; Paid to = radio group (D27); Method = toggle buttons (`aria-pressed`) in a labelled group, tap again to clear; note field (≤ 40); primary "Record ₱X". Saving / Not saved · Try again via `useDirectSave` + `useRetryOnReconnect`; typed values kept on failure; 422/403 show the server message under the button.
+  - Payments block (after Receipt check, once ≥ 1 payment, visible per D28): "Collected ₱X of ₱Y", "Left to pay ₱Z"; orphan payments listed under "Not matched to a share" with the host's delete.
+  - Privacy page: "no payment processing" instead of "no payments", and recorded payments (amount, method label, note) added to what Salo keeps until the order is deleted.
+- **Notification** per D30/D31: type `payment.recorded` joins `NotificationType`, `notificationText` "{host} recorded ₱500 from you", `notificationTarget` → "kkb"; subject `{centavos}` + actor; recipient = payer's `participantId` only when active (typed names get none; host's own card sends none since `notify()` skips the actor); dedup key `payment:<id>`, `source: ["payment:<id>"]`.
+- **Docs**: `docs/api.md`, `docs/data-model.md`, `docs/ux-specification.md:63` (KKB tab), `docs/realtime.md`, new `docs/contracts/payments.md`, `docs/contracts/notifications.md`.
+- Rejected: one stored "paid" amount per person (`receipt_people` style): loses payee, method and the ledger §5.1 describes.
+
+### Reuse
+- `personKey`, `tidyName`, `personRef` zod (`validation.ts:111`), receipts route + server fn shape (except idempotency, above), 0015 trigger SQL, `runMutation`, `notify` + `source`, `ConfirmDialog`, `Drawer` + `useDirectSave` + `useRetryOnReconnect` + `parsePeso` + `formatPeso`, Bill to pill styling from `price-editor.tsx` for Paid to.
+
+### Not doing
+- Paid status in `kkbText`, Items text/PNG or exports (F13, slice 8); `kkbText` stays byte-identical.
+- Paid status in the dock label; status counts ("2 paid · 1 unpaid"); ended-banner rewording.
+- Editing a payment (delete and record again), void history, guests self-reporting, any payment integration.
+- Payments by someone with no share: the host records it on the card it covers, with a note.
+
+### States
+Each has a sketch below (M-label).
+- No payments: today's KKB + host's Record payment (M1a); guest unchanged.
+- Partly paid (M1), paid (M4), overpaid (M1b), not final "so far" (M1c), no price / zero card (M1d), several payments + long payee/note + long name at 320 (M1e), host's own card (M1f), guest viewing someone else's card (M4b).
+- Drawer: default with prefill (M2), nothing left / empty prefill (M2b), Saving / Not saved · Try again / server error (M2c).
+- Delete confirm, incl. failure (M3c).
+- Payments block (M3), with orphans (M3b).
+- Ended order: host still records and deletes; guest read-only (same as M1 / M4).
+- Widths 320 / 375 / 430 / 768 / 1280; light and dark.
+
+### Decisions
+Owner answers 2026-11-24: D27–D31 = recommended option.
+
+- **D27 [decided: (a)] Paid to (payee).** (a) Radio pills: the people on the order who have a card, minus the payer, plus "Restaurant"; preselect the host, or "Restaurant" on the host's own card; stored as person ref, null = Restaurant; (b) free text ≤ 40; (c) no payee. Recommend (a): at a KKB table money goes to whoever fronted the bill (usually the host) or straight to the restaurant; pills reuse the Bill to picker; brief "Recipient or payee, when relevant".
+- **D28 [decided: (a)] Who sees payment status (was D5).** (a) Everyone sees every card's Paid / Left rows and the Payments block (every member already sees every price, `sessions/snapshot.ts:59-95`); (b) guests see only their own. Recommend (a): no per-viewer snapshot exists; (b) needs filtering in `getSnapshot` and the `/sync` SSE path.
+- **D29 [decided: (a)] Recording before the bill is final.** (a) Allowed; balance "Left to pay so far", chip never "Paid" until `billFinal`; (b) Record payment disabled until final. Recommend (a): people pay at the table before the last dish is priced; "after billing amounts are finalized" is honoured by never showing "Paid" early.
+- **D30 [decided: (a)] Notify the payer.** (a) One notice per recorded payment to an active participant payer: "Ana recorded ₱500 from you", opens KKB; (b) none. Recommend (a): brief §7 "Payment status updated"; one per real payment isn't noise. No balance in the text: the server can't compute it.
+- **D31 [decided: (a)] Delete retracts the notice.** (a) Deleting a payment deletes its notice (`source: ["payment:<id>"]`, existing delete-by-source, `server/notifications.ts:25-60`); (b) notice stays. Recommend (a): a mistyped ₱5,000 deleted and re-recorded as ₱500 would otherwise leave two notices, one wrong ("non-redundant").
+
+### Assumptions
+- Mobile scope: responsive + native feel (D6, carried): decimal keypad, drawer above the keyboard, 44 px targets.
+- Overpaying is allowed at record time; "Overpaid ₱X" shows on the card.
+- Method set Cash, GCash, Maya, Bank, Other is ours (brief says only "Optional payment method"); label only.
+- Co-hosts can't record (brief §6; slice 3 grants co-hosts `serving.update` only).
+- HANDOFF says no tool attribution in commits; the land step follows HANDOFF.
+
+### Done when
+- `timeout 900 pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm e2e` pass (Postgres via `pnpm db:up`).
+- Unit (`tests/payments.test.ts`): unpaid / partly / paid / overpaid; `billFinal` false for each piece (unpriced, blocker, pending, charge unset/blocked, unresolved) and never "Paid" then; no-price and zero cards get no status; price change after payment recomputes left, payment unchanged; split + adjustment obligation; removed person keeps payments; orphans surfaced; totals: Left = sum of max(0, left) with one overpaid person. `tests/permissions.test.ts`: `settlement.record` host only, co-host refused. `kkbText` byte-identical (`.shots/before/kkb-export.txt`).
+- Contract (`tests/contract-payments.test.ts` + `docs/contracts/payments.md`): record 200; same id same body 200 no-op; same id different body 409; other session's id 404; delete 200 / unknown 404; guest 403; co-host 403; closed allowed; cancelled 409; removed payer 200; newly added removed payee 404; payee == payer 422; bad method / note > 40 / amount 0 or > max → repo validation status; limit; cross-session trigger; events keep Confirm fresh; claim re-keys a typed payer and payee; notice created for a participant payer, none for a typed payer or the host's own card, deleted with the payment (D30/D31). `contract-billing-after-end` gains the payment routes; notifications contract gains `payment.recorded`.
+- E2E (`e2e/payments.spec.ts`): host records ₱500 GCash to self for Jun; Jun's card shows Partly paid and left live on Jun's phone, plus the notice opening KKB; host records the rest → Paid; host raises a price → Partly paid again, payments untouched; lowers it → Overpaid; host deletes a payment via the dialog and Jun's notice disappears; guest sees no controls; after End the host still records; axe light/dark on the drawer, the dialog and a card with payments. Existing KKB specs stay green.
+- Manual: shots of every state above.
+
+### Skills
+- `impeccable` + `.impeccable/surfaces/src-app.md`, `DESIGN.md`, `PRODUCT.md`: Operate surface, ticket world, status = icon + words, centred confirm dialogs.
+- `database-migrations`: 0016 (hand plpgsql after `--> statement-breakpoint`, `pnpm db:generate`).
+- `backend-patterns` + `contract-first`: routes, contract docs; read `node_modules/next/dist/docs/` per AGENTS.md.
+- `frontend-a11y` / `accessibility`: radio group (Paid to), toggle group (method), labelled amount, live save status, named delete buttons.
+- `mobile-native`: decimal keypad, drawer above the keyboard.
+
+### You need to do
+- [ ] After merge, the first app start runs migration 0016 (watch logs).
+
+### Mockups (slice 5, text sketch)
+
+M1 Host, Jun's card, partly paid (375):
+```
+┌─────────────────────────────────────────┐
+│ Jun                 ₱1,128  (◐ Partly paid)│
+│  Sisig ×2 ......................  ₱580   │
+│  Halo-halo .....................  ₱150   │
+│  Crispy Pata ½ · from Whole table ₱390   │
+│ - - - - - - - - - - - - - - - - - - - -  │
+│ Food subtotal                 ₱1,120     │
+│ Service charge                  ₱108     │
+│ Senior citizen discount         −₱100    │
+│ Total                         ₱1,128     │
+│ Paid                            ₱500     │
+│   ₱500 · GCash · to Ana            [trash]│
+│ Left to pay                     ₱628     │
+│ ┌─────────────────────────────────────┐ │
+│ │          Record payment             │ │
+│ └─────────────────────────────────────┘ │
+└─────────────────────────────────────────┘
+```
+M1a No payments yet (host): no chip; footer ends at Total, then [Record payment].
+M1b Overpaid (price lowered after paying): chip (● Paid); rows "Paid ₱1,200" … "Overpaid ₱72".
+M1c Bill not final (one dish unpriced anywhere): chip (◐ Partly paid) even if paid ≥ total so far; row "Left to pay so far ₱628".
+M1d No prices yet: heading "No prices yet", no chip; footer "No prices entered"; Paid rows only if payments exist; no Left row; [Record payment] (empty amount).
+M1e 320, long name + 2 payments:
+```
+┌──────────────────────────────────┐
+│ Maria Concepcion dela    ₱1,128  │
+│ Cruz-Villanueva  (◐ Partly paid) │
+│ …                                │
+│ Paid                      ₱800   │
+│  ₱500 · GCash · to Ana    [trash]│
+│  ₱300 · Cash · to         [trash]│
+│  Restaurant · for drinks         │
+│ Left to pay               ₱328   │
+│ [        Record payment        ] │
+└──────────────────────────────────┘
+```
+M1f Host's own card: same as M1; drawer preselects "Restaurant".
+
+M2 Record payment drawer (host, from Jun's card):
+```
+┌─────────────────────────────────────────┐
+│ Record payment from Jun                  │
+│ ₱628 left of ₱1,128                      │
+│ Amount                                   │
+│ ₱ [ 628.00                         ]     │
+│ Paid to                                  │
+│ (● Ana · host) ( Liza ) ( Restaurant )   │
+│ Method (optional)                        │
+│ [ Cash ] [ GCash ] [ Maya ] [ Bank ]     │
+│ [ Other ]                                │
+│ Note (optional)                          │
+│ [ e.g. for drinks                  ]     │
+│ ┌─────────────────────────────────────┐ │
+│ │           Record ₱628               │ │
+│ └─────────────────────────────────────┘ │
+└─────────────────────────────────────────┘
+```
+M2b Nothing left / unknown: subline "Nothing left to pay" or "No prices yet"; amount empty; button "Record payment" until an amount is typed.
+M2c Saving: button "Saving…" disabled. Not saved: "Not saved · Try again" under the button, values kept, retries on reconnect. Server error: message under the button (e.g. "Only the host can record payments.").
+
+M3 Payments block (after Receipt check, once a payment exists):
+```
+┌─────────────────────────────────────────┐
+│ Payments                                 │
+│ Collected              ₱2,000 of ₱3,054  │
+│ Left to pay                     ₱1,054   │
+└─────────────────────────────────────────┘
+```
+M3b With orphans: below, "Not matched to a share" + lines "₱300 · Cash · from Pedro [trash]".
+M3c Delete confirm (centred dialog):
+```
+┌───────────────────────────────┐
+│ Delete ₱500 payment from Jun? │
+│        [ Keep ]  [ Delete ]   │
+└───────────────────────────────┘
+```
+failure: message inside the dialog, dialog stays open.
+
+M4 Guest (Liza) own card, paid: M1 footer without trash buttons and without Record payment; chip (● Paid).
+M4b Guest viewing Jun's card (D28 a): same read-only rows as M4.
+
+### Slice 5 addendum: payments that need review after a claim (follow-up 2)
+
+Status: landed (PR #55)
+
+Verify 2026-11-27: checker 963/963 (e2e: 2 flaky specs outside payments, pass on re-run), reviewer, qa, ui-critic SHIPPABLE; G41 + G45–G51 pass as plain `it`; Fix/trash gap fixed and measured (8 px on every card at 320/375).
+
+Owner's message (2026-11-27), verbatim:
+
+> **Follow-up 2 — Payment becomes self-referential after a name claim**
+> Let's proceed with **Leave the payment record**, with additional safeguards.
+> When Ana claims a typed-name participant and that causes an existing payment to have the same payer and payee:
+> 1. Preserve the original payment record for auditability. Do not automatically delete it or change the payee to Restaurant.
+> 2. Mark the payment as **Needs review** because the payer and payee now refer to the same participant.
+> 3. Exclude the unresolved payment from settlement calculations so it cannot incorrectly reduce Ana's outstanding balance.
+> 4. Notify the host that the payment needs correction.
+> 5. Allow the host to reassign the payee to the correct participant or Restaurant, or remove the payment if it was entered incorrectly.
+> 6. Once corrected, restore its normal settlement effect.
+> 7. Ensure this behavior is handled atomically when a typed-name participant is claimed, with proper idempotency and realtime updates.
+> **For test G41:** Update the expected behavior to verify that the payment is preserved, flagged for review, and excluded from settlement totals until resolved. Remove the expected-failure marker only after the implementation passes.
+> The guiding rule is that identity changes must never silently rewrite payment history or produce an invalid financial settlement.
+
+#### Ask ledger (addendum)
+
+| # | Owner's words | Planned change | Status |
+|---|---|---|---|
+| S5.10 | "Preserve the original payment record… Do not automatically delete it or change the payee to Restaurant." | Claim keeps today's re-key (`adoptPaymentLabels`, `adjustments.ts:130-133`); amount, method, note, created_at untouched; never deleted or nulled | done |
+| S5.11 | "Mark the payment as **Needs review**" | Derived flag (D32 a): payer == payee | done |
+| S5.12 | "Exclude the unresolved payment from settlement calculations" | `paidByKey`, `paymentStatus`, `paymentTotals` skip flagged rows (Paid, Left, chip, Collected); line still listed on the payer's card | done |
+| S5.13 | "Notify the host that the payment needs correction." | One host notice per flagged payment, created in the claim tx, retracted on fix or delete (Pinned details) | done |
+| S5.14 | "Allow the host to reassign the payee to the correct participant or Restaurant, or remove the payment" | `PATCH /api/sessions/[id]/payments/[paymentId]` `{payee}` (host only, payee ≠ payer, same payee rules as record) + D33 UI; delete = existing trash + dialog | done |
+| S5.15 | "Once corrected, restore its normal settlement effect." | Flag clears as soon as payer ≠ payee; totals include it again; host notice retracted | done |
+| S5.16 | "handled atomically when a typed-name participant is claimed, with proper idempotency and realtime updates" | Flagging + host notice inside the claim-approval transaction (already one `runMutation`); PATCH via `runMutation` with key type `payment.payee:<id>`, event `payment.updated` in `NON_TICKET_EVENTS`; snapshot carries the flag | done |
+| S5.17 | "For test G41: … preserved, flagged for review, and excluded from settlement totals… Remove the expected-failure marker only after the implementation passes." | G41 rewritten to those expectations; `it.fails` → `it` only once green | done |
+
+#### Approach
+- **Flag is derived**: `needsReview = personKey(payer) === personKey(payee)` (payee non-null). Record and PATCH already refuse payee == payer (422), so a claim is the only way in, and any payee change clears it, so the flag can't drift. Snapshot payments gain `needsReview: boolean` computed server-side in `getSnapshot`, so every client agrees.
+- **Claim** (`adoptPaymentLabels`): after the re-key, for each payment that became payer == payee, `notify` the host in the same transaction: type `payment.needsReview`, text "{claimant}'s claim left a ₱500.00 payment paid to themself. Fix it on KKB.", target "kkb", dedup `payment-review:<id>`, `source: ["payment:<id>"]` (so delete removes it with the existing call) plus `["payment-review:<id>"]`. The claim's event already refreshes clients.
+- **PATCH payee**: body `{payee: personRef | null}`; host only (`settlement.record`), `allowClosed`, `assertBillable`; 404 unknown/other session; payee rules as record (active participant, typed label, or null = Restaurant; payee == payer 422). Allowed only on a payment that needs review (else 409 `NOT_NEEDS_REVIEW`; editing stays out of scope). Same body twice → 200 no-op via the idempotency key. Retracts the host's `payment-review:<id>` notice. Payer's original `payment.recorded` notice stays (it was true).
+- **Math**: flagged rows count nowhere (card Paid/Left/chip, Payments block Collected/Left); orphan logic unchanged.
+- **UI**: per D33.
+
+#### Decisions (addendum)
+Owner answers 2026-11-27: D32, D33, D35 = recommended option (D34 dropped: the owner asked for the notice).
+
+- **D32 [decided: (a)] How "Needs review" is stored.** (a) Derived from payer == payee, no column; (b) a `needs_review_at` column set on claim and cleared on fix. Recommend (a): it can't disagree with the data, needs no migration change, and a fixed payee clears it by definition.
+- **D33 [decided: (a)] Where the host fixes it.** (a) The payment line on the payer's card shows a tag "Needs review" (alert icon + words, saffron) and, for the host, a "Fix" button next to the trash that opens the payment drawer in a payee-only mode: "Who received ₱500.00 from Ana?" + Paid to pills (payer excluded) + "Save"; guests see the tag only; (b) a "Needs review" list in the Payments block with the same Fix/delete controls. Recommend (a): the line is where the host sees it, and it reuses the drawer and pills.
+- **D35 [decided: (a)] PATCH scope.** (a) Only payments that need review (409 otherwise); (b) any payment's payee. Recommend (a): plan says payments aren't edited; the owner asked only for the flagged case.
+
+#### Pinned details (plan-critic, verified)
+- **Host notice recipient**: `notify` drops the actor (`server/notifications.ts:33`) and claim approval is host-only (`permissions.ts:35`), so `adoptLabelShares` / `adoptPaymentLabels` gain a `hostId` argument; `resolveClaim` (`people.ts:159`) passes `actor.participantId`; the notice goes with `recipients: [hostId]`, `actorId: <claimant participantId>`. The claimant is always a guest (`requestClaim` is guest-only, `people.ts:105`), so the host is never the self-payer.
+- **Notice type**: `payment.needsReview` joins the `NotificationType` union (`lib/notifications.ts:3`), the `kkb` case of `notificationTarget` (`:37`) and `notificationText` (`:74`); subject `{ name: claimant displayName, centavos }`; text "{name}'s claim left a ₱500.00 payment paid to themself. Fix it on KKB."; dedup `payment-review:<id>`; `source: ["payment:<id>", "payment-review:<id>"]`. No migration (`schema.ts:466`).
+- **Replay**: replaying the claim-approval key returns the stored result before `apply` (`mutations.ts:73-79`), so no second notice; a new key gets 409 `CLAIM_RESOLVED` (`people.ts:134`).
+- **No flag while the name still has food**: `adoptLabelShares` returns early (`adjustments.ts:103`); the payment stays on the typed name's card, unflagged. Tested.
+- **Payer-side variant** (typed payer, participant payee, payee claims the name) flags the same way; the line lands on the claimant's card. Only the payee can be fixed (owner item 5); delete covers the rest.
+- **Orphans**: `paymentTotals.orphans` still scans all payments, flagged included; `collected`, `left`, `paidByKey` skip flagged rows. A flagged orphan shows in "Not matched to a share" with the tag, Fix (host) and trash. PATCH doesn't check the payer (as `deletePayment`), so Fix works for a removed payer. A flagged line appears once: on its card or in the orphan list.
+- **Paid ₱0.00**: with only a flagged payment, the card shows "Paid ₱0.00", the line with the tag, and Left unchanged; the Payments block shows "Collected ₱0.00 of ₱X". Intended.
+- **Delete dialog** for a flagged payment: body "It was not counted in what they have paid." (title unchanged).
+- **Fix drawer (M6)**: opens with no pill selected, Save disabled until one is chosen; options = `payeeOptions` (`payment-sheet.tsx:43-49`) minus the payer; amount, method and note hidden; failure keeps the drawer open with the message. Stale fix (409 `NOT_NEEDS_REVIEW`): "That payment doesn’t need review any more.", then closes on refresh. Only the same idempotency key replays.
+- **PATCH route**: added to `api/sessions/[id]/payments/[paymentId]/route.ts`, `allowClosed: true`, key type `payment.payee:<id>`; event `payment.updated` in `NON_TICKET_EVENTS` (`settlement.ts:16`) and `docs/realtime.md:12`.
+- **Docs**: `docs/api.md` PATCH row; `docs/contracts/payments-golden.md` G41 rewritten + G45–G51; `docs/contracts/notifications.md` E-row for `payment.needsReview`; `docs/contracts/payments.md` flag rule.
+
+#### Done when (addendum)
+- Unit: flagged rows excluded from paid/left/chip/totals; fixing the payee restores them.
+- Contract (G41 rewritten + new G45–G51): claim flags the payment (row preserved byte for byte except the re-keyed side); the host has exactly 1 `payment.needsReview` notice after approval; replaying the approval key doesn't add one; claim while the name still has food leaves it unflagged; payer-side variant flags; flagged orphan (payer removed) can be fixed and deleted; PATCH 200 clears the flag and retracts the notice; PATCH on an unflagged payment 409; PATCH payee == payer 422; guest/co-host 403; delete of a flagged payment removes both notices; after End allowed. `it.fails` removed only when green.
+- E2E: host records Ana paying typed Rafa, approves Ana's claim of Rafa, Ana's card shows the line with "Needs review" and her Left unchanged, host gets the notice, fixes payee to Restaurant, balance updates live on Ana's phone.
+- `timeout`-wrapped typecheck, lint, test, build, e2e pass.
+
+#### Mockups (addendum, text sketch)
+M5 Host, Ana's card with a flagged payment (375):
+```
+│ Paid                            ₱0.00    │
+│   ₱500.00 · GCash · to Ana   [Fix][trash]│
+│   (! Needs review)                       │
+│ Left to pay                   ₱1,128.00  │
+```
+M6 Fix drawer: "Fix payment" / "Who received ₱500.00 from Ana?" / (Host (you)) (Liza) (Restaurant) / [ Save ].
+
+## Slice 6: My order and host transfer (F08, F09)
+
+Status: landed (PR #56)
+
+Verify 2026-11-27: checker typecheck/lint/1031 unit + touched e2e pass; contract-tester 50/50 (`tests/contract-host-transfer-adversarial.test.ts`, golden `docs/contracts/host-transfer.md`); reviewer NOT SHIPPABLE → fixed (notices over drawers, claim on Shared rows, ClaimControl, typed rows) → re-check SHIPPABLE; qa SHIPPABLE; ui-critic SHIPPABLE, 9 fix-in-loop items fixed and measured. Follow-ups in `.shots/follow-ups.md`.
+
+Research brief (2026-11-27, researcher) cited below. Baseline in `.shots/before/` (seed `.shots/before/seed.mjs`, index `README.md`; slice 5 shots moved to `.shots/v1-4-slice5/`). Seeded: host + Jun (co-host), Liza, Ana (joined, nothing added); round 1 confirmed, round 2 draft with Liza's Large + note dish, a dish the host added for Liza, a dish Liza added for Jun, a whole-table dish; Jun ready. Pre-existing, seen in baseline: header title button 25 px next to 44 px buttons (all 20 geometry findings). Not this slice's scope.
+
+### Ask ledger (slice 6)
+
+Brief F08 and F09 quoted from `salo-v1-4-brief.md:581-657`.
+
+| # | Owner's words | Planned change | Status |
+|---|---|---|---|
+| S6.1 | "Improve the existing readiness workflow rather than introducing a duplicate confirmation system." | One ready toggle, same `PUT /readiness`; where it lives per D36 | done |
+| S6.2 | "Provide a convenient **My order** review showing: Dish names. Quantities. Variants. Preparation notes. Assigned participant. Current round. Readiness status." | New `MyOrderSheet` drawer (M2): header "My order · Round n" + readiness line; rows show qty, dish, size, note, and who it is for / who added it | done |
+| S6.3 | "Allow participants to: Correct their draft items when permitted." | Rows the guest may edit (`canEditEntry`) get the ticket's stepper and Edit (opens the existing `EditDishSheet`); host-added rows per D43 | done |
+| S6.4 | "Identify mistakes before confirmation." | Sheet covers the open round only (D37); groups my items by "For you" / "You added for others" / "Shared" | done |
+| S6.5 | "Clearly indicate readiness." | Sheet footer toggle "I'm ready" / "Ready ✓ · tap to undo"; dock shows the state (D36) | done |
+| S6.6 | "The host should see which participants have responded." | Already: People badges "Ready" / "Still choosing" (`people-view.tsx:149-155`) and Review "x of y ready · still choosing: names" (`review-panel.tsx:65-70`); wording per D38 | done |
+| S6.7 | "Readiness must remain appropriately scoped to the active round." | Unchanged: rows keyed (participant, draft round) (`people.ts:21-31`), reset on own changes (`:48-58`) | done (existing) |
+| S6.8 | "Do not add mandatory confirmation steps for guests who are not actively participating." | Readiness stays advisory (never blocks Confirm); D38 decides whether guests with nothing in the round count | done |
+| S6.9 | "Introduce an explicit host-transfer workflow. … 1. Select another active participant. 2. Review the transfer consequences. 3. Confirm the transfer. 4. Relinquish host authority." | Order options → "Hand over host" → pick (M4) → consequences + confirm (M5); old host becomes a guest (D40) | done |
+| S6.10 | "The new host should receive the appropriate capabilities immediately." | Role swap in one `runMutation`; event refetches every device's snapshot; `isHost` flips from `snapshot.me.role` (`workspace.tsx:74`); new host gets a notice (M6) | done |
+| S6.11 | "Only the active host can initiate a normal transfer." | `can(fresh, "host.transfer")`, new action in `HOST_ONLY` | done |
+| S6.12 | "Transfer must be atomic." / "Never allow two primary hosts accidentally." | One transaction under the session lock: demote then promote (one-host unique index `schema.ts:95`, cohost CHECK `:93`); a second transfer in flight fails 403 `ROLE_CHANGED`, one sent after the commit 403 `FORBIDDEN` | done |
+| S6.13 | "Update permissions across connected devices." | Event `host.transferred` (ids only) → SSE refetch on all devices; in `NON_TICKET_EVENTS` | done |
+| S6.14 | "Reject stale writes from the former host." | After the commit the old host resolves as GUEST and fails `can()` → 403 `FORBIDDEN`; a write already in flight hits the `ROLE_CHANGED` guard (`mutations.ts:84`, R01 `tests/contract-slice3-golden.test.ts:385-399`); client refreshes on any 403 (today only 409/404, `use-session.ts:359`) | done |
+| S6.15 | "Record the transfer event." | `host.transferred {fromId, toId}` event in `session_events` (D39 a) | done |
+| S6.16 | "Lost-device recovery should be evaluated separately." / "Do not implement insecure automatic takeover, predictable PINs, or unrestricted host reassignment." | Not built; noted in Not doing | planned (none) |
+
+### Today
+
+- **Ready control**: guest-only dock button "I'm ready" / "Ready" (`workspace.tsx:738-753`, `!isHost && isOpen`), op `{kind:"ready"}` → `PUT /readiness` → `setReady` (`people.ts:21-43`), DRAFT round only (`people.ts:13-15`). The host has no ready state.
+- **"Everyone ready" notice**: fires when ready guests = all non-removed guests (`people.ts:33-37`), so a guest who added nothing (Ana) blocks it. Host count "n/m guests ready" (`views.ts:105-109`, dock `workspace.tsx:713-717`); Review "1 of 3 guests ready · still choosing: Liza, Ana" (`review-panel.tsx:44-45,65-70`).
+- **A guest's own items**: inline in the shared round ticket (`order-ticket.tsx:61,85`) and in People "for me" (`people-view.tsx:84-92,176-182`). KKB My share is the only all-rounds personal view (`workspace.tsx:721-727`). No review sheet.
+- **Edit rules**: draft round only and `canEditEntry` = host or submitter (`permissions.ts:~43`, `entries.ts:~118-122`). A guest can't edit a dish someone else added for them; they can edit dishes they added for others. Edit UI: `EditDishSheet` (`workspace.tsx:482`), stepper/remove via `TicketActions` (`workspace.tsx:315-330`).
+- **Assignment data**: snapshot entry `attribution {type, label, participantId}` + `submittedBy` (`lib/snapshot.ts`); groups via `snapshot.groups[].memberIds` (`views.ts:~53`).
+- **Host role**: `participants.role`, partial unique index one HOST per session (`schema.ts:~90`); CHECK `cohost_at IS NULL OR (role='GUEST' AND removed_at IS NULL)`. `runMutation` re-reads role under the lock and throws 403 `ROLE_CHANGED` if it changed (`mutations.ts:57-84`). No transfer exists. Options sheet (`order-options-sheet.tsx`, host + open only, `session-header.tsx:~58-70`) already has a two-step options → confirm flow for End.
+- **Files at cap**: `workspace.tsx` 800/800 lines; `use-session.ts` 569.
+
+### Approach
+
+**F08 My order**
+- New `src/components/workspace/my-order-sheet.tsx` (vaul `Drawer`, like `PricesSheet`; `EditDishSheet` stacks over it as PaymentSheet does over SummarySheet, `kkb-view.tsx:200-201`). Guests only, open order with a draft round.
+- Pure `myOrderRows(roundEntries /* overlay, so steppers move optimistically */, {participants, removedPeople, groups}, meId)` in `src/lib/views.ts`: open-round entries in groups. **For you**: `attribution.participantId === me`. **Host added for "{name}"** (typed name = my display name, `normalizeText`, as `people-view.tsx:86-87`) per D43. **You added for others**: `submittedBy === me` and for someone else. **Shared**: TABLE, and GROUP whose `normalizeText(label)` matches a group with me in `memberIds` (attribution has no groupId, `snapshot.ts:143-150`). Each row: qty, dish, size, note, plus "for {name}" or "added by {name}" when not both me.
+- Rows I may edit (`canEditEntry`) reuse the ticket's controls: export `EditButton` from `order-ticket.tsx:26`, use `Stepper` from `./stepper`; sheet takes `actions: TicketActions` (built `workspace.tsx:315`). Row layout = `SourceRow` (`order-ticket.tsx:59`): text left with `min-w-0` wrap and Edit after the detail, stepper right; "Saving…" on `entry.pending` rows.
+- Footer: the ready toggle (same op). Header line: "Round 2 · You're ready" / "Round 2 · Not marked ready yet".
+- Entry per D36.
+- **Room in `workspace.tsx`**: extract the dock (`workspace.tsx:700-757`) to `src/components/workspace/dock.tsx` first, behaviour unchanged, then wire the sheet there. See Pinned details.
+
+**F09 Host transfer**
+- Action `host.transfer` in `HOST_ONLY` (`permissions.ts:35`).
+- `PUT /api/sessions/[id]/host` body `{participantId, displayName?}`, modelled on `participants/[pid]/cohost/route.ts`; key type `host.transfer:${pid}`; `apply` uses its third argument `(tx, s, fresh) => transferHost(tx, s, fresh, …)`; not `usesFreshActor`. No route pre-check needed (guard makes `fresh.role === actor.role`). Open orders only (D41). Transport per D42.
+- `transferHost(tx, session, fresh, targetId, displayName?)` in `src/server/orders/people.ts`: `can(fresh, "host.transfer")`; `targetId === actor` → 422 `ALREADY_HOST` (checked first); target via `loadTarget` (`people.ts:~176`, FOR UPDATE; not `loadGuest`, which says `CANNOT_REMOVE_HOST`): unknown → 404, removed → 409 `ALREADY_REMOVED`. If `displayName` given: `tidyName` (`settlement.ts:19`) and rename the old host first. Then `UPDATE` old host `role='GUEST', cohost_at=NULL` (D40), then target `role='HOST', cohost_at=NULL`, in that order (index). Event `host.transferred {fromId, toId}` in `NON_TICKET_EVENTS` (`settlement.ts:16`). Notice `host.transferred` to the new host only: "{old name} made you the host." using the name after any rename; dedup `host.transferred:${toId}:${session.revision+1}`; `NotificationType` + `notificationText` (`lib/notifications.ts:3,~71`), target defaults to order. Pending claims the target requested are rejected in the same transaction (as `removeParticipant`, `people.ts:~188`).
+- Record per D39.
+- Client: per D42. Any 403 joins the refresh set (`use-session.ts:359`). On success the old host's device runs `markTourSeen("guest")` (else a guest tour offer pops up right after handing over); `<Guide key={role}>` so a promoted guest mid-tour doesn't keep a stale step index (`workspace.tsx:495-497`).
+- UI (M3–M5): Options sheet gets a "Hand over host" row above "All done? End order" → step "pick": radio list of active guests, co-hosts first then join order, names `break-words` → step "handover": consequences list + stacked buttons (as End's confirm, `order-options-sheet.tsx:96-103`): [Make Jun the host] primary, [Keep hosting] ghost with autoFocus. `step` union gains `pick` | `handover`; `startAt="confirm"` still means End. If the host's name is still "Host" (`order-options-sheet.tsx:49` test), the handover step shows a required "Your name" field sent as `displayName` in the same request (Assumption A6.1).
+- Everything else follows `snapshot.me.role` on refetch: Review, Rounds, KKB pricing, groups, claims queue, Options button, guide.
+
+Rejected: transfer from the People card (right cluster already full at 320, slice 3 D17 note); a FullScreenSheet for My order (Drawer-over-Drawer is proven, `kkb-view.tsx:200-201`; Drawer over a top-layer `<dialog>` is not).
+
+### Pinned details (plan-critic, verified)
+- **D38 [decided 2026-11-27: (a) guests with no order don't count] rule** (if (a)): one pure `orderingIds(entries, participants, groups, roundId)` in `src/lib/views.ts`, used by client and `setReady`. Ordering = any non-deleted open-round entry with `attribution.participantId === me`, or `submittedBy === me`, or INDIVIDUAL with no participantId and `normalizeText(label) === normalizeText(displayName)`, or GROUP whose label matches a group with me in `memberIds` (server: `withMembers`, `server/notifications.ts:~66`). Whole-table and unassigned dishes don't count. A guest with nothing who taps Ready counts as Ready in both n and m. `readinessSummary` (`views.ts:105`) takes `entries, groups, activeRoundId` too and returns `{ready, total, readyIds, noOrderIds}`; callers `workspace.tsx:250`, `review-panel.tsx:44,66-70`, `people-view.tsx:89`. Notice needs `ordering.length > 0`.
+- **Dock extraction**: safe; `composerActive` (`workspace.tsx:97`) is used only in the dock and moves with it; `dockRef` is a callback ref (`use-dock-height.ts`) passed as a prop. ~20 props (`dockRef, isOpen, isHost, total, ready, iAmReady, shareLabel, left, onShare, onPrices, confirmedTicket, correctionsThisRound, onMode, mutate, snapshot, recipients, view, detailsSignal, onAdd, onMyOrder`). Net ≈ −10 lines in `workspace.tsx`; `e2e/slice8-measure.spec.ts` dock geometry is the guard.
+- **Session events are never pruned** beyond the session's own deletion (checked), so D39 (a) is a durable record for the order's life.
+
+### Reuse
+- `Drawer` + `PricesSheet` structure; `TicketActions` (stepper, Edit, remove + Undo) and `EditDishSheet` for edits; `canEditEntry`.
+- `attributionLabel` (`lib/snapshot.ts:~143`) for "for {name}"; `everyone(snapshot)` for "added by {name}". `people-view.tsx` is not refactored.
+- `setCohost` route/server/op/notification shape (slice 3) for the transfer; `OrderOptionsSheet` step pattern for pick → confirm.
+- Contract tests: `tests/contract-cohosts.test.ts` template; e2e `e2e/cohosts.spec.ts` helpers.
+
+### Not doing
+- Lost-device recovery, automatic takeover, PINs (brief: "evaluated separately").
+- Transfer to a typed name (no device) or to a removed person.
+- A ready state or My order sheet for the host (the host has Review).
+- Earlier, confirmed rounds in My order (D37 a); KKB My share covers them.
+- New edit permissions: a guest still can't edit a dish someone else added for them.
+- Re-parenting `submitted_by` on transfer. Claims key on the submitter's current role (`people.ts:110`) and only work in the draft round, so dishes the old host added in that round become editable by the new host directly instead of claimable. Accepted (Assumptions).
+
+### States
+| State | After |
+|---|---|
+| Guest, draft round, items for them | Dock entry (D36); sheet M2 with groups, editable rows have stepper + Edit |
+| Guest, draft round, nothing for them | Sheet M2-empty: "Nothing for you in round 2 yet." + ready toggle |
+| Guest ready | Dock shows ready state; sheet header "You're ready"; any change of theirs resets it (existing) |
+| Guest edits in sheet | Stepper/Edit as the ticket; queued op, "not saved" handling as today; readiness resets; Undo toast shows above the sheet, at the top of the screen on the overlay while any sheet is open (`z-[60]`; a bottom offset covered short sheets' controls, CI axe on quick-prices) |
+| Someone adds a dish for a passive guest | They become "ordering" and "Still choosing"; any ready is cleared (existing reset, `entries.ts:97`) |
+| Only shared dishes in the round | "Nothing for you in round 2 yet." then the Shared section |
+| Dish added for me by someone else | Guest-added: read-only "added by Jun". Host-added: per D43 |
+| Round confirmed while sheet open | Sheet closes; `useEffect` sets `myOrderOpen=false` when `!isOpen \|\| isHost`, render `open={myOrderOpen && !isHost && isOpen}` so it never reopens by itself |
+| No draft round / order ended | No My order entry |
+| Co-host (Jun) | Same as guest (role GUEST) |
+| Host, Options | "Hand over host" row (open order, ≥1 active guest); hidden with no guests |
+| Pick step | Active guests list, none preselected, Continue disabled until one picked |
+| Confirm step | Consequences (M5); name field when host is still "Host"; busy; offline: "No connection. Keep this open: it hands over as soon as you're back online.", retries on reconnect (D42) |
+| After transfer, old host's phone | Becomes guest view on refetch: My order / ready, no Review/Options, no tour offer; People card has no suffix (`people-view.tsx:140-146`) |
+| After transfer, new host's phone | Host view on refetch + notice M6; host tour offer appears (not seen as host) |
+| Old host's write after the swap | 403 `FORBIDDEN` (per-action message), or 403 `ROLE_CHANGED` ("Your role in this order changed. Reload to continue.") if already in flight; both refresh the snapshot |
+| Two transfers | In flight together (different keys): first wins, second 403 `ROLE_CHANGED`; sent after the commit: 403 `FORBIDDEN`; same key: replayed (`mutations.ts:64-77`), no second notice |
+| Target removed meanwhile | 409 `ALREADY_REMOVED` with message, stays on handover step |
+| Host dock count when nobody is ordering | Hidden (as `ready.total > 0` today) |
+| Widths | 320, 375, 430, 768, 1280; light and dark |
+
+### Decisions
+
+Owner answers 2026-11-27: D36–D43 = recommended option.
+
+- **D36 [decided 2026-11-27: (a) dock "My order" → sheet with the ready toggle] My order entry and the ready control.** (a) The dock's ready button becomes "My order" (M1a): opens the sheet; the sheet's footer holds the one ready toggle; dock label shows the state ("My order ✓ Ready"). (b) Keep the dock "I'm ready" one-tap button as is and add "Check my order" as a link at the top of the People "for me" list and in the Order tab (M1b); the sheet also has the toggle. Recommend (a): the brief asks to improve readiness "rather than introducing a duplicate", and puts review before ready ("verify their orders before the host confirms"); the dock row is already at its limit at 320 (`workspace.tsx:719-753`, `max-[359px]` wrap), so (a) adds no button. Cost: ready takes two taps instead of one.
+- **D37 [decided 2026-11-27: (a) open round only] Rounds in My order.** (a) Open round only. (b) Open round editable + earlier rounds read-only below. Recommend (a): readiness is per round (`people.ts:13`), confirmed rounds can't change, and KKB My share already lists every round with prices.
+- **D38 Guests with nothing in the round.** (a) Guests with no dish for them in the open round (for you, added by you, or a group they're in) don't count in "n of m ready" and don't hold back the "Everyone is ready" notice; Review reads "1 of 2 ready · still choosing: Liza · no order yet: Ana"; People badge "No order yet". (b) Unchanged: everyone counts. Recommend (a): today a passive guest blocks the notice (`people.ts:33-37`) and shows "Still choosing" forever, which is what the brief's "not actively participating" line rules out. Notice copy becomes "Everyone who's ordering is ready for round n".
+- **D39 [decided 2026-11-27: (a) session event, no migration] Transfer record.** (a) The `host.transferred` event in `session_events` (durable, ids only, kept as long as the order, `schema.ts:~346`); no migration. (b) New `host_transfers` table (migration 0017, from/to ids, time, same-session trigger). Recommend (a): nothing reads a separate table, retention would be the same (cascades with the session), and the brief asks only to "record the transfer event". Slice table's 0017 then moves to slice 8.
+- **D40 [decided 2026-11-27: (a) plain guest] The old host after transfer.** (a) Plain guest. (b) Co-host (keeps serving). Recommend (a): the brief's step 4 is "relinquish host authority"; the new host can make them co-host in one tap (`cohost-toggle.tsx`).
+- **D41 [decided 2026-11-27: (a) open orders only] Transfer after End.** (a) Open orders only (Options sheet is hidden on ended orders, `session-header.tsx:~58-70`). (b) Also after End, since billing after End is host-only (D1). Recommend (a): the host can still bill from their own phone after End, and (b) needs a new host surface on ended orders. Revisit if the pilot shows hosts leaving before the bill.
+- **D42 [decided 2026-11-27: (a) direct call via `useDirectSave`] How the transfer reaches the server.** (a) Direct call from the handover step with `useDirectSave` (`src/hooks/use-direct-save.ts`, as PaymentSheet): same-key retry, offline shows "No connection…" and retries on reconnect while the step is open, nothing persisted; route is PUT. (b) Queued op in `use-session.ts`: persisted in localStorage (`use-session.ts:223,414`), so an offline "Make Jun the host" could fire hours later. Recommend (a): a handover should happen while the host is looking at it ("Transfer must be atomic"); also keeps `use-session.ts` (569 lines) untouched.
+- **D43 [decided 2026-11-27: (a) "That's mine" claim on host-added rows] Dishes the host added for me (by participant or typed name) in My order.** (a) Show the existing "That's mine" claim on host-added rows (reuse `onClaim` / `myClaims`, `people-view.tsx:127-129,151-155`); typed-name rows in their own group 'The host added these for "Liza". Yours?'. (b) Read-only "added by Host", no claim. Recommend (a): claiming is the only existing way a guest corrects a host-added dish ("Correct their draft items when permitted", "Identify mistakes before confirmation"), and `requestClaim` says names alone never merge (`people.ts:~100`), so typed names can't be shown as mine without it.
+- Mobile scope: carried from D6 (responsive + native feel; all baseline items present, researcher re-checked 2026-11-27).
+
+### Assumptions
+- Co-hosts see My order like any guest (role GUEST).
+- The new host's earlier ready row is left as is (`readinessSummary` counts guests only).
+- `participant_credentials.credential_type` left stale (never read, `create.ts:42`).
+- The new host gets the host tour offer (`tourSeen` is per role, `guide-steps.ts:169`); kept, it helps. The old host's guest offer is suppressed.
+- A6.1 Handover step asks for the host's name when it is still "Host" (one request); not asked by the owner, needed because a guest can't rename themself (`permissions.ts:35`).
+- The M6 notice is an addition (brief asks only for immediate capabilities and a record); same shape as the co-host notice.
+- Unread `guests.ready` / `payment.needsReview` notices in the old host's Updates stay.
+- The old host's own open-round dishes make them "ordering" (via `submittedBy`) under D38, so they hold back the notice until they tap ready.
+- D38 notice is evaluated only in `setReady`: a guest removing their last dish when everyone else is ready sends no notice. Accepted.
+- The new host's earlier dishes in the open round become claimable by guests (claim rule keys on current role, `people.ts:110`). Accepted.
+- Guide: guest step "Tell the host you're done" (`guide-steps.ts:128-135`) copy becomes "Check your order" / "Tap My order to see everything that's yours this round, fix mistakes, then tap I'm ready." (D36 a); the dock button keeps `data-tour="ready"`; no host-transfer guide step (first-use prompt: the row sits in Options, where the host meets it).
+- Claims after transfer as in Not doing.
+
+### Done when
+- `timeout`-wrapped `pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm e2e` pass.
+- Unit: `myOrderRows` grouping (for you / added for others / shared incl. group membership / typed-name fold); `readinessSummary` with D38; `can()` table gains `host.transfer`.
+- Contract (`tests/contract-host-transfer.test.ts`, golden `docs/contracts/host-transfer.md`): host transfers → roles swapped, one HOST; new host's `cohost_at` cleared; old host co-host flag cleared; guest/co-host 403; self 422; removed target 409; typed/unknown 404; closed order 409 `SESSION_CLOSED`; replay same key = same result, no second notice; old host's write after transfer 403 `FORBIDDEN`, in-flight one 403 `ROLE_CHANGED` (R01-style `betweenAuthAndLock`); two concurrent transfers → exactly one HOST; displayName renames before demote; target's pending claims rejected; event in `NON_TICKET_EVENTS`; notice to new host only (E16 in `contract-notifications`). D38: notice fires when all ordering guests are ready, never with 0 ordering.
+- Existing tests to update: `e2e/groups.spec.ts:42-47`, `e2e/rounds.spec.ts:25`, `e2e/slice8-measure.spec.ts:99` (dock), `tests/contract-notifications.test.ts:331,346` (E08/E08b under D38), `tests/views.test.ts:74`, `tests/people.test.ts:29-42`.
+- E2E (`e2e/my-order.spec.ts`, `e2e/host-transfer.spec.ts`): guest opens My order, sees size + note + "added by Host" row, changes quantity in the sheet, marks ready, host sees Ready; host hands over to Jun, Jun's phone shows Review without reload, old host's phone shows "I'm ready"/My order; axe on both sheets light/dark.
+- Manual: shots of every state above at 320/375/430/768/1280.
+
+### Skills
+- `.impeccable/surfaces/src-app.md`, `DESIGN.md`: order-pad world, dock, sheet styling.
+- `frontend-a11y` / `accessibility`: drawer focus, radio group, aria-pressed toggle, live status.
+- `mobile-native`: drawer on phones, tap targets.
+- `contract-first`: new route + golden contract.
+- AGENTS.md: read `node_modules/next/dist/docs/` route handler guide before the new route.
+
+### You need to do
+- Nothing (no migration: D39 a).
+
+### Mockups (slice 6, text sketch)
+
+M1 Guest dock, 375 (today: `[Share ₱880] [Ticket] [✓ I'm ready]`):
+```
+M1a (D36 a)                                M1b (D36 b)
+│ 7 items                                │ │ 7 items                               │
+│ [Share ₱880] [Ticket] [☰ My order]     │ │ [Share ₱880] [Ticket] [✓ I'm ready]   │
+│   ready: [☰ My order ✓]  (ok-wash)     │ │ + Order tab, above Liza's first row:  │
+│                                        │ │   "Check my order →"                  │
+```
+
+M2 My order sheet (guest Liza, 375):
+```
+┌──────────────────────────────────────────┐
+│ My order                             [✕] │
+│ Round 2 · Not marked ready yet           │
+│──────────────────────────────────────────│
+│ FOR YOU                                  │
+│ 2× Sinigang · Large                [−][+]│
+│    No sauce, extra calamansi · Edit      │
+│ 1× Halo-halo                             │
+│    added by Host          [That's mine?] │  (D43 a)
+│ THE HOST ADDED THESE FOR "LIZA". YOURS?  │  (D43 a, only if any)
+│ 1× Pancit                 [That's mine?] │
+│ YOU ADDED FOR OTHERS                     │
+│ 1× Sisig · for Jun · Edit          [−][+]│
+│ SHARED                                   │
+│ 1× Crispy Pata · whole table             │
+│──────────────────────────────────────────│
+│ [        ✓ I'm ready        ]            │
+│ The host sees this. Changing anything    │
+│ clears it.                               │
+└──────────────────────────────────────────┘
+```
+M2-empty: "Nothing for you in round 2 yet." then any SHARED rows, same footer.
+M2-ready: header "Round 2 · You're ready"; footer button `[✓ Ready · tap to undo]` (ok-wash, aria-pressed=true).
+
+M3 Order options (host, 375), new row above End:
+```
+│ Your name [ Kovie        ]              │
+│ Order name [ Max's Restaurant ] [Save]  │
+│ ─────────────────────────────────────── │
+│ How Salo works                          │
+│ Hand over host →                        │
+│ All done? End order                     │
+```
+
+M4 Pick step:
+```
+│ ← Hand over host                    [✕] │
+│ Who should host this order?             │
+│ ( ) Jun · co-host                       │
+│ ( ) Liza                                │
+│ ( ) Ana                                 │
+│ [ Continue ]  (disabled until picked)   │
+```
+
+M5 Confirm step:
+```
+│ ← Make Jun the host?                [✕] │
+│ • Jun can confirm rounds, change prices,│
+│   record payments and end the order.    │
+│ • You become a guest. You can't undo    │
+│   this; only Jun can hand it back.      │
+│ • Everyone's phone updates right away.  │
+│ Your name [            ] (only if "Host")│
+│ [      Make Jun the host       ]        │
+│ [        Keep hosting          ] (ghost)│
+```
+
+M6 New host's notice (Updates): "Kovie made you the host." → opens the order.
+
+## Slice 7: invite continuity and reliability (F10, F12)
+
+Status: landed (PR #57)
+
+Verify 2026-11-27: checker typecheck/lint/1035 unit/build + 47 touched e2e pass; reviewer SHIPPABLE (fixed: `docs/pwa-invites.md` join line; corrections replay test rewritten to record real corrections); qa SHIPPABLE (7 flows); ui-critic SHIPPABLE, 3 fix-in-loop items fixed and measured (hint code weight 500, no gap before ".", curly apostrophe). Follow-ups in `.shots/follow-ups.md`.
+
+Brief F10 quoted from `salo-v1-4-brief.md:659-720`, F12 from `:762-800`. Research 2026-11-27 re-verified the audit's F10/F12 rows (`salo-v1-4-audit.md:45-60`) against slices 3–6. Slice 6 shots and handoff moved to `.shots/v1-4-slice6/`. Baseline: `.shots/before/` (21 states, script `.shots/before-s7.mjs`; `invite-ended-member-*` re-captured after End: the 404).
+
+### Ask ledger (slice 7)
+
+| # | Owner's words | Planned change | Status |
+|---|---|---|---|
+| S7.1 | "Define the proper PWA scope." | `manifest.ts`: `id: "/"`, `scope: "/"` (D44) | done |
+| S7.2 | "Support installed-app link capture." / "Evaluate launch-handler behavior." / "Avoid opening unnecessary duplicate application windows." | `launch_handler: { client_mode: "navigate-existing" }` (D44); capture itself is the OS's call, documented as such | done |
+| S7.3 | "Preserve the destination invitation." / "No invite codes are lost." | Invite page shows the code with a Home Screen hint (D45); join failures keep name and URL (already true) | done |
+| S7.3b | "Clear installed-app guidance." (iOS, Consider) | The D45 line: guidance for someone already using the Home Screen app, not an install how-to | done |
+| S7.3c | "Session resumption." (iOS, Consider) | Not doing: no cross-context identity; F09 rules out insecure takeover | not doing |
+| S7.3d | "Browser/PWA storage isolation." (iOS, Consider) | Documented in `docs/pwa-invites.md`, `[unverified until device check]` | done |
+| S7.3e | "Review the PWA manifest and invite routing." / "Use supported browser and OS mechanisms." / "Installed PWA launch works where supported." | Manifest per D44, invite routing per D46; launch behaviour confirmed by owner device check | done |
+| S7.4 | "Invitations open the correct session." | A member opening their ended order's invite lands on the order instead of a 404 (D46) | done |
+| S7.5 | "Browser fallback remains usable." / "Maintain a reliable browser fallback." / "No invite codes are lost." | Invite page stays the browser path; offline join error says what really happens | done |
+| S7.6 | "Existing sessions are not silently overwritten." | Already true (per-session cookies `credentials.ts:13-30`); pinned by a new e2e | done |
+| S7.7 | "Android and iOS behavior is documented accurately." / "Do not claim ordinary external HTTPS links can always force-launch a Home Screen PWA." / "Never use an unreliable custom URI scheme" | New `docs/pwa-invites.md`: what each platform does, what's unverified until a real-device check; no custom scheme | done |
+| S7.8 | F12 "Audit and strengthen: Server-Sent Events delivery. Reconnection behavior." | Covered: durable log replay + resync (`events.ts:19`, `use-session.ts:300-313`), `realtime.test.ts:81-155`; written up in new `## Reliability scenarios (F12)` section of `docs/realtime.md` (audit file untouched) | done |
+| S7.8b | "Offline change queues. Direct-save retries." | Queue persisted (`use-session.ts:214-228`, `queue.test.ts`); direct saves retry on `online` (`use-direct-save.ts:56-67`); new offline payment e2e (S7.12); serving per D48 | done |
+| S7.8c | "Idempotency keys." | `mutations.ts:62-78`; `contract-billing-after-end.test.ts:150` (E02), `contract-adjustments.test.ts:576` (R07); lost-response e2e (S7.10) | done |
+| S7.8d | "Concurrent serving updates." | `contract-serving.test.ts:545-596` (slice 3) | done |
+| S7.8e | "Stale price revisions." / "Simultaneous adjustment changes." / "Conflict handling." | `contract-table-prices.test.ts:203`, `contract-adjustments.test.ts:103`, `e2e/adjustments.spec.ts:97` | done |
+| S7.8f | "Session revision behavior." | Gap-free revisions, stale snapshots ignored (`use-session.ts:244`); `realtime.test.ts` | done |
+| S7.8g | "No duplicate serving increments, duplicated discounts, lost payments, silently overwritten prices, or invalid totals." / "Preserve existing working infrastructure and apply targeted improvements only." | Serving: `contract-serving.test.ts`; discounts/payments: S7.10; prices: `contract-table-prices.test.ts:203`; totals: money tests in `tests/kkb*.test.ts` + slice 9 property tests. No new infrastructure | done |
+| S7.9 | F12 "Test: Two co-hosts mark the same dish served simultaneously. Host revokes a co-host while an update is pending." | Already fixed and tested in slice 3 (`contract-serving.test.ts:545-596,645-664`, `e2e/cohosts.spec.ts:60,91`); cited, no new work | done |
+| S7.10 | F12 "A discount save succeeds but its response is lost. The client retries a saved receipt adjustment." | New e2e: response dropped after the server commits (adjustment, receipt, payment); retry must not duplicate or show a false conflict | done |
+| S7.11 | F12 "Two devices edit the same bill." | Already covered (`contract-table-prices.test.ts:203`, `e2e/adjustments.spec.ts:97`, `e2e/quick-prices.spec.ts:110`); cited | done |
+| S7.12 | F12 "The host switches networks during settlement." | New e2e: host records a payment offline, it retries on reconnect and lands once | done |
+| S7.13 | F12 "A participant reconnects after several corrections." | New contract/realtime test: replay after several correction events, then snapshot matches | done |
+| S7.14 | F12 "An order closes while changes remain queued." | Replay-after-End already pinned (E02, R07). New e2e only for a fresh queued add: guest adds offline, host ends, guest reconnects → "Not saved" list with Discard, nothing lands | done |
+| S7.15 | F12 "Notification read-state synchronization." | Documented limitation kept (refresh-only across one person's devices, `notifications.ts:150-158`) | done |
+| S7.16 | Slice 3 deferral: "persisting serving edits across reload (slice 7 F12)" | D48 (b): unsent / failed / in-flight served taps persisted with keys in `localStorage` `salo:served:<sessionId>`, resent on load | done |
+
+### Today (slice 7)
+- Manifest: `name`, `start_url: "/"`, `display: "standalone"`, colours, icons; no `id`, `scope`, `launch_handler`; no service worker (`src/app/manifest.ts:5-20`). Next's type has `id`, `scope`, `launch_handler` but not `handle_links` (`node_modules/next/dist/lib/metadata/types/manifest-types.d.ts:26,28-30,43`).
+- Invite page: closed or unknown code → `notFound()` (`src/app/i/[code]/page.tsx:55`) runs **before** the "already a member → redirect" check (`:60-61`), so a member tapping their ended order's link gets "Wala dito." while the order is still viewable at `/s/<id>` until expiry.
+- Join form offline: shows the shared network message "No connection. Your change is kept and will be retried." (`api-client.ts:48`, shown by `join-name-form.tsx:33`); nothing is kept or retried there.
+- No standalone detection or install guidance anywhere. iOS Home Screen apps don't share cookies with Safari, so a guest who joined in Safari is a stranger in the Home Screen app; the landing page's code field (`components/landing/join-form.tsx`) is the only way in from there, and the invite page never shows the code as text.
+- F12, re-verified: co-host serving race and revoke-under-lock fixed in slice 3; offline direct saves retry on `online` (`use-direct-save.ts:56-67`, 8 sheets); queue persisted in `localStorage` `salo:queue:<id>` (`use-session.ts:214-228`); server replay by key in `mutation_records`, before the closed check (`mutations.ts:62-82`). A lost-response retry of the same request reuses its key (`use-direct-save.ts:22-27`) and replays, but only while the same sheet stays mounted: ids are minted per mount (`adjustment-sheet.tsx:75`, `receipt-sheet.tsx:56`, `payment-sheet.tsx:55`). **Ceiling:** lost response, then close or reload and re-enter → a second row; the first is visible in the list via SSE. Accepted and documented in `docs/realtime.md`; fixing it needs a persisted id per sheet. Other gaps are test gaps plus serving taps held only in memory (`use-served-edits.ts:43-45`).
+
+### Approach (slice 7)
+1. **Manifest** (`manifest.ts`): add `id`, `scope`, and per D44 `launch_handler`. `id: "/"` equals the id browsers already derive from `start_url: "/"`, so existing installs are not treated as a new app.
+2. **Invite page** (`i/[code]/page.tsx`): keep `lookupInvite` first. For a found CLOSED invite, don't `notFound()` at `:55`; run the cookie + `resolveActor` check (`:60-61`) first and `notFound()` only with no actor (D46). Move `inviteActivity` (`:57`) after the actor check. `resolveActor` already returns null for expired orders and removed guests (`actor.ts:36-46,53-57`); `loadSessionForPage` renders closed orders for members (`page-data.ts:12-17`), so no loop. Strangers keep the same 404 (comment at `:54`). Home Screen line (D45): shows `normalizeJoinCode(code)` (`join-code.ts:6`) in the `tally` class with `sr-only` spaced letters as `invite-sheet.tsx:102-104`; hidden with `[@media(display-mode:standalone)]:hidden` (no JS `matchMedia`, it would flash).
+3. **Join form**: when `err instanceof ApiError && err.isNetwork` (`api-client.ts:11`), override the message in `join-name-form.tsx` only; other errors keep `err.message` ("No connection. Your name is still here; try again when you're back online."); `api-client.ts` stays shared and unchanged.
+4. **Docs**: `docs/pwa-invites.md` (platform behaviour, labelled verified / unverified), new `## Reliability scenarios (F12)` section in `docs/realtime.md` (incl. the lost-response ceiling), `HANDOFF.md` known limitations.
+5. **Tests**: the new e2e and contract tests in the ledger. Any test that fails reveals a bug that gets fixed in this slice.
+6. **Serving persistence** (D48 b, `use-served-edits.ts`): every `put` mirrors edits to `localStorage` `salo:served:<sessionId>`, keeping only edits with `unsent > 0`, failed ones, or `sending > 0 && committedRevision === null` (an in-flight send is stored with its key and `expected`, so a resend after reload replays instead of counting twice). On mount with `canServe`, read back (pure `toStoredServed` / `fromStoredServed`, unreadable entries dropped, as `queue.ts` `toStored`/`fromStored`) and send each: in-flight with its stored key, unsent as a new batch. A stale `expectedServed` applies nothing and returns the current count (`serving.ts:36-39`). Losing the role (`dropAll`, 403, `!canServe`) also clears the storage key. Listed on `/cookies` (`src/app/cookies/page.tsx`) beside `salo:queue`.
+
+Rejected: storing the pending invite code in `localStorage` with a "Continue joining" prompt (doesn't cross the iOS Safari/Home Screen storage split, which is the real gap; the code is already in the URL and share text). Server-side "same id + identical body = 200" for adjustments/receipts like payments: within one mounted sheet the same-body retry already replays by key; after close or reload the id is new, so it would never fire either.
+
+### Reuse
+- `resolveActor`, `credentialCookieName` (already on the invite page); `lookupInvite` returns the invite with its status, and `expiresAt` filtering already makes expired orders "missing" (`join.ts:38`).
+- Existing e2e helpers in `e2e/` (offline via `context.setOffline`, as `reconnect-retry.spec.ts`).
+- Dropping a committed response: `page.route` on the real adjustment / receipt / payment PUT path with a first-request-only counter: `await route.fetch(); await route.abort("failed")`, later calls `route.continue()`. The abort reads as NETWORK, the sheet shows Try again (`adjustment-sheet.tsx:340`, `receipt-sheet.tsx:205`, `payment-sheet.tsx:162`); `online` never fires, so the test clicks Try again (same key → replay). Assert exactly one row and no conflict banner.
+- `queue.ts` `toStored` / `fromStored` conventions for the served store (D48 b).
+
+### Not doing (slice 7)
+- No service worker, offline invite page, or custom URI scheme.
+- No `handle_links` (not in Next's type; Chromium-experimental).
+- No "resume on a new device" or cross-context identity (would need a takeover path; F09 rules out insecure takeover).
+- Notification read state stays refresh-only across one person's devices.
+- No change to the landing page's "Nothing to install" (still true: Salo works in the browser).
+- `theme-color` on landing/invite (tomato bar over paper, `layout.tsx:49-52`) stays as is; flag for slice 8/10 brand pass.
+- No pruning of stale `salo:queue:*` keys or `mutation_records`.
+- Real-device Android/iOS link tests: owner task (below).
+
+### States (slice 7)
+| State | After |
+|---|---|
+| Stranger opens invite (browser) | As today + one line "Using Salo from your Home Screen? Open it and enter **ABCDEF**." under the card (D45) |
+| Same, already in the installed app (standalone) | Line hidden |
+| Member opens own open order's invite | Redirect to the order (unchanged) |
+| Member opens own **ended** order's invite | Redirect to the order (read-only ended view) instead of 404 (D46) |
+| Member opens own **cancelled** (never confirmed) order's invite | Redirect to the cancelled view (`workspace.tsx:581`) |
+| Member of an order past its deletion date | 404 (invite "missing", `/s/<id>` gone) |
+| Removed guest opens an ended order's invite | 404, as a stranger |
+| Hint at 320, light and dark | Centred, wraps freely like the line above |
+| Stranger opens ended / unknown code | Same 404 as today |
+| Join offline | "No connection. Your name is still here; try again when you're back online."; name kept; button re-enabled |
+| Member of A opens invite B | Joins B; A untouched, both in "Pick up where you left off" (pinned by e2e) |
+| Widths | 320, 375, 768, 1280; light and dark |
+
+### Decisions
+
+Owner answers 2026-11-27: D44 (a), D45 (a), D46 (a) = recommended; D48 = (b) persist.
+
+- **D44 [decided: (a)] Manifest launch behaviour.** (a) `id: "/"`, `scope: "/"`, `launch_handler: { client_mode: "navigate-existing" }`; (b) `id`/`scope` only; (c) (a) + `handle_links: "preferred"` via a type cast. Recommend (a): `navigate-existing` reuses an open window where Chromium supports it ("Avoid opening unnecessary duplicate application windows") and is ignored elsewhere; `handle_links` isn't in Next's manifest type (`manifest-types.d.ts`) and is experimental.
+- **D45 [decided: (a)] Home Screen hint on the invite page.** (a) one line under the card showing the code, hidden in standalone; (b) no hint, docs only; (c) a guide step about installing too. Recommend (a): the code is what an iOS Home Screen user needs (Safari and the Home Screen app don't share storage), and memory "entry point at first use" says guidance belongs where users first meet it.
+- **D46 [decided: (a)] Member opens their ended order's invite.** (a) redirect to `/s/<id>`; (b) an "This order has ended" page with a link. Recommend (a): the ended view already exists and is read-only (`workspace.tsx:587`); strangers keep the 404.
+- D47 unused.
+- **D48 [decided: (b) persist, against the recommendation] Serving taps across reload.** (a) keep in memory (today); document; (b) persist unsent/failed taps with keys in `localStorage` and resend on load. Recommend (a): a lost offline tap leaves the count visibly unchanged and is re-tapped; `expectedServed` (`serving.ts:36-39`) makes (b) safe but it adds a second persisted queue for a kitchen counter; offline taps already retry on reconnect (`reconnect-retry.spec.ts:5-15`), only a reload loses them. Slice 3 promised this here (`salo-v1-4.md:528`), so (a) drops that deferral.
+- **Mobile scope**: carried from D6, responsive + native feel; this slice touches only the invite page and join form.
+
+### Assumptions
+- Hint copy: "Using Salo from your Home Screen? Open it and enter **ABCDEF**." (code in mono, as the invite sheet).
+- Lost-response tests: if the sheet shows "Someone changed this" after a committed create whose body the person then edited, that conflict is correct (the first save did land) and Keep mine re-saves; only a duplicate row or a stuck sheet counts as a bug.
+- Docs label platform claims `[verified in code]` or `[unverified until device check]`, as the audit does.
+
+### Done when (slice 7)
+- `pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm e2e` pass.
+- `GET /manifest.webmanifest` has `id`, `scope` (and `launch_handler` per D44).
+- Unit: `toStoredServed`/`fromStoredServed` round-trip and drop rules in `tests/served-edits.test.ts`.
+- New e2e: served tap offline → reload → online lands exactly once (in `e2e/reliability.spec.ts`).
+- New e2e: `e2e/invite-continuity.spec.ts` (ended-member redirect, stranger 404, A→B no overwrite, offline join message, hint element carries the `display-mode: standalone` hide class — Playwright can't emulate display-mode); `e2e/reliability.spec.ts` (lost response on adjustment / receipt / payment create, offline payment then reconnect, queued-then-ended). New test in `tests/realtime.test.ts` or a contract file: reconnect after several corrections.
+- Manual: invite page shots at 320/375/768/1280, light/dark, vs `.shots/before/`.
+
+### Skills
+- `mobile-native` (PWA manifest, standalone media query), `impeccable` + `.impeccable/surfaces/src-app.md` (invite copy), `e2e-testing`, `contract-first` (contract docs if a contract changes).
+
+### You need to do (slice 7)
+- [ ] Real-device check after merge: Android (Chrome, Messenger) and iPhone (Safari, Home Screen app) open an invite link; hint hidden inside the installed app; note results in `docs/pwa-invites.md`.
+
+### Mockups (slice 7, text sketch)
+M1 Invite page, browser (375):
+```
+┌ ticket ─────────────────────────────┐
+│ [logo]                              │
+│ Join the order at Max's Restaurant  │
+│ Add your dishes to the table's …    │
+│ ● Live · 3 people · 5 items so far  │
+│ Your name [            ]            │
+│ [        Join the order        ]    │
+└─────────────────────────────────────┘
+No app or account. Your name is only shown to this table.
+Using Salo from your Home Screen? Open it and enter ABCDEF.   ← new (D45)
+        Not now, back to Salo
+```
+M3 Hint at 320: same line, centred, wraps to two lines under "No app or account…".
+
+M2 Join offline: under the name field, "No connection. Your name is still here; try again when you're back online."
+
+## Slice 8a: restaurant menu link (F16)
+
+Status: landed (PR #58)
+
+Verify 2026-11-27: checker typecheck/lint/1244 unit (incl. 148-scenario golden contract `tests/contract-menu-link-golden.test.ts`)/build + touched e2e pass; reviewer SHIPPABLE (fixed: menu step reuses `useDirectSave` with an `offlineMessage` param; zod too-long uses `MENU_REASONS.tooLong`); contract-tester CONTRACT HOLDS; qa SHIPPABLE (8 flows); ui-critic SHIPPABLE, 2 fix-in-loop items fixed and measured (hint `min-h-5`: Link input top 574px in every state; Report link `pr-3`: right edge = icon right edge at 320/375/1280). Follow-ups 1–3 done 2026-11-27 (owner picked all): domain cut from the start, visible "Share the menu link" title on the menu step, rate-limit wait in minutes above 90 s (`waitText`); re-check also cut the Options-row domain from the start and set the step description to `text-sm`. Re-check: checker 1245 unit + menu-link e2e pass, reviewer/qa/ui-critic SHIPPABLE. Note: unit tests share `salo_test`; never run two `pnpm test` at once.
+
+Baseline: `.shots/before/` (21 shots + measure-rows JSON, `heights.json`), script `.shots/s8a-before.mjs` (`OUT=.shots/after BASE=http://localhost:3400 node .shots/s8a-before.mjs`). Port 3300 runs the owner's `next dev` of this repo and Next 16 refuses a second one in the same dir, so the shooter served a copy rsynced to the session scratchpad; re-sync it after the edits. Guest Order tab after End is reached by clicking Order (ended guests land on Rounds).
+
+Slice 8 split into 8a–8d (owner, 2026-11-27: "Split 8a–8d", F16 first). Order after 8a: 8b F17, 8c F14, 8d F11+F13 (assumption; re-ask at each kickoff). Research 2026-11-27 re-verified the Phase 0 audit: migration is `0017` (audit's `0018` stale, D39 dropped `host_transfers`).
+
+### Ask ledger (slice 8a)
+
+Brief F16 (`salo-v1-4-brief.md:1400-1532`).
+
+| # | Owner's words | Planned change | Status |
+|---|---|---|---|
+| A1 | "Add a restaurant menu URL." / "Edit or remove the URL." | Options sheet "Menu link" row → sub-step with URL + label, Save, Remove link (M2) | done |
+| A2 | "See the current URL and its validation status." | Sub-step shows the saved domain and inline validation message as the host types (shared `parseMenuUrl`) | done |
+| A3 | "Optionally provide a short menu label, such as "Main Menu" or "Drinks Menu"." | Optional label, max 40 (`LIMITS.label`); one link per order | done |
+| A4 | "Share the same link with all participants through the session." / "Receive realtime updates when the host changes or removes the link." | `snapshot.session.menu`; event `session.menuSet` → normal SSE refetch | done |
+| A5 | "View the current restaurant menu link." / "Open the menu externally." / "See the destination domain before opening it." | View menu row at the top of the Order tab, domain shown, `target="_blank" rel="noopener noreferrer"` (M1) | done |
+| A6 | "Show a discoverable **View menu** action near the top of the Order screen" / "Avoid adding a permanent navigation tab." / "Do not display empty menu controls when no URL is configured." | Row only when a link exists; no tab; guests see nothing otherwise | done |
+| A7 | "Provide menu management within the host's session options." | `OrderOptionsSheet` (host + open only, `workspace.tsx:522`) | done |
+| A8 | URL validation and safety 1–9 ("server-side", "HTTPS", reject schemes, credentials, localhost/private/encoded IPs, length, plain data, escaped label, no unsafe HTML) | `src/lib/menu-url.ts` `parseMenuUrl`, used by the zod schema server-side and the form hint client-side; DB CHECKs on length | done |
+| A9 | "Rate-limit menu URL changes." | Dedicated limiter, 10 changes / 10 min per participant (Pinned details) | done |
+| A10 | "Apply host-only authorization for add, edit, and removal operations." | Action `session.menu` in `HOST_ONLY` (`permissions.ts:36`), re-checked under the lock (`mutations.ts:57-62`) | done |
+| A11 | "Avoid server-side URL fetching" / no crawl, no OG, no redirects | No outbound request anywhere | done |
+| A12 | Malicious URL detection ("Evaluate optional integration…", "Do not advertise links as "verified safe"") | D4: no reputation service; never say "safe"/"checked"; show the domain | done |
+| A13 | "Provide a way for users to report a suspicious menu URL." | "Report" link for guests: `mailto:` `POLICY_CONTACT` with prefilled subject + URL | done |
+| A14 | "Do not embed… in an iframe" / "Avoid routing… through a Salo-hosted open redirect" / "Open links only through deliberate user interaction" | Plain anchor to the stored URL; no iframe, no `/go?url=`, no auto-open | done |
+| A15 | "No effect on confirmed order history or KKB." / "Existing retention behavior." | Event in `NON_TICKET_EVENTS` (`settlement.ts:16`); columns on `sessions`, so cleanup's cascade is unchanged | done |
+| A16 | Tests list (valid, schemes, credentials, private, IPv6/encoded, malformed/length, unauthorized guest, edit/remove, realtime, safe link, mobile a11y) | Unit `tests/menu-url.test.ts`, contract test, e2e `e2e/menu-link.spec.ts` (+ axe) | done |
+| A17 | Audit: "`PRODUCT.md:22` lists menus out of scope (F16 is a link only; reword)" | Reword PRODUCT.md:22 and README.md:3 menu clauses only (rest of PRODUCT.md:22 is 8d's); docs/api.md, docs/data-model.md, docs/ux-specification.md:15, new docs/contracts/menu-link.md | done |
+
+### Today
+- `sessions` has no menu columns (`schema.ts:40-58`). Last migration `drizzle/0016_payments.sql`.
+- Mutation template: `PATCH /api/sessions/[id]` → `runMutation(type "session.rename")` → `renameSession` checks `can(actor, "session.rename")`, updates, returns `session.renamed` (`api/sessions/[id]/route.ts:15-22`, `server/sessions/rename.ts:10-15`). Client op `{ kind: "rename" }` in the offline queue (`use-session.ts:35,88,112,160`).
+- Snapshot `session` block (`lib/snapshot.ts:10-18`) is filled by `getSnapshot` (`server/sessions/snapshot.ts`); every event ends in a full refetch, so a new field reaches guests with no new realtime code.
+- Per-participant mutation limit 120/min (`limits.ts:8`), too loose for URLs; `createRateLimiter` + `singleton` pattern exists.
+- `OrderOptionsSheet` main step: Your name + Order name form, "How Salo works", "Hand over host", End/Cancel (`order-options-sheet.tsx:126-205`); has steps already (`options`/`confirm`/`handover`).
+- Order tab: two branches, confirmed (`workspace.tsx:643`) and draft (`:675`); `workspace.tsx` is 787 lines.
+- No external `target="_blank"` link in the app; CSP doesn't govern navigation, framing already forbidden (`lib/csp.ts:14-30`).
+- WHATWG parser normalises encoded IPv4 (`2130706433`, `0x7f.1`, `0177.0.0.1`, `127.1`, full-width digits) to dotted form and IDN to punycode (audit `[node]`, `salo-v1-4-audit.md:70`).
+
+### Approach
+- **Validator** `src/lib/menu-url.ts`: `parseMenuUrl(input) → { ok: true, url, domain } | { ok: false, reason }`. Trim; prepend `https://` unless the input matches `/^[a-z][a-z0-9+.-]*:(?!\d)/i` (pinned below); `new URL()`; then reject: protocol ≠ `https:` (D49), username/password, any IP-literal host (v4 after normalisation, any `[v6]`), single-label hosts and `localhost`/`.localhost`/`.local`/`.internal`/`.home.arpa`, total length > 500. Stored value = `url.href` (normalised). `domain` = the full normalised hostname (no `www.` stripping), punycode shown as-is (no Unicode spoofing). Pure, shared by server and client.
+- **Server**: migration `0017_menu_link.sql` adds `sessions.menu_url text`, `sessions.menu_label text`, CHECKs `char_length(menu_url) <= 500`, `char_length(menu_label) <= 40`, `menu_label IS NULL OR menu_url IS NOT NULL`. `setMenuLink(tx, session, actor, input)` in `server/sessions/menu.ts`, Action `session.menu` (host only), event `session.menuSet` (payload `{}`), added to `NON_TICKET_EVENTS` and `docs/realtime.md`. Route: `PUT /api/sessions/[id]/menu` body `{ url: string | null, label?: string | null }` (null url = remove), zod schema refines with `parseMenuUrl`, idempotency key, `menuLimiter` (10 / 10 min per participant, hit inside `setMenuLink`; see Pinned details). Open orders only (D50).
+- **Snapshot**: `session.menu: { url: string; label: string | null; domain: string } | null` (domain derived server-side with the same helper).
+- **Client**: direct save (not the offline queue): the server may reject a URL, and a queued rejection surfaces late. Offline → "No connection. Try again when you're back online." in the sub-step, value kept.
+- **UI**: M1 View menu row (new `menu-link.tsx`, one line in each Order-tab branch of `workspace.tsx`, net ≤ +4 lines). M2 Options sheet row + "menu" step.
+- Rejected: separate `menu_links` table (brief: "small additive change"); Safe Browsing (D4); an interstitial "you're leaving Salo" page (that's an open redirect pattern the brief warns against).
+
+### Pinned details (plan-critic, verified)
+Validator (`src/lib/menu-url.ts`):
+- Scheme: prepend `https://` unless the input matches `/^[a-z][a-z0-9+.-]*:(?!\d)/i`; matching input is parsed as given (`javascript:`, `data:`, `ftp:` get the scheme reason; `https:example.com` normalises). `host:8080/x`, `localhost:3000`, `example.com:8080/x` get the prefix (then fail the port rule).
+- Strip one trailing dot from `hostname` before every host check; store the dotless host (`localhost.`, `foo.local.`, `x.internal.`, `example.com.`).
+- Hostname shape: ≥ 2 labels; each label `/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/` (`xn--` passes); last label not all digits. Rejects `a..b`, `.com`, `-a.com`, `exa_mple.com`, `a`.
+- Port: reject any non-empty `url.port` (`:443` is normalised away by the parser; `:8443` rejected).
+- Length: `href.length <= 500` after normalisation; zod caps raw input at 2048 so a huge body never reaches `new URL`. Test an input under 500 that expands past it.
+- Query and fragment kept. Credentials checked on the parsed URL, so `@` in path/fragment is fine.
+- Reasons and copy (one line under the field, `role="alert"` on submit):
+  - not parseable / no host: "That doesn't look like a web address."
+  - other scheme: "Use a web link that starts with https://."
+  - http (D49): "Use the https:// address of the menu."
+  - credentials: "Remove the name and password from the link."
+  - IP address: "Use the restaurant's web address, not an IP number."
+  - local / single-word / malformed host: "Use the restaurant's public web address."
+  - port: "Use the menu's normal web address (no port number)."
+  - too long: "That link is too long. Try a shorter one."
+  - 429: "Too many changes. Wait N seconds." (N ≤ 90) or "Wait about M minutes." (from `retryAfter`)
+  - offline (`ApiError.isNetwork`): "No connection. Try again when you're back online." (overrides `api-client.ts:36`, nothing is queued)
+  - label too long after tidying: "Keep it under 40 characters."
+
+Server:
+- `menuLimiter` (10 / 10 min) keyed by `actor.participantId`, hit inside `setMenuLink` after `can(actor, "session.menu")` and after the same-value no-op check. Replays return before `apply` (`mutations.ts:44-70`), zod 422s never reach it, so neither counts. In-memory: a later throw doesn't undo a hit.
+- PUT replaces both fields; omitted `label` = null; `url: null` clears the label too (a label with a null url is ignored). Same normalised url+label, or remove with no link → 200, no event, no revision bump (cohost no-op pattern, `docs/api.md:42`).
+- Route stores `parsed.url` (normalised href), never the raw input.
+- Label through `tidyText`, length re-checked after tidying → 422 (same pattern as `tidyName`, `settlement.ts:19-24`).
+- `getSnapshot` returns `menu: null` when `status = 'CLOSED'` (D50), so the URL isn't sent after End; columns stay for retention. Client reads `snapshot.session.menu ?? null`.
+- Migration: columns + three CHECKs in `schema.ts` (style of `sessions_closed_ck`), then `pnpm db:generate --name menu_link` → `drizzle/0017_menu_link.sql`, `meta/0017_snapshot.json`, journal entry. Not hand-written.
+- Files: `src/lib/permissions.ts` (Action union + `HOST_ONLY`), `src/server/limits.ts`, `LIMITS` in `src/server/orders/validation.ts`.
+
+Client / UI:
+- Save via `api()` + `newKey()` (`src/lib/api-client.ts`, like `host-handover.tsx:42`); one key per Save attempt, reused on retry. On success call the sheet's refresh prop (like `onHandoverRefresh`) so the row shows the domain before SSE lands.
+- Focus: entering the menu step focuses the Link input; Back and successful Save return to the main step with focus on the "Menu link" row, which shows the saved domain.
+- Row anchor accessible name: "<label or View menu>, <hostname>, opens in a new tab". Lucide `BookOpen` + `ExternalLink` (sketch emoji are placeholders). Label and domain carry `data-ph-mask` (`workspace.tsx:598`; `privacy/page.tsx:55`).
+- Live insertion: row inserts without animation, not sticky; one layout shift per host change, accepted.
+- Report mailto: `encodeURIComponent` subject and body; body = URL + order name (order name is private data going to `POLICY_CONTACT`, same as the privacy page's own request). Asserted in e2e.
+
+### Reuse
+- `runMutation`, `idempotencyKey`, `readJson`, `handle` (`server/http`), `can`/`HOST_ONLY`, `createRateLimiter` + `singleton`, `optionalText` for the label, `LIMITS.label`, `Drawer` steps in `OrderOptionsSheet`, `Button`, input classes from the Order name field, `POLICY_CONTACT` (`components/policy/policy-page.tsx:5`), e2e helpers `startOrder`/`inviteCode`/`joinAsGuest`/`confirmRound1`/`endOrder`.
+
+### Not doing
+- Reputation lookup, server-side fetch, previews/OG, iframe, redirect endpoint (brief non-goals, D4).
+- Several menu links per order (brief reads as one URL + one label).
+- Report endpoint or report storage (mailto only).
+- Updates notification when the link changes (snapshot refresh is the realtime update).
+- Editing the link after End (D50).
+
+### States
+- No link: nothing renders for anyone (Order tab unchanged); Options row reads "Add a menu link".
+- Link, no label: row "View menu" + domain. Link with label: row shows the label ("Drinks menu") + domain.
+- Long label / long domain at 320: the label truncates at the end; the domain truncates from the start (follow-up 1, owner-picked 2026-11-27) so its end stays visible; full label and domain stay in the accessible name.
+- Host draft and confirmed branches, guest draft and confirmed branches: row is the first thing in the tabpanel.
+- Host editing: empty, typing invalid (inline reason under the field, Save disabled), valid (domain preview "Opens ramennagi.com.ph"), saving, saved (back to main step, row shows domain), server error (inline `role="alert"`), rate-limited (message with seconds), offline.
+- Remove: "Remove link" ghost button in the sub-step when a link exists; guest row disappears live.
+- Guest live: link added/changed/removed while guest is on the Order tab → row updates with no focus jump (if focus was on the removed link, focus moves to the tabpanel).
+- Ended order: row hidden for everyone (D50); management gone with the sheet.
+- Widths 320/375/768/1280, light and dark.
+
+### Decisions
+Owner answers 2026-11-27: D49–D53 = recommended option.
+
+- **D49 [decided: (a) reject with hint] http:// links.** (a) reject with "Use the https:// address of the menu."; (b) silently upgrade to https. Recommend (a): brief "Allow only HTTPS destinations by default"; upgrading changes the destination the host chose without telling them.
+- **D50 [decided: (a) hidden after End] After End.** (a) link hidden and not editable once ended (management is open-only today, `workspace.tsx:522`); (b) guests keep seeing it after End. Recommend (a): the menu serves ordering, and ending freezes ordering.
+- **D51 [decided: M1a inline row] View menu layout (M1).** M1a inline row at the top of the Order tab: book icon, "View menu" / label, domain, external icon; guests also get a small "Report" link. M1b compact chip that opens a drawer with domain, Open menu, Report. Recommend M1a: one tap to the menu with the domain visible before the tap (brief "See the destination domain before opening it").
+- **D52 [decided: M2a row + sub-step] Menu management layout (M2).** M2a a "Menu link" row in the main options step that opens a "menu" sub-step (like Hand over host). M2b URL + label fields inside the existing name form, one Save. Recommend M2a: the name form posts to a different endpoint, and the URL needs its own validation, error and Remove states.
+- **D53 [decided: (a) Options row only] Host's first contact with the feature.** (a) Options row only; (b) Options row plus a host-only line on the Order tab while no link exists ("Add the restaurant's menu link"). Recommend (a): brief "Do not display empty menu controls when no URL is configured" and "Provide menu management within the host's session options". Tension: owner's standing rule that new features need an entry point where users first meet them.
+- Mobile scope: carried from D6 (responsive + native feel; new UI matches the baseline: 16 px inputs, `inputMode="url"`, 44 px targets).
+
+### Assumptions
+- Build choices accepted 2026-11-27 (within plan): empty-string url → 422 (only `null` removes); input > 2048 → too-long reason client and server; link input `type=text inputMode=url` placeholder `https://`, label placeholder "Drinks menu"; sub-step heading `sr-only` (back button carries "Menu link"); `Applied.event` may be `null` in `runMutation` for the no-op path (records the key, no event, no revision bump).
+- Missing scheme → `https://` prepended (hosts paste "ramennagi.com.ph/menu").
+- Every IP-literal host rejected, public ones too (no real menu lives on a bare IP; one rule covers all encodings).
+- Length cap 500 chars for the stored URL; label 40.
+- Rate limit 10 changes per 10 minutes per participant (only the host can change it; a new host after handover gets a fresh quota); generic mutation limit still applies.
+- "Report" mailto subject `Suspicious menu link`, body has the URL and the order name; guests only (the host set it).
+- No `rel="noreferrer"` downside: the restaurant doesn't learn the visitor came from Salo, which is fine.
+- No new cookie or storage, so `/cookies` is unchanged.
+
+### Done when
+- `pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm e2e` pass; `pnpm db:generate` leaves `drizzle/` clean.
+- Unit `tests/menu-url.test.ts`: valid https URLs (path, query, IDN → punycode, missing scheme), rejects `http:`, `javascript:`, `data:`, `file:`, `intent:`, custom schemes, `https://user:pw@x.com`, `localhost`, `127.0.0.1`, `2130706433`, `0x7f.1`, `0177.0.0.1`, `127.1`, full-width digits, `[::1]`, `[::ffff:127.0.0.1]`, `10.x`, `192.168.x`, `169.254.x`, public IP, single-label host, `.local`; normalised, not rejected: `https:example.com` and `https:/\evil.com` (stored as the parsed `https://…/` href), `https://example.com\@evil.com` (lands on example.com, domain shown is example.com), whitespace/tab, > 500 chars, empty.
+- Contract test: host set/edit/remove; guest 403; invalid 422; closed order refused; 11th change in 10 min → 429; snapshot carries `menu`; `session.menuSet` doesn't make a confirmed round stale.
+- E2E `e2e/menu-link.spec.ts`: host adds link → guest sees row live with domain; link has `target=_blank` and `rel` containing `noopener noreferrer`; host edits label, then removes → guest row gone; invalid URL shows inline reason; ended order hides the row; axe light/dark on the Order tab with the row and on the sub-step.
+- Also: `tests/permissions.test.ts` (`session.menu` host-only); `tests/db-integrity.test.ts` (three CHECKs); validator cases from Pinned details (scheme regex, trailing dot, hostname shape, ports, post-normalisation length); guest 403 and idempotent replay don't count against the host's limiter; same-value PUT emits no event; closed-order snapshot `menu === null`.
+- Manual: shots of every state above at 320/375/768/1280 vs `.shots/before/`.
+
+### Skills
+- `security-review` (untrusted URL input), `database-migrations` (0017 + snapshot), `impeccable` + `.impeccable/surfaces/src-app.md` (Operate surface), `frontend-a11y` (link names, live removal focus), `mobile-native` (url keyboard, 16 px input). No `.claude/skills/` in the repo.
+
+### You need to do (slice 8a)
+- [ ] Apply migration `0017_menu_link.sql` to production when the PR deploys (same as earlier migrations).
+
+### Mockups (slice 8a, text sketch)
+M1a Order tab, guest, 375 (row is new; everything below unchanged):
+```
+[ Order ] [ People ] [ Rounds ]
+┌──────────────────────────────────────────┐
+│ 📖 View menu                          ↗  │
+│    ramennagi.com.ph                      │
+└──────────────────────────────────────────┘
+                              Report link    ← guests only, text-sm, right-aligned
+┌ ticket: Round 1 ─────────────────────────┐
+│ ...                                      │
+```
+With label: `📖 Drinks menu ↗` / `ramennagi.com.ph`. Whole row is the anchor (min-h-12, rounded-xl, bg-paper).
+
+M1b (alternative) chip opens a drawer:
+```
+[ 📖 Menu ]                       ← chip at top of Order tab
+Drawer: "Restaurant menu" / "Opens ramennagi.com.ph in a new tab"
+        [ Open menu ↗ ]  Report link
+```
+
+M2a Options sheet, host, 375:
+```
+Order options                            [✕]
+Your name [Kovie          ]
+Order name [Ramen Nagi, Friday]
+[            Save            ]
+📖 Menu link            ramennagi.com.ph ›     ← or "Add a link" when empty
+🧭 How Salo works       30-second tour
+🤝 Hand over host       Pick a new host
+- - - - - - - - - - - - - - - - - - - - - -
+All done? …  [ End order ]
+```
+"menu" step:
+```
+← Menu link
+Paste the restaurant's menu link. Everyone in the order can open it.
+Link  [https://ramennagi.com.ph/menu    ]   (inputMode=url, 16px)
+      Opens ramennagi.com.ph                ← or the reason, e.g. "Use the https:// address of the menu."
+Label (optional) [Drinks menu     ]
+[            Save link            ]
+[           Remove link           ]   ← ghost, only when a link exists
+```
+M2b (alternative): the two fields appended inside the name form above its Save.
+
+## Slice 8b: animated room creation and Turnstile states (F17)
+
+Status: landed (PR #59)
+
+Verify 2026-11-28: checker typecheck/lint/1245 unit/build + e2e new-order + standalone (mobile + webkit) 41 pass, 1 skipped (webkit keyboard, Safari Tab default); reviewer SHIPPABLE; qa SHIPPABLE (flows A–L, 0 geometry findings over 42 states); ui-critic SHIPPABLE. Fixed in loop: dark-mode plates were near-black (`--on-tomato` is dark in dark theme) → loader uses the band pair (`fill-band`/`fill-on-band`), measured plate L 94 vs table L 25 in dark, light unchanged; one-word last lines → `text-balance` on the supporting line and error reason, last line now 4–7 words, checking/creating card 377 px and h1 y equal at 320/375. Follow-up 4 (e2e rAF hardening) done 2026-11-28: stale-callback test waits two frames and asserts no POST; new-order e2e 27 pass, 1 skipped.
+
+Kickoff 2026-11-27. Goal: "slice 8b of docs/plans/salo-v1-4.md." Research done in-session (the brief names the files; all read): no researcher. Baseline: `.shots/before/` (script `.shots/s8b-before.mjs`; 8a's shots moved to `.shots/s8a/`). States are frozen with a `window.turnstile` stub injected by `addInitScript` (`loadScript` returns early when it exists, `bot-check.tsx:23`). Baseline captured: 5 states × 320/375/1280 light+dark + 768 light, plus `checking-375-light-reduced`, measure-rows JSON per shot, `heights.json`. Re-run: `OUT=.shots/after BASE=http://localhost:3400 node .shots/s8b-before.mjs` against a scratchpad copy (`rsync` + `cp -cR node_modules`, symlinks break Turbopack) on port 3400 with the always-pass test keys. Before, at 375 light: card 317 px (checking/creating) → 381 (check error) → 405 (network/server error), h1 y 305.5 → 261.5; the empty status `<p>` leaves a gap above the alert in error states.
+
+### Ask ledger (slice 8b)
+
+Brief F17 (`salo-v1-4-brief.md:1533-1673`).
+
+| # | Owner's words | Planned change | Status |
+|---|---|---|---|
+| B1 | "Create a lightweight, original animation based on Salo's shared-table identity." / "A top-down circular dining table. Small plates or serving elements appearing or moving gently. Warm tomato-red and cream colors." / "No large animated backgrounds." | New `TableLoader` SVG (tail-less table, plates) replaces the `LogoMark` on `/new` (M1; animation D55) | done |
+| B2 | "Use CSS or lightweight SVG animation where practical." / "Avoid adding a substantial animation dependency" | Inline SVG + CSS keyframes in `globals.css`; no dependency, no JS timers | done |
+| B3 | State 1: "Preparing your table…" / "Just a quick security check before we start." / "Show the existing Turnstile widget when user interaction is required." | Copy per D54; widget box kept (`appearance: "interaction-only"` unchanged) | done |
+| B4 | State 2: "Setting up your table…" / "Getting everything ready for your order." | Copy per D54 while `POST /api/sessions` runs | done |
+| B5 | State 3: "Transition directly to the created dining session." / "may be shown if it does not delay navigation." | `router.replace` on 201 as today; no success frame (Assumptions) | done |
+| B6 | State 4: "clear explanation and actionable retry option" ("Verification could not finish." / "Connection was lost." / "Session creation failed.") / "Do not replace meaningful error messages with decorative animation." | Three error kinds with title + reason + Try again (Pinned copy); animation stops, error text keeps `role="alert"` | done |
+| B7 | Security list ("Preserve Cloudflare Turnstile… Siteverify… action and hostname… rate limiting… idempotency… Handle token expiry and failed verification… Never treat animation completion as proof… Never bypass… Never display a fake success state") | Server untouched (`turnstile.ts`, `api/sessions/route.ts`); state driven only by Turnstile callbacks and the API response; add `timeout-callback`, `unsupported-callback`, expiry → error | done |
+| B8 | "Do not introduce artificial waiting periods." / "Start verification as early as practical." | No minimum display time; `preconnect` to `challenges.cloudflare.com` during render | done |
+| B9 | "Keep animation lightweight." / "Avoid excessive JavaScript or CPU usage." / "Pause unnecessary animation when the page is not visible" | Transform/opacity keyframes only; hidden tabs don't render CSS animations, so no JS listener (Assumptions) | done |
+| B10 | "Respect `prefers-reduced-motion`." / "Display a usable fallback if motion is disabled or unavailable." | Reduced motion: still table with all plates set (final frame); server render shows the same still frame before CSS runs | done |
+| B11 | "Ensure readable status text with assistive technologies." / "Prevent disruptive repeated screen-reader announcements." | One always-mounted `role="status"` region; only checking → creating is announced (initial copy is page content); errors in `role="alert"`; SVG `aria-hidden` | done |
+| B12 | "Work at 320px…" / "light and dark mode" / "consistent Salo typography" / "Avoid unnecessary layout shifts." / "Turnstile challenge remains accessible and unobstructed." | Fixed-height copy block, widget box keeps `min-h-[65px]` below the copy, animation never overlaps it; tokens only | done |
+| B13 | Tests list (success, verification timeout, expired token, failed token, network interruption, creation failure, retry, no duplicate room, reduced motion, keyboard, SR announcements, narrow mobile, browser + installed PWA) | `e2e/new-order.spec.ts` grows to cover each with the stub + `page.route`; server failed/unavailable token stay in `tests/turnstile.test.ts`; iOS engine by adding `new-order` to the webkit `testMatch` (`playwright.config.ts:31`); installed PWA stays an owner check | done |
+| B14 | Phase 0 audit: "token expiry resets silently with no message (`bot-check.tsx:95`); no `timeout-callback`/`unsupported-callback`" / "Any F17 table animation should use a tail-less table" | Covered by B7 and B1 | done |
+
+### Today
+- `/new` (`app/new/page.tsx:11-24`): ticket card, `LogoMark size-12`, h1 "One moment", line "A quick check that you're a person, then we'll open your order.", `BotCheck`, "Back to Salo" link.
+- `BotCheck` (`landing/bot-check.tsx`): states `checking | creating | error` (`:20`). Widget box `min-h-[65px]` (`:105`), status `<p role="status" aria-live="polite">` with spinner + "Checking you're a person…" / "Starting your order…" (`:106-109`); error `<p role="alert">` + Try again (`:110-130`).
+- Callbacks: `callback` → `create(token)`; `error-callback` → "The quick check couldn't finish. Try again."; `expired-callback` → silent `reset` (`:84-95`). No `timeout-callback` / `unsupported-callback`. Script load failure → "The quick check couldn't load…" (`:97`), but a hanging script load spins forever (no timeout).
+- `create` (`:46-67`): one `attemptKey` per mount, reused on every retry (`??=`), so a retry after a lost response returns the same order (server replay store, `api/sessions/route.ts:28-33`). Error message = server `error.message`, or "No connection…" on `Failed to fetch`. The fetch has no timeout: a hung request spins forever.
+- Server: rate limit before verification, Siteverify 5 s timeout, never fails open, hostname + action checked (`api/sessions/route.ts:34-51`, `turnstile.ts:20-39`). Errors: 429 RATE_LIMITED, 403 BOT_CHECK_FAILED, 503 BOT_CHECK_UNAVAILABLE.
+- Motion: global reduced-motion rule clamps every animation to one 0.01 ms iteration (`globals.css:256-264`), so a keyframe whose end state is "plates set" shows the still frame. Keyframes live in `globals.css` (`:284-499`); `components/motion/` holds only `ticker.tsx`.
+- Mark: `LogoMark` has a speech-bubble tail (`brand/logo.tsx:13`); slice 10 redraws the logo, so the loader must not depend on it.
+- Tests: `e2e/new-order.spec.ts` (16 lines) asserts heading "One moment" (`:14`) — must change. `startOrder` (`e2e/support/helpers.ts:3-8`) and `e2e/standalone.spec.ts:8` only wait for `/s/<id>`: unaffected. Playwright runs Cloudflare always-pass keys (`playwright.config.ts:41-42`).
+
+### Approach
+- **`src/components/motion/table-loader.tsx`** (new, ~40 lines, server-safe, no hooks): inline SVG `viewBox 0 0 120 120`, `aria-hidden`: a tomato table circle (no tail), a faint inner rim ring, six cream plates on the rim at 60° steps, each a `<g class="table-plate">` with `--i` for its stagger. Prop `still` (error state: plates hidden, table only). Size `size-28` (112 px).
+- **Keyframes** in `globals.css` next to the others: per D55. Transform + opacity only, `transform-box: fill-box; transform-origin: center`. End keyframe = plate set, `animation-fill-mode: both`, so the global reduced-motion rule lands on the still "table set" frame.
+- **`BotCheck`**: state → copy table (Pinned copy). Render the loader + h1 + supporting line inside BotCheck (it owns the state), so `/new` page shrinks to the card shell + Back link. Add `timeout-callback` and `unsupported-callback` → verification error; `expired-callback` → verification error with its own reason (replaces the silent reset); watchdogs per D57 (same `attemptKey` on retry). `preconnect("https://challenges.cloudflare.com")` from `react-dom` at the top of render.
+- **Error classification** in BotCheck: Turnstile callback / script problems → `check`; `TypeError`/`AbortError`/timeout from fetch → `connection`; any non-2xx → `server` (body message shown as the reason). Kind picks the title, the reason is the second line.
+- Rejected: a JS/rAF-driven animation or a motion library (brief B2; CSS covers it); a minimum display time so the animation "finishes" (brief B8); keeping "One moment" as the h1 (see D54).
+
+### Pinned copy
+| State | h1 | Supporting line |
+|---|---|---|
+| checking | Preparing your table… | Just a quick security check before we start. |
+| creating | Setting up your table… | Getting everything ready for your order. |
+| error, check | Verification could not finish. | per cause: error-callback "The quick check couldn't finish. Try again." · timeout "The check timed out. Try again." · expired "The check expired before we could use it. Try again." · unsupported "This browser can't run the quick check. Try another browser." · script failed/15 s "The quick check couldn't load. Check your connection and try again." |
+| error, connection | Connection was lost. | No connection. Check your data or Wi-Fi and try again. |
+| error, check (server) | Verification could not finish. | 403 BOT_CHECK_FAILED / 503 BOT_CHECK_UNAVAILABLE: the server's `error.message` |
+| error, server | We couldn't set up your table. | other non-2xx (e.g. 429 RATE_LIMITED "Too many new orders… Try again in N minutes."): the server's `error.message`, else "Could not start an order. Try again." |
+
+Error block: title + line inside `role="alert"`, then the existing Try again button (unchanged behaviour: reset widget, or reload when the widget never rendered). Focus is not moved (Assumptions).
+
+### Pinned details (plan-critic, verified)
+- **Reduced motion:** `.table-plate` base style is the set state (opacity 1, no transform). Add `.table-plate { animation: none !important; }` to the reduced-motion block next to `.tick` (`globals.css:265-267`). The generic clamp doesn't touch `animation-delay`, so it would leave plates hidden up to 0.8 s and land on the empty 100 % frame.
+- **Live regions:** the `role="status"` container stays mounted in every state (never re-mounted on retry): h1 + supporting line while checking/creating, empty in error. In error, title + reason live in the `role="alert"` block, so the title is announced once.
+- **Error classification:** connection = thrown `TypeError` or `name` in `AbortError`/`TimeoutError` (never match `"Failed to fetch"`; Safari says "Load failed", `bot-check.tsx:69`), or a rejected `.json()` on an ok response (today swallowed, `:57`). Non-2xx: `error.code` BOT_CHECK_FAILED / BOT_CHECK_UNAVAILABLE → check kind; anything else → server kind. Server message is the reason line.
+- **No auto-retry loop:** remove `turnstile.reset` from the catch (`:65`): reset re-runs the managed challenge and its `callback` would call `create` again, so a 429/503 would auto-retry and hammer the limiter. Reset only on Try again. `callback` ignores tokens unless state is `checking`.
+- **Stale callbacks:** `error-`, `timeout-`, `unsupported-`, `expired-callback` change state only while `checking`; ignored in `creating`/`error` (an expiry 300 s after a used token must not overwrite an error).
+- **Script watchdog (D57):** sets a flag so a late script load doesn't render the widget behind the error.
+- **Widget box in error:** stays mounted (reset needs it) but `hidden`; `min-h-[65px]` returns on retry. Try again sits under the alert text, centred, as today.
+- **preconnect:** only when `siteKey` is set, no `crossOrigin` (plain script tag). Not CSP-governed; `csp.ts` already lists `challenges.cloudflare.com`.
+- **E2E details:** the stub stores `render` options so tests fire callbacks, and its `reset` re-invokes `callback`; stub token `XXXX.DUMMY.TOKEN.XXXX` (the lost-response test's `route.fetch()` reaches real Siteverify with the test secret); reduced-motion test asserts plate `opacity: 1` and `animation-name: none` (Chromium reports `1e-05s` durations); axe under `emulateMedia({ reducedMotion: "reduce" })` like `standalone.spec.ts`; real-path heading regex `/Preparing your table|Setting up your table/`; 320 tests call `page.setViewportSize` (project default 412). 503 test expects "Verification could not finish." + server message; server-kind test uses 429 RATE_LIMITED.
+
+### Reuse
+- Existing `BotCheck` flow, `attemptKey` idempotency, `Button`, `track` events (unchanged names), tokens `--tomato` / `--on-tomato` / `--rule` (dark values already defined), global reduced-motion rule, `ticket` card class.
+
+### Not doing
+- Any server change (Turnstile, rate limit, replay store): brief says preserve.
+- Reusing or changing `LogoMark` (slice 10 owns the logo).
+- A visible success frame or delay before navigation.
+- JS `visibilitychange` pausing (browsers don't paint hidden tabs; CSS-only animation costs nothing there).
+- Real-device and installed-PWA manual checks (owner, slice 9); Playwright can't emulate display-mode and the loader has no display-mode dependence.
+- `start-form.tsx` (plain `Link` to `/new`, `prefetch={false}`): unchanged, as the brief asks.
+
+### States
+- checking (default, widget invisible): loader animating, "Preparing your table…" + supporting line, empty 65 px widget box under the copy.
+- checking, interaction needed: same, Cloudflare widget visible in the box (box sits below the copy, nothing overlaps it).
+- creating: loader keeps animating, "Setting up your table…" copy; box stays (no shift).
+- error × 3 kinds: loader still (table only), title + reason in the alert, Try again; Back to Salo stays.
+- retry: back to checking copy; same `attemptKey`.
+- reduced motion: still table with six plates, same copy.
+- Widths 320/375/768/1280, light and dark; no layout shift between checking and creating: below 440 px viewport the h1 reserves 2 lines and the supporting line 2 lines (content is 240 px at 320, 295 px at 375; both copies wrap), 1 + 1 at ≥ 440. Implementer pins the `min-h` from measured line heights; verify measures 320/375/430/768. Error blocks may be taller; only checking → creating must not shift.
+- checking, interaction needed at 320: per D56.
+
+### Decisions
+Owner answers 2026-11-27: D54–D57 = recommended option.
+
+- **D54 [decided: (a) state is the heading] Heading and status structure.** (a) h1 shows the state's primary message ("Preparing your table…" → "Setting up your table…"), supporting line under it, both in one `role="status"` region; "One moment" and the old intro line retire. (b) keep h1 "One moment" + intro, brief's messages become the small status line under the widget. Recommend (a): the brief calls them "Primary message" / "Supporting message" (`brief:1577-1595`); (b) shows two competing messages.
+- **D55 [decided: (a) M4a table being set] Animation (M4).** (a) M4a "table being set": each plate runs the same 2.4 s cycle (fade + scale in from 0.6, hold, fade out) offset by `--i × 160 ms`, so plates arrive and leave as a wave round the table (plan-critic: "clear together" would need six keyframes). (b) M4b "lazy susan": all six plates on the table, the ring of plates turns slowly (one rotate, 8 s per turn). Recommend (a): brief "Small plates or serving elements appearing or moving gently" and "Preparing your table"; it reads as setting the table, and reduced motion shows the set table via `animation: none` (Pinned details). (b) is cheaper (one transform) but reads as a spinner.
+- **D56 [decided: (1) compact below 340 px] Interactive widget at 320.** Content is 240 px wide (`heights.json`), Cloudflare's normal widget is 300×65 and the `ticket` mask clips overflow. (1) `size: "compact"` (150×140) when `matchMedia("(max-width: 339px)")`, normal otherwise; verify with forced-interactive key `3x00000000000000000000FF`. (2) keep normal, widen the box with `-mx-6` (possible ~6 px clip). (3) leave it, note the limit. Recommend (1): brief "remains accessible and unobstructed" + "Work at 320px".
+- **D57 [decided: (a) both, 15 s + 20 s] Watchdogs.** Invented numbers, not in the brief. (a) keep both: 15 s for Cloudflare's script to load, 20 s abort on `POST /api/sessions` → error + Try again; (b) script watchdog only (a hung create keeps spinning); (c) neither (rely on `timeout-callback` and browser network errors). Recommend (a): today a hung load or request spins forever with no way out but reload; caveat in Assumptions (possible second empty order after a 20 s abort).
+- Mobile scope: carried from D6 (responsive + native feel; no inputs on this screen, Try again stays 44 px).
+
+### Assumptions
+- No success frame: on 201, `router.replace` right away; the creating copy stays until the new page paints.
+- Error state: focus is not moved; the alert announces, and Try again is the first tab stop in the card (before Back to Salo).
+- Expired token → error with Try again instead of a silent reset (audit U7); Try again resets the widget.
+- SSR markup has the set state as the plates' base style; the animation is CSS only, so it runs without JS too.
+- Timeout, unsupported, expired and script-load failures fire the existing `turnstile_failed` (`analytics.ts:18`); no new event names.
+- Focus after Try again falls to body as today (the button unmounts); the next Tab reaches the widget if shown, else Back to Salo.
+- A client timeout while request 1 still runs server-side can leave a second, never-opened empty order (`created.set` runs after `createSession`, `route.ts:52`, no in-flight lock). Accepted; server out of scope. A completed-but-lost response replays as 200, which `response.ok` accepts.
+
+### Done when
+- `pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm e2e` pass (one `pnpm test` at a time, shared `salo_test`).
+- `e2e/new-order.spec.ts`: keeps the API 403 check and the real always-pass path (heading "Preparing your table…" or "Setting up your table…", then `/s/<id>`); adds, with the `window.turnstile` stub and `page.route`: error-callback → "Verification could not finish." + Try again → passes on retry; timeout-callback; expired-callback; unsupported-callback; `/api/sessions` aborted → "Connection was lost."; 503 → "We couldn't set up your table." + server message; lost response (`route.fetch()` then `route.abort()`) → Try again lands on the same `/s/<id>` and both requests carried the same `Idempotency-Key`; reduced motion → plates' computed animation is clamped and plates visible; keyboard: Tab reaches Try again, Enter retries; the status region text changes exactly once from checking to creating; 320 px: no horizontal overflow; axe light/dark on checking and error.
+- Manual: `.shots/after/` vs `.shots/before/` for every state at 320/375/768/1280, light and dark.
+
+### Skills
+- `impeccable` + `.impeccable/surfaces/src-app.md` (Salo look), `motion-foundations` (keyframe timing, reduced motion), `frontend-a11y` (live regions, alert), `mobile-native` (320 px, no hover). No `.claude/skills/` in the repo.
+
+### You need to do (slice 8b)
+- Nothing (no migration, no env change).
+
+### Mockups (slice 8b, text sketch)
+M1 checking, 375 (creating identical with its copy):
+```
+┌ ticket ──────────────────────────────┐
+│              ( table )               │  ← TableLoader 112px, plates animate
+│                                      │
+│       Preparing your table…          │  ← h1 text-3xl, in role=status
+│  Just a quick security check before  │  ← text-ink-soft
+│            we start.                 │
+│        [ Turnstile box 65px ]        │  ← empty unless a click is needed
+└──────────────────────────────────────┘
+            Back to Salo
+```
+M2 creating: same layout, "Setting up your table…" / "Getting everything ready for your order."
+
+M3 error (connection shown):
+```
+┌ ticket ──────────────────────────────┐
+│              ( table )               │  ← still, no plates
+│        Connection was lost.          │  ← h1, inside role=alert
+│  No connection. Check your data or   │
+│       Wi-Fi and try again.           │
+│           [ ⛨ Try again ]            │
+└──────────────────────────────────────┘
+            Back to Salo
+```
+M4a table being set (wave: each plate fades/scales in, holds, fades out; next plate 160 ms later; 2.4 s per plate cycle):
+```
+  t=0      t=0.3s     t=0.8s       t=1.4s        t=2.0s
+  ( )      (•   )     (•• •)       (•• ••)       ( • ••)   ← first plates leave as the last arrive
+```
+M5 checking, interaction needed (Cloudflare widget in the box under the copy):
+```
+375: content 295 px; widget 300×65 normal → fits (box may bleed into padding)
+┌ ticket ───────────────────────────┐
+│            ( table )              │
+│      Preparing your table…        │
+│ Just a quick security check …     │
+│ ┌ ☐ Verify you are human  CF ───┐ │
+│ └───────────────────────────────┘ │
+└───────────────────────────────────┘
+320 (D56 option 1): compact widget 150×140 centred in the box
+│   ┌ ☐ Verify ┐   │
+│   │  …    CF │   │
+│   └──────────┘   │
+```
+M6 reduced motion: table with all six plates set, still; copy as M1.
+
+M3b error with a long server reason (429, 320):
+```
+│         ( table )          │
+│ We couldn't set up your    │
+│          table.            │
+│ Too many new orders from   │
+│ this connection. Try again │
+│ in 12 minutes.             │
+│       [ ⛨ Try again ]      │
+```
+M4b lazy susan: six plates set, the ring turns slowly clockwise (8 s/turn).
+
+## Slice 8c: large-order navigation (F14)
+
+Status: landed (PR #60)
+
+Verify 2026-11-28: checker typecheck/lint/1252 unit/build + e2e (mobile 12 specs, webkit large-order) pass; two one-off flakes passed on rerun (`unavailable.spec.ts:222` stuck at /new in a long run; `my-order.spec.ts:29` axe on a fading arrival tag, follow-up 7). reviewer SHIPPABLE; qa SHIPPABLE; ui-critic SHIPPABLE. D58 after numbers (`.shots/s8c/numbers-after.json`, 375): What's next 14,193 → 1,801 (−87%), px above first Waiting 3,184 → 459 (−86%), first draft row 11,298 → 1,715 (−85%), named dish 6,814 px → 1 tap + typing, 11th People card 3,491 → 1,059 (−70%), guest Order 9,782 → 1,694. All four changes kept. Fixed in loop: failed row's Try again kept visible during a search (unit test); Fully served matches render as a plain list while searching (forced-open details desynced on tap); host's own People card no longer sorts first/opens (plan States); collapsed People header spacing tightened; ticket button `pb-4` so the stamp clears the zigzag (measured −5.8 px overlap at 8 px padding; +8 px padding computed, not reshot). Follow-ups 5–7 in `.shots/follow-ups.md`. Follow-ups 5, 6 done 2026-11-28: collapsed People status pill is icon-only below 400 px (`max-[400px]:sr-only`; v4 `max-*` is strict <, so 375 needed the wider cut), headers 44 px at 375/390, 320 except the typed long name; disclosure button hides its stamp while the ticket is open, closed stamp clears the zigzag by 2.2 px (measured). Checker ALL PASS, reviewer SHIPPABLE, qa re-check, ui-critic SHIPPABLE. Follow-up 7 done: `my-order.spec.ts` waits for arrival tags/pills to unmount (ARRIVAL_MS) before axe; 3/3 repeat runs pass.
+
+Kickoff 2026-11-28. Goal: "slice 8c of docs/plans/salo-v1-4.md." Research: researcher brief (this session). Baseline: `.shots/before/` (8b's shots moved to `.shots/v1-4-slice8b/`), script `.shots/s8c/s8c-before.mjs`, seed `.shots/s8c/seed.mjs` → `seed.json` (host + 12 joined guests + 3 typed names, 40 dishes, 280 entries over 3 confirmed rounds 95/92/93, 14 correction rows, 1 dish unavailable, 30 of 51 dish+size priced, round 1 served, round 2 about half, round 3 none) and `seed-r4.json` (same plus round 4 open). Re-run after: `BASE=http://localhost:3400 OUT=.shots/after NUM=.shots/s8c/numbers-after.json node .shots/s8c/s8c-before.mjs` against `pnpm build && NEW_ORDERS_PER_HOUR=1000 JOINS_PER_HOUR=1000 POSTHOG_KEY= pnpm start -p 3400` (dev Postgres must still hold both seeded orders).
+
+### Ask ledger (slice 8c)
+
+Brief F14 (`salo-v1-4-brief.md:843-873`).
+
+| # | Owner's words | Planned change | Status |
+|---|---|---|---|
+| N1 | "Evaluate usability with realistic large dining sessions." | Seeded 12-guest, 3-round, 280-line order; numbers at 375×812 in `.shots/s8c/numbers-before.json` (Today) | done (baseline) |
+| N2 | "Only retain enhancements that measurably improve large-order navigation." / plan row "keep only what moves the number" | Each change names its metric; verify re-runs the script and reverts any change that cuts its metric by less than 30% (D58) | done |
+| N3 | "Do not implement every possible filter." | One search box (Served dishes) only; no filter chips, no per-person or per-round filters | done |
+| N4 | "Search or filtering for preparations." | "Find a dish" field in Served when it has 8+ rows (R4) | done |
+| N5 | "Collapsible sections." / "Reduced repetitive scrolling." | Confirmed ticket collapses on the Order tab (R1); Waiting shows the first 10 (R2); People cards collapse (R5) | done |
+| N6 | "Prioritization of outstanding food." | Waiting stays first and oldest-round first (already, `serving.ts:123-126`); R2 keeps the oldest 10 in view | done |
+| N7 | "Faster access to individual participant orders." | People cards collapsed to their header when there are more than 6, guest's own card first and open (R5) | done |
+| N8 | "Improved round navigation." / "Clearer correction-history references." / "More compact summary cards." | Measured: Rounds tab 1,437 px collapsed, last correction 601 px, 1 tap: below the bar, no change (Not doing). Compact Waiting rows projected under 30% once R2 lands (Not doing) | done (no change) |
+| N9 | "Maintain accessibility and keyboard focus when rows or sections change dynamically." | Disclosures use `aria-expanded`/`aria-controls`; filtered rows keep `useRowFocusFallback`; match count in a polite status; e2e asserts focus never drops to `body` | done |
+
+### Today
+
+Numbers at 375×812, host, dock 110 px (`numbers-before.json`):
+
+| Measure | Before |
+|---|---|
+| Order tab height (round 3 confirmed) | 15,029 |
+| → scroll to "What's next?" | 14,193 |
+| → px above the first Waiting row | 3,184 |
+| → scroll to 25th distinct dish (Buko Pandan, Waiting) | 6,814 |
+| → scroll to last Waiting row | 13,770 |
+| → Served rows rendered: Waiting / Fully served | 73 / 64 (Fully served collapsed) |
+| Order tab, round 4 open (`seed-r4`): height | 12,448 |
+| → scroll to the first draft-ticket row | 11,298 (73 Waiting rows above it) |
+| Order tab, guest Bea (read-only rows): height | 9,782 |
+| → scroll to last Waiting row | 8,786 |
+| People tab height (17 cards) | 5,475 |
+| → scroll to Migs (11th card) | 3,491 |
+| Rounds tab collapsed / all expanded | 1,437 / 9,045 |
+| → last correction row | 601 (1 tap) |
+| KKB sheet scroll height | 20,134 |
+| → Trisha's card | 7,100 |
+| → first unpriced line | 60 |
+| Summary Items sheet | 7,858 |
+
+- Order tab after confirm (`workspace.tsx:647-678`): `MenuLink`, the active round's `WaiterTicket size="compact"` (~3,000 px for 93 lines), `ServedSection`, then What's next (host) or a line (guest). The same dishes are on the ticket and in Waiting. The dock's Ticket button opens the full waiter view (`dock.tsx:72-76`), and the Rounds tab has every ticket.
+- Order tab while a round is open (`workspace.tsx:679-683`): `ServedSection` sits above the draft `OrderTicket`, so earlier rounds' Waiting rows push the draft down: the first draft row is 11,298 px down with 73 Waiting rows above it.
+- `ServedSection` (`served-section.tsx`): Waiting rows are ~150 px (label + stepper, meta line, people line, All served / Change… row, `:96-127`); never capped, no search. Fully served is a `<details>` closed above 5 (`COLLAPSE_ABOVE`, `:31,178`). Live count `role="status"` (`:197`). `useRowFocusFallback` on the row container (`:68,203`).
+- `PeopleView` (`people-view.tsx:129-176`): one `ticket` card per bucket, all expanded, active round only; header holds name, role badges, Ready badge, item count, Remove guest (host); then the co-host toggle, `Lines`, and the guest's "Yours?" claim block. Order from `byPerson` (`views.ts:23-42`); the guest's own card is not first.
+- Search today: only `DishPicker` (`dish-picker.tsx:9-36`): `SEARCH_FROM = 8`, labelled `type="search"`, `normalizeText`, "No dish matches."
+- Rounds are collapsed by default (`rounds-view.tsx:48`); KKB others' cards are `<details>`, host-unpriced ones start open (`kkb-view.tsx:54`).
+
+### Approach
+
+Five changes, each with the metric it must move (D58: ≥30% or it is reverted in verify):
+
+- **R1 Confirmed ticket collapses** (Order tab, confirmed round, host and guests). When the confirmed ticket has more than 8 dishes (`ticket.dishes.length`; sub-lines don't count), `WaiterTicket` sits behind a disclosure button, closed by default; ≤8 dishes render as today. The button shows "Round 3", the compact Stamp (no animation, keeps its `aria-label`) and "93 items" (`totalItems`), chevron `aria-hidden`; the open panel is today's `WaiterTicket` incl. its Corrections block. Rounds tab (`rounds-view.tsx:97`), review panel (`review-panel.tsx:99`), waiter panel (`waiter-panel.tsx:32`) and `/s/[id]/waiter` keep the full ticket. Metric: px above the first Waiting row (3,184 → ~250).
+- **R2 Waiting shows the first 10.** Above 10 Waiting rows, render the first 10 (oldest round first, as today) and a full-width "Show all 73 waiting dishes" button (rows, not plates); tapping shows all and the button becomes "Show fewer". Marking a row served pulls the next one in. Rows with an unsent, sending or failed edit (`edits[key]`) and the row `followKey` points at (`served-section.tsx:54-65`) always render, even past the first 10, so undo focus-follow and a failed row's Try again alert are never hidden. Metric: scroll to What's next (14,193 → ~2,000); in an open round, scroll to the first draft row.
+- **R4 Find a dish in Served.** With 8+ Served rows (Waiting + Fully served round-rows; 137 in the seed; reuse `SEARCH_FROM` by moving it next to `normalizeText` in `lib/dish-name.ts`), a labelled "Find a dish" `type="search"` field under the Served header. A query matches `line.label` (normalized, substring); while it is non-empty, matching Waiting rows show uncapped and matching Fully served rows show with the group forced open; "No dish matches." when empty; a polite status reads "3 dishes match" (counts round-rows), separate from `served-summary`, announced only when the query changes. Only `line.label` is searched, not the people line. The "N of M served" line and progress bar stay global. Copy "Find a dish" differs from DishPicker's "Search dishes" on purpose (this finds, it doesn't pick). Metric: reaching a named dish (6,814 px scroll → 1 tap + typing, 0 scroll).
+- **R5 People cards collapse.** Above 6 cards, each card shows only its header row (name, badges, count, Remove) plus a disclosure button (placement D64) with sr-only "Show Migs's order" (`aria-expanded`/`aria-controls`), a sibling of the header's controls, never wrapping them. The co-host toggle, lines and claim block are inside, so Make co-host becomes 2 taps on a large table. The guest's own card moves first and starts open; a "Possibly ordered twice" hint stays above, unchanged. Metric: scroll to the 11th card (3,491 → ~800 with D64 (a), ~1,200 with (b); +1 tap).
+- **Tests**: unit for the Served filter + cap helper; e2e on a seeded large order (extend `e2e/load.spec.ts` pattern) for each disclosure and the search, focus staying in the list after a filter removes the focused row, undo of a row past the cap keeps focus on its −, axe pass. Existing specs checked by plan-critic: none break (Order-tab ticket assertions are ≤8-dish orders; `load.spec.ts:38-39` asserts a People header, still visible; `motion.spec.ts:38` stamp is in the waiter dialog).
+
+Rejected: shipping the audit's guessed pair ("Order search, People collapse") without measuring — the brief says keep only what measurably helps, and the numbers show the Order tab's cost is the duplicated ticket and the uncapped Waiting list, not a missing dish search on the draft ticket.
+
+### Reuse
+- `normalizeText` (`lib/dish-name.ts:5`), `SEARCH_FROM` moved out of `dish-picker.tsx:9` into the same module, "No dish matches." copy.
+- Disclosure pattern of `rounds-view.tsx:136-148` (`aria-expanded` + `aria-controls`, chevron `aria-hidden`).
+- `useRowFocusFallback` already wraps Served rows; filtered/capped rows stay inside that container.
+- Seed + measure script `.shots/s8c/` for the after numbers; e2e helpers `joinAsGuest`, `confirmRound1`.
+
+### Not doing
+- Order-tab search on the draft `OrderTicket`: the draft holds one round (~40 dishes max); measure only if the `draft` numbers say otherwise.
+- Compact Waiting rows: after R2 only 10 rows show; saving ~50 px each is ~500 px of ~2,000 (25%, under D58's bar).
+- Rounds tab, corrections list: 1 tap and 601 px today.
+- KKB sheet and Summary Items (20,134 / 7,858 px): their open-by-default rules belong to the price and settle flow; handed to slice 8d with these numbers (D60).
+- Expand-all controls, filter chips, per-person/per-round filters, sticky section headers.
+- Groups tab (812 px).
+
+### States
+- Order tab, confirmed, host: ticket closed ("Round 3 ticket · 93 items"), Served header + Find a dish, 10 Waiting rows, "Show all 73 waiting", Fully served (64) closed, What's next. Ticket opened: today's ticket. Show all: 73 rows + "Show fewer".
+- Same, guest: read-only rows (no stepper/buttons), same cap and search, no What's next.
+- Small order (≤8 ticket lines, ≤10 Waiting, <8 Served rows): exactly as today (no disclosure, no cap button, no search).
+- Search: matches (Waiting uncapped + Fully served opened), no match ("No dish matches."), cleared (back to capped/closed state as before typing).
+- Order tab, round open (host): Served (capped) above the draft ticket.
+- People, host, 17 cards: all collapsed headers; one opened. People, guest: own card first, open; others collapsed. ≤6 cards: as today.
+- Widths 320 / 375 / 1280, light; dark at 375 for the new buttons.
+
+### Decisions
+Owner answers 2026-11-28: D58, D59, D62, D63, D64, D65 = recommended; M1 and M2 sketches match.
+
+- **D58 [decided: (a) ≥30%] Bar for "measurably improves"**: (a) a change stays only if it cuts its named metric by ≥30% on the seeded order at 375; (b) any improvement. Recommend (a).
+- **D59 [decided: R1, R2, R4, R5] Which changes to build**: R1, R2, R4, R5 (recommended, projections above); variants without R4 (search) or without R5.
+- **D60 [carried: (a) slice 8d; not asked separately] KKB sheet length** (20,134 px): (a) leave to slice 8d, which owns `kkb-view.tsx` defaults with the billing prompts; (b) add a KKB collapse here. Recommend (a).
+- **D63 [decided: (a) lift to workspace] Search and Show all across Change…**: Change… switches to Rounds (`workspace.tsx:244-247`), unmounting Served. (a) hold `query`/`showAll` in `workspace.tsx` so they survive the tab switch; (b) accept the reset. Recommend (a): the host fixing several dishes would retype and rescroll each time.
+- **D64 [decided: (a) name is the button] People disclosure placement**: (a) the name is the disclosure button inside the `<h3>`, badges/count/Remove beside it, one row per card; (b) a chevron button on its own row under the header. Recommend (a): ~100 px less per card, same pattern as Rounds' summary button (`rounds-view.tsx:136-148`).
+- **D65 [decided: (a) claimable cards open] Guest claimable cards**: collapsed cards would hide "That's mine" on typed-name / Not assigned cards holding host-added lines. (a) a card with lines this guest can claim starts open; (b) stays collapsed with a "Yours?" mark in the header. Recommend (a): a feature's prompt must be visible where users meet it (owner rule, memory).
+- **D62 [decided: (a) stay above, capped] Served while a round is open**: (a) stays above the draft ticket, capped by R2 (first draft row 11,298 → ~2,000 px); (b) moves below the draft ticket (→ ~300 px). Recommend (a): smallest change, keeps the served-first order F06 chose, and R2 already clears the bar.
+
+
+### Assumptions
+- Owner 2026-11-28 (after build): a just-confirmed ticket over 8 dishes starts closed too, so the confirm stamp animation plays only in the waiter view.
+- Thresholds: ticket collapses above 8 dishes, Waiting cap 10, search from 8 Served rows, People collapse above 6 cards (8 = existing `SEARCH_FROM`).
+- Mobile scope: responsive + native feel (D6 carried); new buttons `min-h-11`, hover gated as the app does.
+- R1 applies on the Order tab only; Rounds tab, review panel and the waiter view keep the full ticket.
+- R2/R4 state (show all, query) lives per D63; it never persists across a reload.
+- R5's open/closed state is per card, component state; opening the "Possibly ordered twice" hint does not open cards.
+
+### Done when
+- `pnpm typecheck && pnpm lint && pnpm test && pnpm build`; new e2e spec (mobile + webkit) passes; axe clean on Order and People with the large seed.
+- After numbers (`numbers-after.json`) meet D58 for every kept change; changes that don't are reverted before land.
+- Manual: the States above at 320/375/1280; keyboard: Tab through ticket disclosure → search → rows → Show all; filtering away the focused row keeps focus in the list.
+
+### Skills
+- `frontend-a11y`, `accessibility`: disclosures, live status, focus on dynamic rows (N9).
+- `e2e-testing`: seeded large-order spec.
+- `DESIGN.md` (single column, light weights) and `HANDOFF.md:60-66` working rules.
+
+### You need to do (slice 8c)
+- [ ] Nothing (no migration, no env).
+
+### Mockups (slice 8c, text sketch)
+
+Dark mode: same layouts, existing tokens; only the new buttons are checked at 375 dark.
+
+M1 Order tab, confirmed, host, 375 (after):
+```
+┌────────────────────────────────┐
+│ [Order] People Groups Rounds 3 │
+│ [Round 3 (CONFIRMED) 93 items ⌄]│  ← R1 disclosure, closed
+│ ┌ Served ────────────────────┐ │
+│ │ 67 of 230 served · 163 wait│ │
+│ │ ▓▓▓▓░░░░░░░░               │ │
+│ │ Find a dish                │ │  ← R4
+│ │ [                       ]  │ │
+│ │ WAITING                    │ │
+│ │ Sisig          [−] 0 [+]   │ │
+│ │ Round 2 · 0 of 2 · 2 wait. │ │
+│ │ Maria, Jose                │ │
+│ │ [✓ All served] [Change…]   │ │
+│ │ … 9 more rows …            │ │
+│ │ [Show all 73 waiting dishes]│ │  ← R2
+│ │ FULLY SERVED (64)        ⌄ │ │
+│ └────────────────────────────┘ │
+│ What's next?                   │
+│ [+ Add more (round 4)]         │
+│ [✓ End the order]              │
+└────────────────────────────────┘
+```
+M1a ticket opened: the disclosure button stays on top (chevron flipped), today's compact `WaiterTicket` (stamp, dishes, Corrections) below it, then Served as M1.
+
+M1b search "sisig":
+```
+│ │ Find a dish                │ │
+│ │ [sisig                  ]  │ │
+│ │ 2 dishes match             │ │  (polite status)
+│ │ WAITING                    │ │
+│ │ Sisig   … Round 2 row …    │ │  (uncapped; no Show all button)
+│ │ FULLY SERVED               │ │  (forced open)
+│ │ Sisig ×3        All ✓      │ │
+│ │ Round 1 · Bea, Carlo, Nina │ │
+```
+M1c search "pizza": field, status "No dish matches.", no Waiting / Fully served lists. Clearing the field returns to M1.
+
+M1d Show all: all 73 Waiting rows, then `[ Show fewer ]` in the button's place, then Fully served (64) closed.
+
+M1e guest (Bea), confirmed: as M1 without steppers, All served / Change… or What's next; rows are label, meta line, people line; the host line "The host confirmed round 3…" under Served.
+
+M1f host, round 4 open:
+```
+│ Served (M1 card: Find a dish, 10 Waiting, Show all 73 waiting dishes, Fully served ⌄) │
+│ ROUND 4 · draft ticket (OrderTicket, as today)                                           │
+│ Sisig · Bea                [−] 1 [+]                                                     │
+```
+(D62 (b) would swap the two blocks.)
+
+M2 People tab, host, 375 (after, D64 (a)):
+```
+┌────────────────────────────────┐
+│ For settling up: …  [Who ord…] │
+│ ┌────────────────────────────┐ │
+│ │ [Kovie ⌄] · host   12 items│ │  ← name is the disclosure button
+│ └────────────────────────────┘ │
+│ ┌────────────────────────────┐ │
+│ │ [Maria ⌄] (Ready) 7 items ⋯│ │  ⋯ = Remove guest trigger
+│ └────────────────────────────┘ │
+│ … 15 more one-row cards …      │
+└────────────────────────────────┘
+```
+M2a one card opened (Maria): header as M2 (chevron flipped), co-host toggle, her lines.
+
+M2b guest Bea: "Bea (you)" first and open with lines and the "Yours?" block; a typed-name or Not assigned card holding lines she can claim starts open (D65 (a)); others as M2.
+
+M2c 320 header: `[Migs ⌄] (Still choosing) 4 ⋯` on one row (count word is already sr-only ≤375, `people-view.tsx:149`); a long name wraps under the badges (`flex-wrap`, as today).
+
+## Slice 8d: billing next step, estimate vs final, session record (F11, F13)
+
+Status: landed (PR #61)
+
+Verify 2026-11-28: checker typecheck/lint/1268 unit/build + full e2e pass (flakes: startOrder stuck at /new in rounds/food-tracker/onboarding, each passed alone); billing specs 30/30 on mobile + webkit after the last fixes. reviewer NOT SHIPPABLE → fixed → SHIPPABLE (re-check); qa NOT SHIPPABLE → fixed → SHIPPABLE (re-check); ui-critic SHIPPABLE (4 fix-in-loop fixed, measured). Fixed: full-record Payments called a no-price card "paid so far" (now "no price yet"/"nothing to pay", unit test); What's next step text squeezed to 59 px at 320 (`flex-1` set basis 0; now `grow basis-36`, buttons wrap below); pending icon consistent; `dishes` dedup; no-price badge on its own line; Completeness strip no longer overflows (separator space outside `whitespace-nowrap`); no line starts with "·" (`keepDots`). KKB sheet seed A at 375: host 20,134 → 6,541 px (−68%; group and Whole table cards count as shared under D69, so the ~3,000 projection was low), guest 4,858 → 5,117. Webkit `testMatch` doesn't include bill-flow/payments (config, unchanged). Follow-ups 8–9 in `.shots/follow-ups.md`. Follow-ups 8, 9 done 2026-11-28: a receipt mismatch (step 8) shows the saffron "next" row with arrow + Go for the host (`BillStep.differs`), guests stay green; What's next drops the ok tone there; Go sits beside two-line text at 320 (`grow basis-36`, measured: text 174×40, Go same row, no overflow); "1 of 3 paid" kept on one line (`keepDots`, unit test, not reshot); bill-flow e2e locator scoped to `main` (the KKB sheet auto-opens after End). Unit 1268 pass (before the keepDots test; bill-step 17/17 after), bill-flow + receipt-check e2e pass; reviewer, qa, ui-critic re-checks SHIPPABLE.
+
+Kickoff 2026-11-28. Goal: "slice 8d of docs/plans/salo-v1-4.md." Research: researcher brief (this session). Baseline: `.shots/before/` (8c's moved to `.shots/v1-4-slice8c/before/`), scripts and numbers in `.shots/s8d/` (seed A = `.shots/s8c/seed.mjs` large order; seed B = `.shots/s8d/seed-billing.mjs` small order stepped through billing states).
+
+### Ask ledger (slice 8d)
+
+Brief F11 (`salo-v1-4-brief.md:721-760`), F13 (`:810-840`), Phase 8 (`:1245-1253`), plan D60.
+
+| # | Owner's words | Planned change | Status |
+|---|---|---|---|
+| P1 | "Treat pricing and settlement as one connected workflow." / "Recommended sequence: 1. Complete missing prices. 2. Review the restaurant's actual receipt. 3. Record discounts and other adjustments. 4. Allocate the amounts. 5. Review final individual shares. 6. Optionally record payments." | One pure `nextBillStep` walks that order and names the first open step, except the receipt check, which comes after service charge and adjustments because Salo's total isn't comparable before (`reconcile` returns incomplete/waiting, `kkb.ts:339-347`) (Approach B1, D67) | done |
+| P2 | "This should not be a mandatory wizard." / "Users should be able to jump directly to relevant actions." | No step locks another; the prompt is one line with a jump button; every block stays where it is and editable | done |
+| P3 | "Surface the next appropriate action contextually." | Next-step line at the top of the KKB tab, in What's next once prices are in, and in the ended block (host) (D66) | done |
+| P4 | "Avoid excessive tabs." / "Avoid permanent warning banners." | No new tab or sheet; the line changes with the bill and reads as done when final (not a warning) | done |
+| P5 | "Use plain-English terminology." | Copy pinned in Approach (no "allocate", "reconcile" in UI copy) | done |
+| P6 | "Distinguish estimates from final obligations." | One rule: amounts read "so far" until `billFinal`; final reads "Shares are final" (D68) | done |
+| P7 | "Display unresolved amounts explicitly." | Guest/host status line names what's still open ("3 dishes without a price"); card amounts say "so far" | done |
+| P8 | "Keep guest KKB access straightforward." / "Preserve host and guest navigation consistency." | Same line in the same place for guests, without action buttons; entry points unchanged | done |
+| P9 | "Use existing Salo design components whenever practical." | Reuses `ChargeStrip`-style row, `Button`, existing block anchors | done |
+| P10 | F13 "Extend existing sharing features to optionally include: Session name. Dining date. Confirmed orders. Corrections. Final serving status. Individual KKB. Recorded discounts. Final receipt totals. Payment settlement status, if available." | KKB Copy/Share gains an opt-in "Include the full record" switch adding Orders, Corrections, Served, Receipt and discounts, Payments sections to `kkbText` (D70) | done |
+| P11 | "Use existing text/image sharing functionality where suitable." | Same Copy summary / Share summary buttons; text only | done |
+| P12 | "A printable or PDF export may be considered if there is sufficient demand." | Not doing (no demand evidence) | done (not doing) |
+| P13 | "Do not require accounts or permanent cloud history." / "Preserve the existing retention policy." | Client-side text from the snapshot; no endpoint, no migration; `CLOSED_RETENTION_DAYS` untouched | done |
+| P14 | Dining date (F13) | Export date = the order's first confirmed round, not the device's today (`summary-sheet.tsx:47`) (D71) | done |
+| P15 | D60: "KKB sheet length (20,134 px) … leave to slice 8d, which owns `kkb-view.tsx` defaults" | Others' cards start collapsed above 6 cards (D69) | done |
+| P16 | Phase 8: "Final accessibility audit." | Axe on the touched states here; the app-wide sweep stays slice 9 | done |
+
+### Today
+- Six steps live in one KKB tab (`kkb-view.tsx:150-199`): status strip (`Completeness` `:217-244`, `ChargeStrip` `:255-279`), Copy/Share (`:152-166`), cards, then Service charge (`#kkb-service`), Adjustments (`#kkb-adjustments`), Receipt check (`#kkb-receipt`), Payments (`#kkb-payments`) after every card (`:196-199`).
+- Prompts exist only for prices (dock "Enter prices · N left" `workspace.tsx:145-148`, What's next `PriceStatusRow` `:678`, KKB `Completeness`) and a blocked service charge (`ChargeStrip` link to `#kkb-review`). Receipt, adjustments, shares and payments are reached by scrolling.
+- After End there's no dock (`workspace.tsx:~724`); the ended block offers "Who ordered what" (`:600-606`) and says "The host can still fix prices and the bill."
+- `billFinal` (`payments.ts:9`) = all priced, no blockers, charge none/allocated, nothing unresolved; receipt match not included (slice 5, plan:882). Used only for payments (`kkb-view.tsx:11`).
+- Estimate wording is inconsistent: dock says "so far" when `kkb.unresolved` (`kkb.ts:395-404`); card heading (`SummaryAmount` `kkb-view.tsx:352`) and footer total (`Footer` `:403`) show a plain ₱ in that case; `kkbText` adds " so far" only in the food-only branch (`kkb.ts:366`); nothing ever says "final".
+- KKB length: cards start open if shared, or (host and the card has an unpriced line) (`kkb-view.tsx:54`); on seed A nearly every card is open. Baseline 375×812 (`.shots/s8d/numbers-before.json`): seed A host 20,134 px, guest 4,858; seed B (3 people) host 1,485–1,904 across states, guest 1,580.
+- Export: `kkbText` (`kkb.ts:355-392`) carries title, date, per-person totals, unassigned adjustments, "Not yet settled", "Total ₱X" / "Total not final: …". Items text/PNG are price-free by contract (`summary.ts`). Nothing carries corrections, serving status, receipt total or payments. Date is the device's today (`summary-sheet.tsx:47`), wrong for an ended order opened days later. The snapshot already has corrections, `rounds[].confirmedAt`, `servedCounts`, `settlement.receiptTotal`, receipts, adjustments, payments.
+- Stale reference: `.shots/before/kkb-export.txt` cited by slices 2/4/5 doesn't exist; the byte-for-byte baselines are inline in `tests/kkb.test.ts:258-262`, `tests/payments.test.ts:149-178`.
+
+### Approach
+- **B1 `nextBillStep(kkb, settlement, payments)`** in `lib/bill-step.ts` (pure, unit-tested). First match wins:
+  1. dishes without a price → `prices` "Enter prices · 3 left"
+  2. shared dishes with no payer (`billBlockers` unbilled) → `payers` "Choose who pays for 2 shared dishes"
+  3. a change pending with the waiter → `pending` "Waiting on a change with the waiter" (no button)
+  4. service charge unset → `service` "Add the service charge from the receipt"
+  5. service charge blocked → `review` "Service charge: 2 things to review"
+  6. an adjustment unassigned or needing a fix → `adjustment` "Choose who gets the senior citizen discount" / "Fix the senior citizen discount"
+  7. receipt total not entered → `receipt` "Check the total against the receipt" (soft: shares already final)
+  8. receipt differs → `receipt` "Receipt is ₱120.00 more than Salo's total" (soft)
+  9. final, someone unpaid → `payments` "Record payments · 1 of 3 paid" (where it shows: D72)
+  10. final, all paid → `final` (row reads "Shares are final" only)
+  Steps 7–8 never block "Final" (keeps `billFinal`, plan:882). Each step carries its target: `prices` opens the Prices sheet; others scroll to and focus the existing anchor (`#kkb-service`, `#kkb-review`, `#kkb-adjustments`, `#kkb-receipt`, `#kkb-payments`, or the first unbilled shared line).
+- **B2 Where it shows (D66)**:
+  - KKB tab: one row above the status strip, "Next: <text>" + button "Go" (host). Final rows read "Shares are final · <text>" with the ok tone. Guests see "Shares so far · waiting on 3 dishes without a price" or "Shares are final", no button.
+  - What's next (host, open): `PriceStatusRow` stays while prices are left; once all prices are in it shows the next step instead of "All prices in" (keeps "Edit prices").
+  - Ended block (host): the next step under the ended text; its button opens the KKB at that step. Guest ended block unchanged.
+  - Dock: placement unchanged; its "so far" rule per D73.
+- **B3 Estimate vs final (D68)**: one rule from `billFinal`. Not final: card heading amount and footer total read "₱1,240 so far" / "Total so far"; `kkbText` per person adds " so far" on every line. Final: plain amounts; the KKB top row says "Shares are final". `myShareLabel` switches from `kkb.unresolved` to `billFinal` (same plus prices/blockers/charge; check dock tests). `kkbText` output for a final bill is unchanged byte for byte.
+- **B4 KKB length (D69)**: above 6 cards, others' cards start collapsed for host and guests; own card and shared cards keep today's rule; ≤6 cards keep today's rule. "Show the N without a price" already opens the card (`showFirstUnpriced`). Measured before/after on seed A (host and guest).
+- **B5 Full record (D70, D71)**: under Copy/Share in the KKB tab, a switch "Include the full record" (off by default, not remembered). On, `kkbText(kkb, title, date, { record })` appends after the totals: Orders (per round, per person, dish ×qty), Corrections (per round, `from → to`), Served ("12 of 14 plates served", not-served dishes listed), Receipt (receipt total vs Salo total, each adjustment with amount), Payments (per person paid / left, or "None recorded"). Off = today's text byte for byte. Date for both Items and KKB text (and the PNG `?date=`) = first confirmed round's `confirmedAt` in the device's locale; today when nothing is confirmed.
+- **Tests**: unit `tests/bill-step.test.ts` (each step and its order, soft receipt steps, guest copy); `kkbText` record sections + off = existing literals unchanged; final/so-far labels; date helper. E2E: extend `e2e/payments.spec.ts` or new `e2e/bill-flow.spec.ts`: host walks prices → service charge → adjustment → receipt → payment by tapping the next-step button each time; guest sees "Shares so far" then "Shares are final"; full record copy contains each section; ended block shows the step; axe light/dark on the KKB tab.
+
+Rejected: a step-by-step wizard sheet (brief: "should not be a mandatory wizard"); moving the four blocks above the cards (bigger reflow; B4 collapse + jump buttons reach them).
+
+### Pinned details (plan-critic, verified)
+- **Copy**: step text stored in sentence case; "Next: " prefix applies `lowerFirst` ("Next: add the service charge from the receipt"); "Shares are final · " keeps the step's capital; adjustment labels via `lowerFirst` (keeps "PWD"). Buttons: "Go" in the KKB row, "Open bill" in What's next and the ended block; accessible name = visible text + step ("Go: Add the service charge from the receipt", WCAG 2.5.3).
+- **Step 1**: `nextBillStep` also takes `priceRows`; host copy = `enterPricesLabel(pricesLeft(rows))` (same as the dock); guest copy counts dishes like `Completeness`.
+- **Step 5** only fires for `zeroFood` (steps 1–3 take unpriced/unbilled/pending first, `kkb.ts:285`): "Service charge: no priced food to split it across yet", target `#kkb-review`.
+- **Steps 7–8** read `reconcileReceipts(kkb, settlement, snapshot)` (`receipts.ts:38`, as `receipt-check-block.tsx:69`): 7 = state `enter`; 8 = `more`/`less` with the block's existing difference copy.
+- **Step 9 target**: `PaymentsBlock` is `null` until a payment exists (`payments-block.tsx:136`), so the target is the first `hasShare` card without a Paid chip: open its `<details>`, focus its Record payment button (`showFirstUnpriced` pattern). "1 of 3 paid" = `hasShare` cards with chip `paid` over all `hasShare` cards.
+- **Focus targets**: `#kkb-service`, `#kkb-adjustments`, `#kkb-receipt`, `#kkb-payments` get `tabIndex={-1}` + the `#kkb-mine` focus style (`kkb-view.tsx:328`) and `scroll-mt` clearing the drawer header. Step 2 target = first unbilled shared line (open its card).
+- **Guest and co-host row** (prefix "Shares so far · "): 1 "waiting on N dishes without a price"; 2 "waiting on the host to choose who pays for N shared dishes"; 3 "waiting on a change with the waiter"; 4 "waiting on the host to add the service charge"; 5 "waiting on the host to sort out the service charge"; 6 "waiting on the host to finish the <adjustment>"; 7–10 "Shares are final".
+- **Mechanism**: `KkbView` gets a `focusTarget` prop beside `focusMine` (`summary-sheet.tsx` `onOpenAutoFocus`, `workspace.tsx:136`); "Open bill" = `openSummary("button","kkb")` + target. Step `prices` opens the workspace `PricesSheet` directly (`workspace.tsx:528`). Ended block row: host and `ended === "ended"` only, never `cancelled`. What's next shows only for an open session with the latest round confirmed (`workspace.tsx:657-678`); `PriceStatusRow` wraps "Open bill" and "Edit prices" to a second line at 320.
+- **Imports**: move `billFinal` into `kkb.ts` (re-export from `payments.ts`) so `myShareLabel` can use it; `bill-step.ts` is a leaf importing `kkb.ts`/`receipts.ts`.
+- **Cards (B3)**: person cards only; shared cards ("₱X shared", "All billed") untouched. Not final: heading "₱1,240 so far"; footer "Total"/"Total with service charge" both → "Total so far"; "Food subtotal"/"Priced subtotal", "No prices yet", "Not confirmed" unchanged. At 320 the heading's right column stacks amount+"so far" / no-price badge / Paid chip (sketch M6).
+- **kkbText (D74)**: " so far" at the end of each non-final person line incl. the `food + service = total` form; skipped for "no prices yet".
+- **Record text**: Corrections — QUANTITY "Round N: Sisig ×2 → ×1" (N = `sourceRoundNumber`, cancel-all "→ cancelled"), REPLACE "Round N: Sisig → Sinigang", unavailable appends " (out of stock)", pending appends " (waiting for the waiter)"; heading omitted when none. Orders show quantities after confirmed corrections (`confirmedLine`). Served: "N of M plates served" + not-served dishes; omitted when nothing is confirmed. Receipt: "Receipt total not entered" for `enter`; each extra receipt on its own line; adjustments with amount. Payments: "None recorded" once when none, else a line per `hasShare` card; `needsReview` payments listed "needs fixing".
+- **Date**: keep `DATE` format (`summary-sheet.tsx:14`, "Sat, Nov 28", no year); pure `dineDate(rounds, now)` (first `confirmedAt`, else today), unit tested; PNG `?date=` accepts it (`route.ts:11`); update the comment at `summary-sheet.tsx:46`.
+- **Checkbox**: "Include the full record" is `<input type="checkbox" className="size-5 accent-tomato">` in a label, 44 px row (`adjustment-sheet.tsx:309` pattern); resets when the sheet closes; copy status text unchanged.
+- **A11y**: the top row is not a live region (realtime would chatter); icons `aria-hidden`, text carries the state.
+- **Tests that change** (only as D68/D73/D74 decide): `tests/kkb.test.ts:265`, `:311`; `e2e/ux-polish.spec.ts:87,89,97`; check `e2e/adjustments.spec.ts:49`, `e2e/kkb.spec.ts:77`, `e2e/slice8-measure.spec.ts:210` (320 one-row dock); re-run `tests/splits.test.ts` and `tests/contract-*`.
+
+### Reuse
+- `priceCompleteness`, `billBlockers`, `kkb.charge`, `kkb.adjustments[].state` (`kkb.ts`), `reconcileReceipts` (`receipts.ts:38`), `priceRows`/`pricesLeft`/`enterPricesLabel`, `billFinal`, `paymentStatus`/`paymentTotals` (`payments.ts`); `kkbText` keeps its own reasons list (`kkb.ts:381-388`); no refactor (byte-identical tests, import cycle).
+- Existing anchors `#kkb-service`, `#kkb-review`, `#kkb-adjustments`, `#kkb-receipt`, `#kkb-payments`; `showFirstUnpriced` pattern for scroll + focus.
+- `ChargeStrip` row styling (wash + icon) for the next-step row; `PriceStatusRow` slot in What's next; `openSummary(source, "kkb")` for the ended block.
+- `summaryText`'s per-person dish grouping (`summary.ts`) for the Orders section; `trackerLines`/`servedCounts` (`serving.ts:78`) for Served.
+
+### Not doing
+- PDF / printable export (P12). KKB image export: the KKB has no image today; the only PNG is Items (`summary-sheet.tsx` `saveImage`), price-free by contract.
+- Changing Items text/PNG content (stays price-free); only its date source changes (D71).
+- A setting to remember the full-record switch; per-section checkboxes (D70 (a)).
+- Moving or redesigning the Service charge / Adjustments / Receipt / Payments blocks; rewriting `Completeness` or `ChargeStrip`.
+- Guest ended block; dock copy beyond D73.
+- App-wide a11y sweep (slice 9).
+
+### States
+- KKB host: prices left (Next: Enter prices · 3 left) · payers missing · pending · charge unset · charge blocked · adjustment unassigned · receipt not entered (Shares are final · Check the total…) · receipt differs · final, unpaid (Record payments · 1 of 3 paid) · all paid.
+- KKB guest: shares so far (names what's open) · final.
+- Cards: so far vs final amounts; large order (seed A) collapsed above 6 cards, host and guest; small order as today.
+- What's next (host, open): prices left (as today) · next step after prices.
+- Ended block host: next step + button; final + all paid; guest unchanged.
+- Full record switch off (today's text) / on (all sections); Items text with the dining date.
+- Widths 320 / 375 / 1280 light; 375 dark for the new row and switch.
+
+### Decisions
+Owner answers 2026-11-28: D66–D75 = recommended (a); sketches M1–M6 match.
+
+- **D66 [decided: (a)] Where the next step shows**: (a) KKB top row + What's next once prices are in + host ended block; (b) KKB top row only. Recommend (a): after End there's no dock and the ended block is where the host lands (`workspace.tsx:600-606`); the KKB alone means scrolling a 20k px sheet.
+- **D67 [decided: (a)] Receipt step**: (a) last and soft: after service charge and adjustments, never blocks "Final"; (b) brief order literally (right after prices), blocking "Final". Recommend (a): `reconcile` has nothing to compare until prices, payers and adjustments settle (`kkb.ts:339-347`); matches `billFinal` (plan:882). Brief: "2. Review the restaurant's actual receipt." / "This should not be a mandatory wizard."
+- **D68 [decided: (a)] Estimate vs final wording**: (a) "so far" on every amount until `billFinal`, "Shares are final" when final, no word "estimate"; (b) fix only the card footer. Recommend (a): "so far" is the word the dock and payments already use (`kkb.ts:401`, `payments-block.tsx:101`).
+- **D69 [decided: (a)] KKB card defaults**: (a) above 6 sections (`kkb.sections.length > 6`), only own + shared cards start open; the host's "unpriced card starts open" rule (`kkb-view.tsx:54`) is dropped there; (b) same but keep the host's unpriced cards open; (c) leave as is. Recommend (a): host 20,134 vs guest 4,858 px on seed A, the gap is that rule; the Prices sheet and "Show the N without a price" open cards on demand. Projected ~3,000 px.
+- **D72 [decided: (a)] Payments prompt before any payment**: (a) KKB row only, once final ("Shares are final · Record payments · 0 of 3 paid"); What's next and the ended block show plain "Shares are final"; (b) everywhere; (c) only after the first payment exists. Recommend (a): brief "6. Optionally record payments" and "Avoid permanent warning banners"; S5.1 "Nothing shows until the host records a payment".
+- **D73 [decided: (a)] Dock follows `billFinal`**: (a) yes, one rule; an all-priced bill with the service charge not entered reads "so far" until the host enters it (or No service charge); (b) dock keeps today's `kkb.unresolved` rule. Recommend (a): "Distinguish estimates from final obligations"; changes `kkb.test.ts:311`, `ux-polish.spec.ts:87-97`.
+- **D74 [decided: (a)] `kkbText` per-line "so far"**: (a) append " so far" to each non-final person line (not "no prices yet"); (b) leave lines, the footer's "Total not final: …" already says it. Recommend (a): a pasted line reads as final otherwise; changes `kkb.test.ts:265`.
+- **D75 [decided: (a)] Duplicate prompts in the KKB tab**: (a) no separate row for step 1 (host: `Completeness` already carries Enter prices) and the row for later steps even though `ChargeStrip` sits below; (b) row for every step incl. a second Enter prices. Recommend (a).
+- **D70 [decided: (a)] Full record shape**: (a) one switch "Include the full record" on the KKB tab's Copy/Share; (b) per-section checkboxes; (c) a separate "Copy full record" button. Recommend (a): one choice, default text unchanged.
+- **D71 [decided: (a)] Export date**: (a) first confirmed round's date; (b) keep the device's today. Recommend (a): an ended order shared 3 days later shows the wrong day today.
+
+### Assumptions
+- Mobile scope: responsive + native feel (D6 carried). Baseline re-checked: viewport/theme-color/tap highlight/16px inputs/dvh present (`layout.tsx:48-55`, `globals.css:171-181`, `ui/input.tsx:7`); hover is gated by Tailwind v4's default `hover:` (`@media (hover: hover)`).
+- Host-only actions stay host-only (co-hosts: serving only, D2).
+- Payments recording stays allowed before final (D29); the next step only suggests payments once final.
+- No analytics change.
+- `.shots/before/kkb-export.txt` references in slices 2/4/5 are historical; this slice's text baselines are `.shots/before/export-*.txt`.
+
+### Done when
+- `pnpm typecheck && pnpm lint && pnpm test && pnpm build`; e2e bill-flow spec (mobile + webkit) and existing kkb/payments/receipt-check/adjustments/summary specs pass.
+- `kkbText` literals for final bills unchanged (`kkb.test.ts:259`, `payments.test.ts:149-178`, `adjustments.test.ts:94`); tests listed in Pinned details change only as D68/D73/D74 decide.
+- KKB sheet height on seed A at 375 re-measured (host and guest) with the before numbers in `.shots/s8d/numbers-before.json`.
+- Manual: the States above; keyboard: next-step button moves focus to its target block.
+
+### Skills
+- `impeccable` + `.impeccable/surfaces/src-app.md`, `DESIGN.md`: ticket world, tones for the row.
+- `frontend-a11y` / `accessibility`: status row, switch label, focus on jump.
+- `e2e-testing`; HANDOFF working rules (no prettier on src, per 8c handoff).
+
+### You need to do (slice 8d)
+- [ ] Nothing (no migration, no env).
+
+### Mockups (slice 8d, text sketch)
+
+Dark mode: same layouts, existing tokens; new row and switch checked at 375 dark.
+
+M1 KKB tab, host, not final (375):
+```
+┌────────────────────────────────┐
+│ [Items] [KKB]                  │
+│ ┌────────────────────────────┐ │
+│ │ → Next: add the service    │ │  ← B1/B2, saffron wash
+│ │   charge from the receipt  │ │
+│ │                     [Go]   │ │  → scrolls to #kkb-service
+│ └────────────────────────────┘ │
+│ All 14 dishes priced · Edit prices│ ← today's strip
+│ Service charge: not entered yet…│
+│ [Copy summary] [Share summary] │
+│ ( ) Include the full record    │  ← B5 switch
+│ ┌ Ana · you ─── ₱1,240 so far ┐│  ← B3
+│ │ …lines…                     ││
+│ │ Food subtotal     ₱1,240.00 ││
+│ └─────────────────────────────┘│
+│ ▸ Bea ─────────── ₱860 so far  │  ← collapsed above 6 cards (B4)
+│ ▸ Carlo ───────── ₱410 so far  │
+│ … Service charge, Adjustments, │
+│   Receipt check, Payments …    │
+└────────────────────────────────┘
+```
+M1b KKB tab, host, final, one unpaid:
+```
+│ ┌────────────────────────────┐ │
+│ │ ✓ Shares are final ·       │ │  ← ok wash
+│ │   Record payments · 1 of 3 │ │
+│ │   paid              [Go]   │ │  → #kkb-payments
+│ └────────────────────────────┘ │
+│ ┌ Ana · you ── ₱1,364 [Paid] ┐ │  ← plain amount
+│ │ Total             ₱1,364.00│ │
+```
+M1c KKB, host, final, receipt not entered: "✓ Shares are final · Check the total against the receipt [Go]" (→ #kkb-receipt). All paid: "✓ Shares are final", no button.
+
+M2 KKB tab, guest:
+```
+│ ┌────────────────────────────┐ │
+│ │ ◔ Shares so far · waiting  │ │
+│ │   on 3 dishes without a    │ │
+│ │   price                    │ │  ← no button
+│ └────────────────────────────┘ │
+```
+Final: "✓ Shares are final".
+
+M3 Order tab What's next, host, open, all prices in:
+```
+│ What's next?                   │
+│ [+ Add more (round 4)]         │
+│ [✓ End the order]              │
+│ Next: add the service charge   │
+│ from the receipt · Open bill   │  ← replaces "All prices in · Edit prices"
+│ · Edit prices                  │
+```
+
+M4 Ended block, host:
+```
+│ This order has ended. Everyone │
+│ can still look at the tickets  │
+│ until Dec 5. The host can still│
+│ fix prices and the bill.       │
+│ Next: choose who gets the      │
+│ senior citizen discount        │  ← B2
+│ [Open bill]  [Who ordered what]│
+```
+Final (D72 (a)): "Shares are final", only [Who ordered what].
+
+M5 Full record text (switch on), appended after today's text before "Made with Salo":
+```
+Kain tayo · Sat, Nov 28
+Ana  ₱1,240.00 + ₱124.00 service = ₱1,364.00
+…
+Total ₱3,000.00
+
+Orders
+Round 1
+  Ana: Sinigang ×1, Rice ×2
+  Bea: Sisig ×1
+Round 2
+  …
+
+Corrections
+  Round 1: Sisig ×2 → ×1
+
+Served
+  13 of 14 plates served
+  Not served: Halo-halo ×1
+
+Receipt
+  Receipt total ₱3,000.00 · matches
+  Senior citizen discount −₱184.00
+
+Payments
+  Ana paid ₱1,364.00 · paid
+  Bea paid ₱500.00 · ₱360.00 left
+  Carlo ₱0.00 paid · ₱410.00 left
+(no payments at all: "Payments" / "  None recorded")
+
+Made with Salo
+```
+
+M6 Row variants and card heading at 320:
+```
+┌──────────────────────────┐
+│ → Next: choose who pays  │  ← step 2
+│   for 2 shared dishes    │
+│                   [Go]   │
+├──────────────────────────┤
+│ ◔ Waiting on a change    │  ← step 3, no button
+│   with the waiter        │
+├──────────────────────────┤
+│ → Next: choose who gets  │  ← step 6 (unassigned;
+│   the senior citizen     │     flagged: "fix the …")
+│   discount        [Go]   │
+├──────────────────────────┤
+│ ✓ Shares are final ·     │  ← step 8 (soft)
+│   Receipt is ₱150.00     │
+│   more than Salo's total │
+│                   [Go]   │
+├──────────────────────────┤
+│ ✓ Shares are final ·     │  ← step 9 (longest)
+│   Record payments · 1 of │
+│   3 paid          [Go]   │
+└──────────────────────────┘
+Card heading, not final, 320:
+│ Bea · added by…   ₱860.00 │
+│                   so far  │
+│            [2 items no price]│
+│                   [Unpaid]│
+Collapsed (>6 sections): "▸ Carlo ─── ₱410.00 so far", one row each.
+Checkbox row: "[☐] Include the full record" (44 px, wraps under the buttons).
+Step 5 (zeroFood): "→ Next: service charge: no priced food to split it across yet [Go]".
+```
+
+## Slice 9: functional validation and stabilization (Phase 9)
+
+Status: landed (PR #62)
+
+Verify 2026-11-28: checker typecheck/lint/1325 unit/build + full e2e (167 passed, 19 skipped, 0 failed, mobile + webkit) + drill (26 tables, every probe named its constraint) + money properties 3/3; re-check after fixes: typecheck/lint/unit/a11y-sweep pass. reviewer SHIPPABLE; qa SHIPPABLE (real taps at 320 hit every control incl. with arrival pills, so keyboard activation in tests hides no tap defect; dark contrast tag 10.17, pill 7.82); ui-critic SHIPPABLE. Fixed in loop: drawer opener check uses `canFocus` (`src/lib/focus.ts`); a11y-sweep 320 describe serial (CI retry can recover); collapsed People name wraps (`min-w-0 wrap-anywhere`; measured 3 lines, no overflow at 320 with 9 people); header round label no longer truncates with the offline pill (pill wraps to a second line; measured scrollWidth = clientWidth at 375/320, header +20 px offline only); HANDOFF stale offline-retry line removed (fixed in #49). Tried and reverted: waiter "Back to order" `whitespace-nowrap` (pushed Copy 19 px off-screen, follow-up 12). CI drill step not run locally (no host pg_dump): first proof is CI. Follow-ups 10-13 in `.shots/follow-ups.md`. Follow-ups 10, 12 done 2026-11-28: "Keep the order" returns focus to End/Cancel order (`order-options-sheet.tsx` `lastStep`; tap + keyboard, both entry points); waiter "Back to order" shows "Back" below 360 px, accessible name unchanged (measured one line, no overflow at 320/359/360/375/768). Checks: 1325 unit, 8 e2e specs 51/52 + notifications flaky (passed alone, follow-up 14); reviewer re-check, qa re-check, ui-critic re-check SHIPPABLE. Follow-up 14 done: not the keyboard helper — the guest's dish could land after the host opened Review, and the server correctly refused the confirm (STALE_REVISION); `notifications.spec.ts` now waits for the host to see "JD added Sisig" (16/16 with retries off). Same pass: the sweep's offline axe check failed when adding a dish scrolled the steppers under the sticky header; it now scrolls to top first (sweep 47/48 with retries off across 1 and 4 workers; the 1 failure is follow-up 16). Bot-check failures seen only under parallel load are Cloudflare's test widget, not the app (CI retries once). Follow-ups 15, 16 added.
+
+Kickoff 2026-11-28. Goal: "slice 9 of docs/plans/salo-v1-4.md." Research: researcher brief + plan-critic pass (this session). Type: feature (tests + stabilization) with small defect fixes; touches tests, CI, one ops script, and UI only where the sweep finds violations. No migration. Baseline: no screenshot baseline (no layout change planned); the a11y sweep's first run (RED, before any fix) is the baseline, its violation list saved to `.shots/s9/axe-before.json`.
+
+### Ask ledger (slice 9)
+
+Brief Phase 9 (`salo-v1-4-brief.md:1254-1264`), updated roadmap (`:1696-1698`), §5.2 (`:986-999`), §5.3, §8.1-8.5 (`:1065-1150`), plan row 9 (`:23`).
+
+| # | Owner's words | Planned change | Status |
+|---|---|---|---|
+| Q1 | "Complete full regression testing." / "Complete … end-to-end regression tests." | Full `pnpm typecheck/lint/test/build` + full `pnpm e2e` (mobile + webkit) green; gaps below closed | done |
+| Q2 | "Validate financial calculations." / §5.2 "Establish explicit invariants for: allocated item costs, adjustments, participant obligations, receipt totals, payments, remaining balances." | `tests/money-properties.test.ts` (fast-check, D76) over `allocate`, `percentOf`, `parsePeso`/`toPesoInput`, `buildKkb`, `applyAdjustments`, `splitLine`, `reconcileReceipts`, `paymentStatus`/`paymentTotals` (invariants in Approach) | done |
+| Q3 | §5.2 "an unpriced dish must never be treated as a free dish." | Property on confirmed lines: a null price keeps line `subtotalCentavos == null`, is excluded from `foodCentavos`, section `status` is "none"/"partial", `billFinal` false, `reconcile` "incomplete"; card reads "no prices yet" (no priced line, `kkb.ts:408`) or "so far" (partial). Drafts are outside `priceCompleteness` (`kkb.ts:316-323`) | done |
+| Q4 | "Verify data integrity." / "Validate production deployment and backups." | Fix `scripts/backup-restore-drill.sh` (lists 15 of 26 tables, `:27-28`; 11 money/billing tables missing), add constraint-named probes, run it in the CI `e2e` job (D78); production restore drill stays owner | done |
+| Q4b | §5.3 new records "removed under session cleanup" / §8.2 "Session cleanup." | Vitest: every `public` table except `sessions` reaches `sessions` through `ON DELETE CASCADE` FKs (query `pg_constraint`); today `cleanup.test.ts` / `db-integrity.test.ts:93-100` touch none of the 11 v1.3/v1.4 tables | done |
+| Q5 | "Complete security … tests." / §8.2 "Authorized and unauthorized writes." | `tests/contract-authz-sweep.test.ts`: one row per mutating handler (33 route files, 38 handlers) × stranger / removed guest / plain guest (D81) | done |
+| Q6 | "Complete … accessibility … tests." / §8.4 "Target WCAG 2.2 AA." / plan :2133 "App-wide a11y sweep (slice 9)." | Shared `axeClean` helper (`e2e/support/a11y.ts`) + `e2e/a11y-sweep.spec.ts` over every surface with no axe today, light and dark, at 320; fix what it finds (D77, D80) | done |
+| Q7 | §8.4 "Focus restoration." | Sweep asserts focus returns to the trigger on close for invite, order options, notifications, summary, payment, fix-payment, adjustment, receipt, correction, remove-guest sheets | done |
+| Q8 | §8.4 "320px through desktop widths." / "Long dish names." | Sweep checks no horizontal overflow at 320/768/1280 on landing, Order, People, KKB, ended, with a 60-char no-space dish name and a 40-char guest name | done |
+| Q9 | §8.3 #4 "A restaurant gives a whole-table privilege-card discount." | E2E in `adjustments.spec.ts` (Approach A4); today only one guest is covered (`adjustments.spec.ts:40`) | done |
+| Q10 | "Complete … realtime … tests." | Existing coverage kept (`tests/realtime.test.ts`, `collaboration.spec.ts`, `reconnect-retry.spec.ts`, CI `proxy` job); no new realtime test | done (no change) |
+| Q11 | "Address critical defects." | `startOrder` diagnoses and retries the stuck-at-`/new` flake (A6); sweep fixes; drill fix (Q4) | done |
+| Q12 | "Conduct mobile device testing." / "Conduct real-table usability testing." / §8.5 "Do not fabricate usability results." | Owner tasks (You need to do); nothing reported as done | owner |
+| Q13 | (research, not a brief ask) Mobile baseline has no test (`layout.tsx:36-52`) | Not doing (D82: baseline present, not a brief ask) | done (not doing) |
+| Q14 | §8.1 unit list | Covered: `permissions.test.ts`, `shared-prices.test.ts`, `kkb.test.ts`, `adjustments.test.ts`, `splits.test.ts`, `receipts.test.ts`, `payments.test.ts`, `corrections.test.ts`; rounding gets properties (Q2) | done (existing) + Q2 |
+| Q15 | §8.2 integration list | Covered: `contract-cohosts`, `contract-host-transfer*`, `contract-serving`, `contract-adjustments`, `hardening.test.ts` (idempotent), `cleanup.test.ts` + Q4b, `db-integrity.test.ts` + Q4 probes, `realtime.test.ts`; writes: Q5 | done (existing) + Q4b/Q5 |
+| Q16 | §8.3 15 scenarios | 1 `standalone.spec.ts:24`; 2 `collaboration.spec.ts:18`; 3 `quick-prices.spec.ts:18`, `bill-flow.spec.ts:37`; 4 Q9; 5 `adjustments.spec.ts:40`; 6, 7 `receipts-splits.spec.ts:39`; 8 `cohosts.spec.ts:60`; 9 `cohosts.spec.ts:30,91`; 10 `payments.spec.ts:42,118`; 11 `host-transfer.spec.ts:7`; 12, 13 owner (proxies `invite-continuity.spec.ts:76,90`, webkit project); 14 `offline.spec.ts:14-47`, `reliability.spec.ts`; 15 `summary.spec.ts:4`, `bill-flow.spec.ts:110`. Implementer confirms 1-3, 5-7 by test title | done (existing) + Q9 |
+| Q17 | §8.4 remaining items | Keyboard `keyboard.spec.ts:5` (sweep adds Escape-close + focus return per sheet); reduced motion `motion.spec.ts` (sweep uses it only to settle frames); large lists `large-order.spec.ts`; dark/light: sweep; touch targets: axe `target-size`; error states: `new-order.spec.ts:188` + sweep's offline pill; screen reader, virtual keyboard: owner | done (existing) + Q6 |
+
+### Today
+- Tests: Vitest `tests/**` (`vitest.config.mts`, local Postgres 5433, `tests/global-setup.ts` migrates `salo_test`), 1268 unit; Playwright `mobile` (all) + `webkit` (6 specs, `playwright.config.ts:25`); CI `verify` + `e2e` + `docker` + `proxy` (`.github/workflows/ci.yml`). The `salo` DB is migrated only by the app at boot (`src/instrumentation-node.ts:10`), i.e. in the `e2e` job's webServer.
+- No property-test library (`package.json`); money tests are hand-picked examples.
+- Axe: `AxeBuilder…withTags(["wcag2a","wcag2aa","wcag21aa","wcag22aa"])` copy-pasted in 19 specs, no shared helper. No axe on: notifications drawer, invite sheet, order options sheet, remove-guest sheet / End confirm, correction / edit / unavailable sheets, fix-payment sheet, summary Items tab, `/i/[code]` (stranger + name form), standalone `/s/[id]/waiter` page (the ticket dialog and Review sheet are axe'd in light, `rounds.spec.ts:26,31`), 404, removed notice, Groups dark (light at `groups.spec.ts:74`), dish/recipient pickers, composer details, host name prompt, landing resume list, offline/sync pills, empty KKB/People, host ended state.
+- Authz: stranger → 404 `NOT_FOUND`, removed guest → 403 `REMOVED` (`http.ts:81-87`); check order `requireActor` → `readJson` (422) → `runMutation` → `assertBillable` (409, billing routes) → role. `POST /api/sessions` (Turnstile) and `POST /join` have no `requireActor`. Per-route 403s spread over `tests/contract-*.test.ts`; no sweep.
+- Guest-allowed (2xx for a plain guest): POST entries; PATCH/DELETE entries/[id] + POST restore on own entries (`entries.ts:116`); PUT entries/[id]/settlement with a price on own entry while open (`settlement.ts:44-45`; `billTo`/`splitAmong` host-only); POST claims on a host entry (`people.ts:124-130`; host gets 403); PUT groups as host or creator (`people.ts:92`); PUT readiness; POST notifications/read; POST join. Everything else is host-only (incl. PATCH `/me`, `participant.renameSelf` in HOST_ONLY); POST serving is co-host or host.
+- Backup drill: `TABLES` has 15 names (`scripts/backup-restore-drill.sh:27-28`), `schema.ts` has 26; probes (`:57-90`) predate v1.3 and use bare `WHEN check_violation THEN NULL` (any CHECK passes them); PGHOST mode doesn't default `PGUSER`/`PGPORT` (`:16-23`); not in CI; last run 2026-11-07. Runner ships PG 16 client; service is `postgres:17-alpine` (`ci.yml:9,51`).
+- `startOrder` (`helpers.ts:3-8`) clicks the "Start an order" link on `/` and waits 20 s for `/s/<id>`; `/new` uses the real Cloudflare widget with test keys (stub only in `new-order.spec.ts:15-18`), `create()` fires from the widget callback; stuck states show `role="alert"` (15 s watchdog, error/timeout/expired callback, `BOT_CHECK_UNAVAILABLE`, connection error) with Try again (same Idempotency-Key). Masked by the CI retry.
+- `HANDOFF.md` stale: `:95` says `interactive-widget` and dark theme-color were never applied (both present, `layout.tsx:36-52`); "Next steps" names v1.3; `docs/backups.md:30,39` "all 15".
+
+### Approach
+- **Property tests (A1):** add `fast-check` (devDependency); `tests/money-properties.test.ts` reusing `tests/kkb.test.ts:1-45` builders. Arbitraries: people 1-12 (unique keys), confirmed lines priced or null, shared/billed/split, quantity 1-20, service charge none/amount, adjustments (discount/charge; proportional/equal/individual/percent; manual with Σ shares == amount as `validation.ts:209` enforces; waiting/unallocated), receipts 1-3, payments incl. needsReview and orphans. Invariants:
+  - `allocate`: Σ == charge when Σweights > 0 (all 0 when Σweights == 0); shares ≥ 0; order-independent.
+  - `percentOf(bps, basis)`, bps 1..10000: in [0, basis], monotonic in bps, 10000 → basis.
+  - `parsePeso(toPesoInput(c)).centavos == c` for 0 ≤ c ≤ `MAX_UNIT_PRICE_CENTAVOS`; blank → null.
+  - No blockers, all confirmed lines priced, every adjustment applied ⇒ Σ non-shared card totals (`totalCentavos ?? pricedCentavos`) == `adjustedTotal`.
+  - Flagged/unallocated adjustments: `adjustedTotal == base ± amount`, no card changes; waiting (Decide later) moves neither until decided (`adjustments.ts`), `reconcile` gates on it.
+  - Applied adjustment shares Σ == amount.
+  - `splitLine`: Σ copies == subtotal; null stays null.
+  - `reconcileReceipts`: every receipt entered at its `expectedCentavos` ⇒ each state "matches" and `overall.matches`; an extra receipt's expected == Σ its people's card totals + their flagged shares.
+  - Payments: `left == Σ max(0, owed − paid)`; needsReview counts 0; `paymentStatus(s, paid, false)` never "paid"; `collected` == Σ non-review payments incl. orphans.
+  - Q3 unpriced properties.
+  - Seed policy per D83.
+- **A11y sweep (A2):** `e2e/support/a11y.ts` exports `axeClean(page, { include? })` (WCAG 2.2 AA tags, reduced motion, waits for `.arrival-pill, .arrival-tag` to unmount) and `expectNoOverflow(page)`. New `e2e/a11y-sweep.spec.ts` (mobile project, default run): one order per describe, visits each surface in Today's no-axe list in light and dark at 320, Escape/close and asserts focus on the trigger (Q7), overflow at 320/768/1280 with long names (Q8). Existing specs keep their own axe calls.
+- **Fixes:** violations the sweep finds are fixed in the slice when contained (D80), existing tokens only.
+- **Authz sweep (A3):** `tests/contract-authz-sweep.test.ts`, contract harness from `tests/contract-cohosts.test.ts`. One row per handler with a valid minimal body and required state (confirmed round for billing routes, real entity ids, a host-owned entry for claims). Stranger → 404 `NOT_FOUND` (all `requireActor` handlers); removed guest → 403 `REMOVED`; plain guest → 403 `FORBIDDEN` on host-only, 2xx on the guest-allowed list (Today), asserting `error.code`. `POST /api/sessions` and `/join` get their own cases (no actor). Rate limit 120/min/participant (`limits.ts:8`) fits.
+- **Whole-table discount (A4):** extend `addDiscount` (`adjustments.spec.ts:32-38`) to choose "Split by what each ordered" (all ticked by default, `adjustment-sheet.tsx:155`). On `pricedOrder` (host ₱120 + JD ₱60): "Privilege card discount", 10 %, proportional, all ticked → title "Privilege card discount for everyone", host −₱12.00, JD −₱6.00, adjusted total ₱162.00; receipt total 162 → "Matches the receipt."
+- **Drill (A5):** `TABLES` from `information_schema.tables` (`table_schema='public' AND table_type='BASE TABLE'`; drizzle's table is in schema `drizzle`). Probes read `GET STACKED DIAGNOSTICS … CONSTRAINT_NAME` and fail unless it equals the named one: `entry_settlements_price_ck` (-1, 10000000), `shared_prices_price_ck`, `correction_settlements_price_ck`, `payments_amount_ck` (0, -1), `adjustments_amount_ck` (0), `adjustments_percent_ck` (10001), `adjustments_one_amount_ck` (both null), `receipts_total_ck` (-1), `sessions_service_charge_ck` / `sessions_receipt_total_ck` (100000000), `served_counts_served_ck` (-1), `adjustment_shares_amount_ck`; the entry fixture uses `RETURNING id`. CI: last step of the `e2e` job after `pnpm e2e` (real rows), install `postgresql-client-17` from PGDG (`/usr/share/postgresql-common/pgdg/apt.postgresql.org.sh`), `/usr/lib/postgresql/17/bin` first on PATH, `PGHOST=localhost PGPORT=5433 PGUSER=salo SALO_DB=salo`.
+- **Flake (A6):** `startOrder` waits for `toHaveURL(/\/s\/…/)` OR `getByRole("alert")` on `/new`. On alert: attach its text + screenshot, click Try again once, fail on a second alert. Neither in 20 s: record `page.url()`, `main` text and status text in the failure. Root cause goes in the handoff; flake-free is not claimed from two runs.
+- **Docs (A7, D79):** `HANDOFF.md` known limitations / next steps refreshed; `docs/backups.md` table count; `docs/testing.md` names the new files.
+- Rejected: hand-rolled seeded loop instead of fast-check (no shrinking). Rejected: migrating existing axe calls to the helper (churn, no new coverage).
+
+### Reuse
+- `tests/kkb.test.ts:1-45` builders; `scene()` builders in `adjustments/splits/receipts.test.ts`.
+- `e2e/support/helpers.ts`; `pricedOrder`/`addDiscount` in `adjustments.spec.ts`; `largeOrder` in `large-order.spec.ts`.
+- Contract harness from `tests/contract-cohosts.test.ts`.
+- `menu-link.spec.ts:6-11` light/dark loop as the helper's model.
+
+### Not doing
+- Real phones, installed-PWA invite (§8.3 #12, #13), virtual keyboard and screen-reader announcements on device (§8.4), real-table pilot (§8.5), production restore drill, production SSE proxy check: owner.
+- New realtime tests (Q10). Migrating existing axe calls. New UI/features; logo (slice 10); PDF export.
+
+### States
+- Sweep surfaces (light and dark at 320): Today's list. Each axe clean, focus back on its trigger after close.
+- Overflow: 320, 768, 1280 on landing, Order, People, KKB, ended, with long names.
+- Properties: randomized; failures print seed + shrunk case.
+- Drill: local compose mode unchanged; CI PGHOST mode.
+
+### Decisions
+Owner answers 2026-11-28: D76-D83 = recommended (a); D82 skip.
+
+- **D76 [decided: (a)] Property library**: (a) add `fast-check` devDependency; (b) hand-rolled seeded loop. Recommend (a): shrinking gives the minimal failing bill; dev-only (plan :262, :339, audit :156).
+- **D77 [decided: (a)] Where the a11y sweep runs**: (a) default `pnpm e2e` (CI); (b) opt-in env var. Recommend (a): opt-in specs never run in CI, so regressions return silently.
+- **D78 [decided: (a)] Backup drill**: (a) fix tables + named probes + CI step in the `e2e` job; (b) fix tables only, manual. Recommend (a): last run predates every money table; CI has Postgres 17.
+- **D80 [decided: (a)] Sweep findings**: (a) fix every contained violation (token, label, role, focus target), structural ones become follow-ups; (b) critical/serious only. Recommend (a): last stop before branding; WCAG 2.2 AA.
+- **D81 [decided: (a)] Authz sweep**: (a) one contract test over all 38 handlers; (b) rely on per-feature 403s. Recommend (a): nothing catches a new route that forgets its role check.
+- **D79 [decided: (a)] HANDOFF/docs refresh**: (a) include; (b) skip. Recommend (a): HANDOFF contradicts the code (`HANDOFF.md:95` vs `layout.tsx:36-52`).
+- **D82 [decided: (a) skip] Mobile baseline test (Q13)**: (a) skip, not a brief ask; (b) assert viewport meta + theme-colors; (c) also assert no input under 16 px (may surface UI changes). Recommend (a): baseline is present and §8.4 doesn't ask; the sweep's axe and overflow checks already run at 320.
+- **D84 [decided: (a)] Text on saffron (raised in build)**: the sweep found dark-mode contrast failures on saffron (dark `--ink` is light, `globals.css:55`). (a) new `--on-saffron` token (light = ink, dark oklch(0.17 0.02 80)) on the sync pill and every `bg-saffron` + ink spot (arrival tags/pills, landing scenes); (b) sync pill only; (c) existing tokens. Owner chose (a) 2026-11-28.
+- **D83 [decided: (a)] Property seed policy**: (a) random seed each run, printed on failure, replay with `FC_SEED`; (b) fixed seed in CI. Recommend (a): a fixed seed reruns the same 200 cases forever; failures stay reproducible from the printed seed.
+
+### Assumptions
+- Mobile scope: responsive + native feel (D6 carried); baseline present (`layout.tsx:36-52`, `globals.css:171-213`, dvh everywhere).
+- Touch targets: axe `target-size` (WCAG 2.2 AA 24 px); no 44 px assertion.
+- Webkit `testMatch` unchanged; the sweep runs on `mobile` only.
+- CI `e2e` job reaches `challenges.cloudflare.com` and siteverify (it does today).
+
+### Done when
+- `pnpm typecheck && pnpm lint && pnpm test && pnpm build` and full `pnpm e2e` (mobile + webkit) pass locally; CI green incl. the drill step.
+- New files pass: `tests/money-properties.test.ts`, `tests/contract-authz-sweep.test.ts`, cascade test, `e2e/a11y-sweep.spec.ts`; whole-table discount e2e.
+- `.shots/s9/axe-before.json` vs a clean final run; fixes listed in the verify line.
+- Drill passes locally (compose) with all 26 tables and every probe naming its constraint, and in CI.
+- `startOrder` failures, if any, carry the alert text or page state.
+
+### Skills
+- `e2e-testing`, `accessibility` + `frontend-a11y` (WCAG 2.2 AA, focus), `tdd-workflow`, `security-review` (authz table).
+- Repo rules: HANDOFF working rules, no prettier on src, no secret-looking literals in tests, `AGENTS.md` Next docs.
+
+### You need to do (slice 9)
+- [ ] Real phones: Android Chrome + installed PWA open an invite link (`docs/pwa-invites.md:19-31`); iPhone opens an invite from Messenger; virtual keyboard on Prices and Composer.
+- [ ] TalkBack and VoiceOver pass on Order, KKB and the Prices sheet.
+- [ ] Real-table pilot, 7-12 people (brief §8.5); record results yourself.
+- [ ] Production: Coolify backup schedule + S3 + failure alerts, then one restore drill (`docs/backups.md`); `scripts/sse-proxy-check.mjs` against production with `SALO_ORDER`/`SALO_CODE`.
+
+### Mockups (slice 9)
+- None: no layout change planned.
+
+## Slice 10: Shared Table logo and icon set (F15)
+
+Status: landed (PR pending)
+
+Verify 2026-11-28: checker typecheck/lint/1331 unit + e2e new-order, motion, policies, a11y-sweep, invite-continuity, summary (43 passed, 1 skipped webkit) ALL PASS; reviewer SHIPPABLE; qa SHIPPABLE (geometry byte-identical before/after on all page states; maskable table 53 % of tile); ui-critic SHIPPABLE. Fixed in loop: primary logo canvas 189→136 wide (measured text ends at x=135 with Fredoka), `site.ts` darkBand comment back above its key; primary files transparent (implementer had added a background rect, not in plan). Follow-ups 17, 18 in `.shots/follow-ups.md`. Follow-ups 17, 18 done 2026-11-28: Wordmark drops plate rims (`logo.tsx` `rim={false}`; sub-pixel at 1.6em on 1x), plates crisp in the 4x zoom; invite (40 px) and removed notice (48 px) captured with a real code, rims read; typecheck + lint pass; ui-critic re-check SHIPPABLE.
+
+Design goal, UI only, no migration, no endpoint changes. Brief: `salo-v1-4-brief.md:875-937` (F15), `:1268-1275` (Phase 10), `:1700-1704` (align the creation animation).
+
+### Ask ledger (slice 10)
+
+| # | Owner's words (brief F15 / Phase 10) | Planned change | Status |
+|---|---|---|---|
+| S10-1 | "A minimalist top-down illustration of a circular dining table with three or four plates and an optional central serving dish." | New mark: one shared geometry (D85) | done |
+| S10-2 | "Remove speech-bubble silhouettes. Avoid chat/message icons." | Tail path and the three-in-a-row "typing" plates go everywhere | done |
+| S10-3 | "Avoid generic fork-and-spoon restaurant branding." | No cutlery in the mark | done |
+| S10-4 | "Preserve Salo's tomato-red and warm-paper palette." / "Do not replace the established typography, layout system, or application color palette" | `--tomato` / `--on-tomato` / `BRAND_HEX`; Fredoka wordmark unchanged | done |
+| S10-5 | "Use simple, recognizable geometry. Remain identifiable at small sizes." | Circles only; checked at 16/24/32 px (board); favicon drops the plate rims | done |
+| S10-6 | "Support light and dark contexts. Work in monochrome." | Light + dark (CSS vars, unchanged mechanism) + mono SVG (one colour, plates cut out) | done |
+| S10-7 | "Support maskable PWA icons." | `/pwa-icon/maskable-512` keeps the paper tile with the mark inside the 80 % safe zone (58 %) | done |
+| S10-8 | "Required deliverables: Primary logo. Compact icon. Favicon. Apple touch icon. PWA icons. Maskable icon. Light and dark variants. Monochrome variant." | Wordmark, LogoMark, `icon.svg`, `apple-icon`, `pwa-icon/{192,512,maskable-512}`, `assets/brand/*.svg` (primary, mark, mark-dark, mark-mono) | done |
+| S10-9 | "Update relevant existing assets and metadata without unnecessarily changing the application's UI architecture." / "Maintain the existing name and tagline" | Same components, same call sites, same sizes; `SITE` untouched | done |
+| S10-10 | "If the final Shared Table logo changes iconography used in the room-creation animation, align the animation to the approved final logo during this phase without changing its verification behavior." | TableLoader redrawn to end on the new mark (D86); `bot-check.tsx` logic untouched | done |
+
+### Today
+- The mark is drawn by hand in four copies feeding five render sites: `src/components/brand/logo.tsx:7-20` (React, CSS vars, `inverse` prop unused by any caller), `src/app/icon.svg` (favicon + manifest `any`), `src/server/og/app-icon.tsx:9-15` (apple-icon 180, PWA 192/512/maskable via `src/app/pwa-icon/[variant]/route.ts`), `src/server/og/render.tsx:30-40` (`Mark` in `/opengraph-image`, `/i/[code]/opengraph-image`, and the saved-summary PNG `summary-image.tsx:4,29` via `/api/sessions/[id]/summary`). All carry the bubble tail `M6.5 44.5 9.6 31.5 18.2 38.6Z` and three plates in a row (`logo.tsx:3-6` says "typing…").
+- Call sites (unchanged by this slice): `Wordmark` in `app/page.tsx:53`, `policy/policy-page.tsx:14`; `LogoMark` in `not-found.tsx:9` (size-16), `i/[code]/page.tsx:69` (size-10), `workspace/removed-notice.tsx:10` (size-12), `landing/scenes.tsx:280` (size-6).
+- Creation animation: `src/components/motion/table-loader.tsx` — band-coloured table, inner ring, six plates looping (`globals.css:291-310`, 160 ms stagger), bare table when `still` (error). Used only at `landing/bot-check.tsx:169`.
+- Docs: `PRODUCT.md:26` says the plate dots "read as a speech bubble". Manifest icons `src/app/manifest.ts:17-22`; theme colours `layout.tsx:49-52`; proxy excludes `icon.svg`, `apple-icon` (`proxy.ts:55`). No test references any icon file; `e2e/new-order.spec.ts:135-141` asserts 6 `.table-plate` under reduced motion.
+
+### Approach
+One geometry module, `src/components/brand/mark.tsx`:
+- Exports the constants (table, `PLATES[]` positions, plate / rim / dish radii) and `MarkShapes({ table, plate, rim })`: a pure, hook-free function returning a fragment of intrinsic `<circle>`s (no `useId`, no nested components). satori (next 16.4.5) rejects a component element inside `<svg>` but renders a function call (critic ran it): React callers use `<MarkShapes/>`; `app-icon.tsx` and `render.tsx` `Mark` call `{MarkShapes(...)}`. `strokeOpacity` and `fillRule="evenodd"` render in satori (verified).
+- Geometry (A2; changes if another option is picked): `viewBox 0 0 48 48`, table `cx=24 cy=24 r=22`; plates `r=5.6` at (24,11) (37,24) (24,37) (11,24); rims `r=3.25 fill=none stroke=table stroke-opacity=.45 stroke-width=1.1`; dish `r=3.6` at (24,24), plate colour, no rim. The mark is now centred (old one sat at 25,23 to make room for the tail), so the table is ~10 % larger in its box (44/48 vs 40/48) at every call site.
+- Static files: `tests/brand-assets.test.ts` (vitest includes only `*.test.ts`, so `createElement`, no JSX) builds each SVG with `renderToStaticMarkup` inside its own `<svg xmlns viewBox="0 0 48 48">` with hex colours and compares with the committed files; `UPDATE_BRAND=1` writes them. No `scripts/` runner (no tsx/jiti installed). Files: `src/app/icon.svg` (rim-less everywhere: it is also the manifest `any` icon), `assets/brand/mark.svg`, `mark-dark.svg` (rims), `mark-mono.svg` (one `<path fill="currentColor" fill-rule="evenodd">`, table + plates + dish as arcs, no rims; mask rejected: ids collide when inlined), plus the primary logo per D87.
+- `TableLoader` maps the constants itself: one `<g className="table-plate" style="--i">` per plate clockwise from top (`--i` 0-3), the dish as a fifth `.table-plate` (`--i=4`); the `rotate(i*60)` wrappers go; same `size-28` box, `viewBox 0 0 48 48`; class name, keyframes, `still` and `bot-check.tsx` untouched.
+- Rejected: hand-editing the four copies again (they already drifted: `logo.tsx` has plate rims, the others don't); switching `icon.svg` to a generated PNG `icon.tsx` (loses the crisp SVG favicon).
+
+### Reuse
+`BRAND_HEX` (`lib/site.ts:10`) for static/OG colours; `--tomato`/`--on-tomato`/`--band`/`--on-band` for in-app; `renderAppIcon` tile and sizes as they are; `cachedImage` route unchanged (in-process LRU of 200, emptied by every deploy, so no key bump). Browsers hold `max-age=86400, immutable`: installed clients refresh within a day (see You need to do); a `?v=` on manifest srcs would be faster but isn't asked for.
+
+### Not doing
+Wordmark type, tagline, palette, header band, layout. OG card layout (only its mark changes). A dark-mode favicon (tomato table with cream plates reads on light and dark tabs; board row "dark"). `favicon.ico` (none today; every target browser takes `icon.svg` or the PNGs). Removing the unused `inverse` prop.
+
+### States
+- Mark at every call site: 24 px (scene), 40 px (invite), 48 px (removed), 64 px (not-found), wordmark 1.6 em (landing, policy) — light and dark, 375 and 1280.
+- Favicon 16/32 (rims off), apple-icon 180, PWA 192/512 (paper tile, mark 72 %), maskable 512 (mark 58 %, inside the circle crop).
+- OG previews: `/opengraph-image`, `/i/[code]/opengraph-image`, saved-summary PNG: new mark, nothing else moves.
+- `/new` bot-check: animating (plates set one by one, then the dish; loops), error (`still`: bare table), reduced motion (set table = the mark), light and dark.
+- Mono asset on white and on black.
+
+### Decisions
+Plan-critic (one pass) fixed: satori needs `MarkShapes` called as a function; generator moved into a vitest test (no tsx); loader maps constants per plate; e2e plate count; OG site list (no `/s/` preview, summary PNG added); dark plates are near-black like the app; cache bump dropped; loader box 112 px; PRODUCT.md line; mono via evenodd. Raised D87.
+
+- **D85 [decided 2026-11-28: A2] Mark**. Board: `.shots/mockups/marks.html` / `marks.png` (16/24/32/64, dark, mono black/white, apple tile, maskable crop, wordmark). Options: **A2** four rimmed plates + solid centre dish; **A** four solid plates + ring dish; **B2** three rimmed plates + dish; **B** three solid plates + ring dish. Rejected on the board: four plates with nothing in the middle (reads as a sewing button), plates sitting on the rim (looks like a gear and clips at the edge). Recommend **A2**: the rims make the plates read as plates rather than holes, and four places plus a dish says "a table of people" best. Its 16 px favicon drops the rims (they fall below a pixel).
+- **D86 [decided 2026-11-28: (a) match the logo] Creation animation**. (a) Redraw TableLoader as the new mark in its `size-28` box: the plates set one by one (same keyframes and stagger), then the dish; error = bare table; reduced motion = the full mark. (b) Keep six plates, drop only the inner ring. Recommend (a): brief `:1702` "align the animation to the approved final logo"; the loop timing, `still` and `bot-check.tsx` are untouched, so verification behaviour can't change.
+- **D87 [decided 2026-11-28: (1) SVG with live text] Primary logo as a file** (raised by critic). Brief: "Primary logo… Light and dark variants. Monochrome variant." No font-to-path tool is installed. (1) `assets/brand/primary.svg` + `primary-dark.svg`: mark + `<text font-family="Fredoka">salo</text>` (ink `#262b45` light; paper on dark), noting the font file `assets/fonts/fredoka-latin-500-normal.woff`; (2) outline the glyphs once and commit paths (portable, one-off tool); (3) mark files only; the in-app `Wordmark` is the primary logo. Recommend (1): cheap, and the in-app wordmark is already live text.
+- Mobile scope: carried from D6 (responsive + native feel); this slice changes no layout.
+
+### Assumptions
+- Table colour: `--tomato` in app (dark mode's lighter tomato), plates `--on-tomato`, rims at 45 % table colour; the loader keeps `--band`/`--on-band` as today.
+- Mono = one colour (`currentColor`), with the plates and dish cut out (`fill-rule="evenodd"` path or mask), so it prints and embosses.
+- `mark-dark.svg`: table `#ee694f` (`oklch(0.68 0.17 33)`, `globals.css:59`), plates `#170c0a` (`--on-tomato` dark, `globals.css:60`), matching the app; add `darkTomato` / `darkOnTomato` to `BRAND_HEX`. Loader in dark keeps `--band`/`--on-band`.
+- Apple/PWA tile background stays paper; SVG box 72 % / 58 % unchanged; table diameter now 66 % / 53 % of the tile, inside the 80 % maskable safe zone.
+- Docs: `PRODUCT.md:26` becomes "top-down round table with four plates and a serving dish"; comments at `logo.tsx:3-6` and `table-loader.tsx:3` updated.
+
+### Done when
+- `pnpm typecheck && pnpm lint && pnpm test && pnpm build` pass; new unit test: committed `icon.svg` + `assets/brand/*.svg` equal the script's output; no file in `src/` still has the tail path (`grep -r "M6.5 44.5"` empty).
+- E2E: `e2e/new-order.spec.ts:137` → `toHaveCount(5)`; rest of `e2e/` green.
+- Manual: shots of every state above vs `.shots/before/`; `/pwa-icon/maskable-512` checked against a circle crop.
+
+### Skills
+`impeccable` + `.impeccable/surfaces/src-app.md` (order-pad world, palette); `frontend-design` for the mark; `accessibility` (mark stays decorative or `role="img"` with title as today; loader stays `aria-hidden`).
+
+### You need to do
+- [ ] After release, reinstall or wait a day for installed PWAs / home-screen icons to pick up the new icon (iOS caches the apple-touch-icon until the shortcut is re-added).
+
+### Mockups (slice 10)
+Rendered SVG board instead of ASCII (a logo can't be judged in text): `.shots/mockups/marks.html`, `.shots/mockups/marks.png`. Baseline: `.shots/before/` (37 files; the Turnstile "Preparing your table…" state isn't capturable without a site key). Generator: `scratchpad/marks/gen2.mjs` (throwaway).

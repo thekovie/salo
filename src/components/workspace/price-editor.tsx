@@ -4,9 +4,15 @@ import { LoaderCircle } from "lucide-react";
 import { useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useDirectSave, useRetryOnReconnect } from "@/hooks/use-direct-save";
+import { personKey } from "@/lib/adjustments";
+import { normalizeText } from "@/lib/dish-name";
 import type { KkbLine } from "@/lib/kkb";
 import { formatPeso, parsePeso, toPesoInput } from "@/lib/money";
 import type { EntrySettlement } from "@/lib/snapshot";
+import { SplitPicker } from "./split-picker";
+
+/** Radio pill for picking one person; shared with the payment sheet. */
+export const pillOption = "inline-flex min-h-11 cursor-pointer items-center rounded-full border-[1.5px] border-input bg-ticket px-3.5 text-sm font-semibold has-checked:border-ink has-checked:bg-ink has-checked:text-paper has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-ink";
 
 /** Someone the host can bill a shared dish to: a joined person or a name typed for someone without a phone. */
 export interface Payer {
@@ -37,18 +43,25 @@ interface PriceEditorProps {
   /** Set for the host on a dish line; lets "Every … here" set the table price. */
   table: TablePrice | null;
   /** What the server has now (updates live while the editor is open). */
-  live: Pick<EntrySettlement, "unitCentavos" | "billTo" | "revision">;
+  live: Pick<EntrySettlement, "unitCentavos" | "revision">;
+  /** Who pays, from the entry (a replacement's price has its own revision, so this is separate). */
+  bill: Pick<EntrySettlement, "billTo" | "splitAmong" | "revision">;
+  /** People already in this dish's split who have since left: still listed, ticked, so the host can untick them. */
+  leftPayers: Payer[];
   onDone: (saved: boolean) => void;
 }
 
 const NOBODY = "none";
-const billKeyOf = (billTo: EntrySettlement["billTo"]) => (billTo?.participantId ? `p:${billTo.participantId}` : billTo?.label ? `n:${billTo.label.toLowerCase()}` : NOBODY);
+const SPLIT = "split";
+const billKeyOf = (b: Pick<EntrySettlement, "billTo" | "splitAmong">) => (b.splitAmong?.length ? SPLIT : b.billTo?.participantId ? `p:${b.billTo.participantId}` : b.billTo?.label ? `n:${normalizeText(b.billTo.label)}` : NOBODY);
+const splitKeysOf = (b: Pick<EntrySettlement, "splitAmong">) => (b.splitAmong ?? []).map(personKey);
+const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((k) => b.includes(k));
 
 /**
  * Inline price (and, for the host on shared dishes, "Bill to") editor on one KKB line. Saves straight to the server so
  * a refusal or someone else's change shows right here, next to the amount the person typed, which is kept.
  */
-export function PriceEditor({ line, sessionId, refresh, canPrice, canBillTo, payers, table, live, onDone }: PriceEditorProps) {
+export function PriceEditor({ line, sessionId, refresh, canPrice, canBillTo, payers, table, live, bill, leftPayers, onDone }: PriceEditorProps) {
   const id = useId();
   const { state, save } = useDirectSave(refresh);
   const lastClear = useRef(false);
@@ -57,22 +70,26 @@ export function PriceEditor({ line, sessionId, refresh, canPrice, canBillTo, pay
   const [baseTable, setBaseTable] = useState(table?.live ?? null);
   const [every, setEvery] = useState(line.priceSource !== "line"); // a line with its own price opens on "Only this line"
   const [text, setText] = useState(toPesoInput(line.unitCentavos));
-  const [billKey, setBillKey] = useState(billKeyOf(live.billTo));
+  const [billBase, setBillBase] = useState(bill);
+  const [billKey, setBillKey] = useState(billKeyOf(bill));
+  const [splitKeys, setSplitKeys] = useState(splitKeysOf(bill));
   const [error, setError] = useState("");
   const parsed = parsePeso(text);
   const everyMode = Boolean(table && baseTable) && every;
   const theirs = everyMode ? table!.live : live;
-  const changedElsewhere = live.revision !== base.revision || (everyMode && table!.live.revision !== baseTable!.revision);
+  const changedElsewhere = live.revision !== base.revision || bill.revision !== billBase.revision || (everyMode && table!.live.revision !== baseTable!.revision);
 
   function keepMine() {
     setBase(live);
+    setBillBase(bill);
     setBaseTable(table?.live ?? null);
   }
 
   function adoptLatest() {
     keepMine();
     setText(toPesoInput(theirs.unitCentavos));
-    setBillKey(billKeyOf(live.billTo));
+    setBillKey(billKeyOf(bill));
+    setSplitKeys(splitKeysOf(bill));
   }
 
   async function submit(event?: React.FormEvent, clear = false) {
@@ -81,23 +98,27 @@ export function PriceEditor({ line, sessionId, refresh, canPrice, canBillTo, pay
     const next = clear ? ({ ok: true, centavos: null } as const) : parsed;
     if (!next.ok) return setError(next.message);
     setError("");
+    const everyone = [...payers, ...leftPayers];
     const payer = payers.find((p) => p.key === billKey);
-    const billChanged = canBillTo && billKey !== billKeyOf(base.billTo);
+    const splitting = billKey === SPLIT;
+    const personOf = (p: Payer) => (p.participantId ? { participantId: p.participantId } : { label: p.label });
+    const billChanged = canBillTo && (billKey !== billKeyOf(billBase) || (splitting && !sameSet(splitKeys, splitKeysOf(billBase))));
     // "Every …": the table price, and the line's own price (if any) is cleared in the same request.
     const tableChanged = everyMode && canPrice && next.centavos !== baseTable!.unitCentavos;
     // "Only this line": its own price; typing the price it already shows (inherited) is not a change.
     const priceChanged = !everyMode && canPrice && next.centavos !== base.unitCentavos && !(base.unitCentavos == null && next.centavos === line.unitCentavos);
     if (!priceChanged && !billChanged && !tableChanged) return onDone(false);
-    if (priceChanged || billChanged) {
-      const path = line.correctionId ? `/api/sessions/${sessionId}/corrections/${line.correctionId}/price` : `/api/sessions/${sessionId}/entries/${line.entryId}/settlement`;
-      const body = line.correctionId
-        ? { expectedRevision: base.revision, unitPriceCentavos: next.centavos }
-        : {
-            expectedRevision: base.revision,
-            ...(priceChanged ? { unitPriceCentavos: next.centavos } : {}),
-            ...(billChanged ? { billTo: payer ? (payer.participantId ? { participantId: payer.participantId } : { label: payer.label }) : null } : {}),
-          };
-      if (!(await save(path, "PUT", body))) return;
+    const billBody = billChanged ? (splitting ? { splitAmong: everyone.filter((p) => splitKeys.includes(p.key)).map(personOf) } : { billTo: payer ? personOf(payer) : null }) : {};
+    const entryPath = `/api/sessions/${sessionId}/entries/${line.entryId}/settlement`;
+    if (line.correctionId) {
+      // A replacement's price and its payer live on different rows, so two saves; a refusal on either keeps what was typed.
+      if (priceChanged) {
+        if (!(await save(`/api/sessions/${sessionId}/corrections/${line.correctionId}/price`, "PUT", { expectedRevision: base.revision, unitPriceCentavos: next.centavos }))) return;
+        setBase({ unitCentavos: next.centavos, revision: base.revision + 1 });
+      }
+      if (billChanged && !(await save(entryPath, "PUT", { expectedRevision: billBase.revision, ...billBody }))) return;
+    } else if (priceChanged || billChanged) {
+      if (!(await save(entryPath, "PUT", { expectedRevision: base.revision, ...(priceChanged ? { unitPriceCentavos: next.centavos } : {}), ...billBody }))) return;
     }
     if (tableChanged) {
       // Removing the table price never wipes a line's own price; setting one does, if the line hasn't changed since it was seen.
@@ -115,6 +136,9 @@ export function PriceEditor({ line, sessionId, refresh, canPrice, canBillTo, pay
   }
 
   const saving = state.kind === "saving";
+  const canSplit = payers.length >= 2 || billKeyOf(bill) === SPLIT;
+  // The whole dish: the typed price when this editor sets it, else what the line shows (a split copy knows the full amount).
+  const splitTotal = canPrice && parsed.ok && parsed.centavos != null ? parsed.centavos * line.quantity : (line.splitOfCentavos ?? line.subtotalCentavos);
   return (
     <form onSubmit={(e) => void submit(e)} noValidate className="ease-in-panel mt-2 space-y-2 rounded-2xl bg-paper p-3" aria-label={`Price for ${line.label}`}>
       {changedElsewhere ? (
@@ -197,20 +221,23 @@ export function PriceEditor({ line, sessionId, refresh, canPrice, canBillTo, pay
       {canBillTo ? (
         <fieldset>
           <legend className="text-sm font-semibold">Bill to</legend>
-          <p className="text-sm text-ink-soft">The whole dish goes to one person. Leave it on No one yet if the table hasn&rsquo;t decided.</p>
+          <p className="text-sm text-ink-soft">
+            {canSplit ? "One person pays, or split it equally." : "The whole dish goes to one person."} Leave it on No one yet if the table hasn&rsquo;t decided.
+          </p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {[{ key: NOBODY, title: "No one yet" }, ...payers].map((p) => (
-              <label key={p.key} className="inline-flex min-h-11 cursor-pointer items-center rounded-full border-[1.5px] border-input bg-ticket px-3.5 text-sm font-semibold has-checked:border-ink has-checked:bg-ink has-checked:text-paper has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-ink">
+            {[{ key: NOBODY, title: "No one yet" }, ...payers, ...(canSplit ? [{ key: SPLIT, title: "Split equally…" }] : [])].map((p) => (
+              <label key={p.key} className={pillOption}>
                 <input type="radio" name={`${id}-bill`} value={p.key} checked={billKey === p.key} onChange={() => setBillKey(p.key)} className="sr-only" />
                 {p.title}
               </label>
             ))}
           </div>
+          {canSplit && billKey === SPLIT ? <SplitPicker id={id} people={[...payers, ...leftPayers]} selected={splitKeys} onChange={setSplitKeys} totalCentavos={splitTotal} /> : null}
         </fieldset>
       ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="submit" disabled={saving}>
+        <Button type="submit" disabled={saving || (billKey === SPLIT && splitKeys.length < 2)}>
           {saving ? <LoaderCircle className="size-5 animate-spin" aria-hidden /> : null}
           {saving ? "Saving…" : "Save"}
         </Button>

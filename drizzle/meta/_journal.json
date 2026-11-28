@@ -92,6 +92,41 @@
       "when": 1795189587495,
       "tag": "0012_receipt_total",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1795428117489,
+      "tag": "0013_adjustments",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1795443020105,
+      "tag": "0014_cohosts",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1795479273337,
+      "tag": "0015_receipts_splits",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1795738047986,
+      "tag": "0016_payments",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1795778297299,
+      "tag": "0017_menu_link",
+      "breakpoints": true
     }
   ]
 }

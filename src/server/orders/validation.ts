@@ -1,4 +1,8 @@
 import { z } from "zod";
+import { normalizeText } from "@/lib/dish-name";
+import { MENU_INPUT_MAX, MENU_REASONS, parseMenuUrl } from "@/lib/menu-url";
+import { ADJUSTMENT_CATEGORIES, ADJUSTMENT_METHODS, PAYMENT_METHODS } from "@/lib/snapshot";
+import { MAX_EXTRA_RECEIPTS } from "@/lib/receipts";
 import { MAX_SERVICE_CHARGE_CENTAVOS, MAX_UNIT_PRICE_CENTAVOS } from "@/lib/money";
 
 export const LIMITS = {
@@ -16,6 +20,9 @@ export const LIMITS = {
   roundsPerSession: 30,
   correctionsPerSession: 100,
   participantsPerSession: 30,
+  adjustmentsPerSession: 20,
+  receiptsPerSession: MAX_EXTRA_RECEIPTS,
+  paymentsPerSession: 200,
   /** The host's optional note to a guest they remove. */
   removalReason: 140,
 } as const;
@@ -62,6 +69,22 @@ export const updateEntrySchema = z
 
 export const renameSessionSchema = z.object({ title: optional(LIMITS.title) });
 
+/** `url: null` removes the link. The parsed (normalised) href replaces the raw input. */
+export const menuLinkSchema = z.object({
+  url: z
+    .string()
+    .max(MENU_INPUT_MAX, MENU_REASONS.tooLong)
+    .nullable()
+    .transform((value, ctx) => {
+      if (value === null) return null;
+      const parsed = parseMenuUrl(value);
+      if (parsed.ok) return parsed.url;
+      ctx.addIssue({ code: "custom", message: parsed.reason });
+      return z.NEVER;
+    }),
+  label: optional(LIMITS.label),
+});
+
 export type AddEntryInput = z.infer<typeof addEntrySchema>;
 export type UpdateEntryInput = z.infer<typeof updateEntrySchema>;
 export type AttributionInput = z.infer<typeof attributionSchema>;
@@ -96,10 +119,15 @@ export type CorrectionBatchInput = z.infer<typeof correctionBatchSchema>;
 export const unavailableSchema = z.object({ replacement: optional(LIMITS.dishName), note: optional(LIMITS.instructions) });
 export type UnavailableInput = z.infer<typeof unavailableSchema>;
 
+export const cohostSchema = z.object({ cohost: z.boolean() });
+export const transferHostSchema = z.object({ participantId: z.string().max(64), displayName: z.string().max(200).optional() });
 export const removeParticipantSchema = z.object({ reason: z.string().trim().max(LIMITS.removalReason, `Keep the reason under ${LIMITS.removalReason} characters.`).nullish() });
 
 /** Whole centavos; null clears (unknown price / service charge not entered). */
 const centavos = (max: number) => z.number().int("Use whole centavos.").min(0, "Can't be negative.").max(max, "That amount is too large.").nullable();
+
+/** A person by id or by typed name (same keys as Bill to). */
+const personRef = z.union([z.object({ participantId: z.uuid() }), z.object({ label: text(LIMITS.label).min(1, "Type the person's name.") })]);
 
 export const entrySettlementSchema = z
   .object({
@@ -107,9 +135,12 @@ export const entrySettlementSchema = z
     expectedRevision: z.number().int().min(0),
     unitPriceCentavos: centavos(MAX_UNIT_PRICE_CENTAVOS).optional(),
     /** Host only, shared or unassigned dishes only: who pays for the whole dish. null clears. */
-    billTo: z.union([z.object({ participantId: z.uuid() }), z.object({ label: text(LIMITS.label).min(1, "Type the person's name.") }), z.null()]).optional(),
+    billTo: personRef.nullable().optional(),
+    /** Host only: split the whole dish equally between these people (2 or more). Exclusive with billTo. */
+    splitAmong: z.array(personRef).min(2, "Pick at least 2 people.").max(LIMITS.participantsPerSession).optional(),
   })
-  .refine((v) => v.unitPriceCentavos !== undefined || v.billTo !== undefined, "Nothing to change.");
+  .refine((v) => v.billTo === undefined || v.splitAmong === undefined, "Choose one person or a split, not both.")
+  .refine((v) => v.unitPriceCentavos !== undefined || v.billTo !== undefined || v.splitAmong !== undefined, "Nothing to change.");
 export type EntrySettlementInput = z.infer<typeof entrySettlementSchema>;
 
 export const correctionPriceSchema = z.object({ expectedRevision: z.number().int().min(0), unitPriceCentavos: centavos(MAX_UNIT_PRICE_CENTAVOS) });
@@ -137,15 +168,74 @@ export type ServiceChargeInput = z.infer<typeof serviceChargeSchema>;
 export const receiptTotalSchema = z.object({ expectedRevision: z.number().int().min(0), centavos: centavos(MAX_SERVICE_CHARGE_CENTAVOS) });
 export type ReceiptTotalInput = z.infer<typeof receiptTotalSchema>;
 
+export const receiptSchema = z.object({
+  /** 0 creates (the id comes from the URL, so a retry never duplicates). */
+  expectedRevision: z.number().int().min(0),
+  label: optional(LIMITS.label),
+  totalCentavos: centavos(MAX_SERVICE_CHARGE_CENTAVOS),
+  people: z.array(personRef).min(1, "Pick at least one person.").max(LIMITS.participantsPerSession),
+});
+export type ReceiptInput = z.infer<typeof receiptSchema>;
+export const removeReceiptSchema = z.object({ expectedRevision: z.number().int().min(1) });
+
+const adjustmentShareSchema = z
+  .object({ participantId: z.uuid().optional(), billToLabel: text(LIMITS.label).min(1, "Type the person's name.").optional(), amountCentavos: z.number().int().min(0).max(MAX_SERVICE_CHARGE_CENTAVOS).optional() })
+  .refine((v) => (v.participantId === undefined) !== (v.billToLabel === undefined), "Name one person.");
+
+/** A receipt discount or extra charge. Percent is only for methods where the people (and so the basis) are known. */
+export const adjustmentSchema = z
+  .object({
+    /** 0 creates (the id comes from the URL, so a retry never duplicates). */
+    expectedRevision: z.number().int().min(0),
+    direction: z.enum(["discount", "charge"]),
+    category: z.enum(ADJUSTMENT_CATEGORIES),
+    note: optional(LIMITS.label),
+    amountCentavos: z.number().int("Use whole centavos.").min(1, "Enter an amount.").max(MAX_SERVICE_CHARGE_CENTAVOS, "That amount is too large.").optional(),
+    percentBps: z.number().int().min(1, "Enter a percent.").max(10000, "That's more than 100%.").optional(),
+    method: z.enum(ADJUSTMENT_METHODS),
+    shares: z.array(adjustmentShareSchema).max(LIMITS.participantsPerSession),
+  })
+  .superRefine((v, ctx) => {
+    const fail = (message: string) => ctx.addIssue({ code: "custom", message });
+    if ((v.amountCentavos === undefined) === (v.percentBps === undefined)) return fail("Enter an amount or a percent.");
+    if (v.percentBps !== undefined && (v.method === "manual" || v.method === "unallocated")) return fail("A percent needs to know who it applies to.");
+    const keys = v.shares.map((s) => s.participantId ?? normalizeText(s.billToLabel ?? ""));
+    if (new Set(keys).size !== keys.length) return fail("Each person can be listed once.");
+    if (v.method === "unallocated" && v.shares.length > 0) return fail("Nobody is picked yet.");
+    if (v.method === "individual" && v.shares.length !== 1) return fail("Pick one person.");
+    if ((v.method === "proportional" || v.method === "equal" || v.method === "manual") && v.shares.length === 0) return fail("Pick at least one person.");
+    const manual = v.method === "manual";
+    if (v.shares.some((s) => (s.amountCentavos !== undefined) !== manual)) return fail(manual ? "Give each person an amount." : "Amounts are only for exact amounts.");
+    if (manual && v.shares.reduce((sum, s) => sum + (s.amountCentavos ?? 0), 0) !== v.amountCentavos) return fail("The amounts must add up to the total.");
+  });
+export type AdjustmentInput = z.infer<typeof adjustmentSchema>;
+export const removeAdjustmentSchema = z.object({ expectedRevision: z.number().int().min(1) });
+
 export const renameMeSchema = z.object({ displayName: text(LIMITS.label).min(1, "Type your name so the table knows whose order is whose.") });
 export type RenameMeInput = z.infer<typeof renameMeSchema>;
 
 export const servingSchema = z.object({
   roundId: z.uuid(),
   lineKey: z.string().min(1).max(600),
+  /** The count the sender saw; a mismatch applies nothing (two people tapping one plate). */
+  expectedServed: z.number().int().min(0).max(999),
   delta: z.number().int().min(-999).max(999).refine((n) => n !== 0, "Nothing to change."),
 });
 export type ServingInput = z.infer<typeof servingSchema>;
 
 /** Mark some (or all) of your own updates read. */
 export const markReadSchema = z.union([z.strictObject({ ids: z.array(z.uuid()).min(1).max(50) }), z.strictObject({ all: z.literal(true) })]);
+
+export const paymentSchema = z.object({
+  payer: personRef,
+  /** null = the restaurant. */
+  payee: personRef.nullable(),
+  amountCentavos: z.number().int("Use whole centavos.").min(1, "Enter an amount.").max(MAX_SERVICE_CHARGE_CENTAVOS, "That amount is too large."),
+  method: z.enum(PAYMENT_METHODS).nullable(),
+  note: optional(LIMITS.label),
+});
+export type PaymentInput = z.infer<typeof paymentSchema>;
+
+/** Fix a payment that needs review: who really received it (null = the restaurant). */
+export const payeeSchema = z.strictObject({ payee: personRef.nullable() });
+export type PayeeInput = z.infer<typeof payeeSchema>;

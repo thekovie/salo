@@ -74,8 +74,8 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: (id: number)
  */
 export function Toasts({ toasts, onDismiss, notices }: { toasts: Toast[]; onDismiss: (id: number) => void; notices?: React.ReactNode }) {
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--dock-h,9.5rem)+0.5rem)] z-50 mx-auto flex max-w-md flex-col gap-2 px-4">
-      {notices}
+    <div data-toast-stack className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--dock-h,9.5rem)+0.5rem)] z-[60] mx-auto flex max-w-md flex-col gap-2 px-4">
+      {notices ? <div className="floating-notices flex flex-col gap-2">{notices}</div> : null}
       <div aria-live="polite" className="flex flex-col gap-2">
         {toasts.map((toast) => (
           <ToastItem key={toast.id} toast={toast} onDismiss={onDismiss} />

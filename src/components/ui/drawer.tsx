@@ -1,6 +1,8 @@
 "use client";
 
+import { useRef } from "react";
 import { Drawer as Vaul } from "vaul";
+import { canFocus } from "@/lib/focus";
 import { cn } from "@/lib/utils";
 
 /**
@@ -24,7 +26,9 @@ function closeNestedDialog(event: KeyboardEvent) {
   if (dialog.dispatchEvent(new Event("cancel", { cancelable: true }))) (dialog as HTMLDialogElement).close();
 }
 
-export function DrawerContent({ className, children, ...props }: React.ComponentProps<typeof Vaul.Content>) {
+export function DrawerContent({ className, children, onPointerDownOutside, onOpenAutoFocus, onCloseAutoFocus, ...props }: React.ComponentProps<typeof Vaul.Content>) {
+  // Sheets opened from state (no DrawerTrigger) have nothing for Radix to hand focus back to: remember who had it as the sheet opens.
+  const opener = useRef<Element | null>(null);
   return (
     <Vaul.Portal>
       <Vaul.Overlay className="fixed inset-0 z-50 bg-black/55" />
@@ -34,6 +38,22 @@ export function DrawerContent({ className, children, ...props }: React.Component
           className,
         )}
         onEscapeKeyDown={closeNestedDialog}
+        onOpenAutoFocus={(event) => {
+          opener.current = document.activeElement;
+          onOpenAutoFocus?.(event);
+        }}
+        onCloseAutoFocus={(event) => {
+          onCloseAutoFocus?.(event);
+          const back = opener.current;
+          if (event.defaultPrevented || !canFocus(back) || back === document.body) return;
+          event.preventDefault();
+          back.focus();
+        }}
+        onPointerDownOutside={(event) => {
+          // Tapping a toast's Undo is not "outside": keep the sheet open.
+          if (event.target instanceof Element && event.target.closest("[data-toast-stack]")) event.preventDefault();
+          onPointerDownOutside?.(event);
+        }}
         {...props}
       >
         {/* Grab handle: the visible hint that this sheet can be dragged down. */}

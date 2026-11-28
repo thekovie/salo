@@ -46,7 +46,8 @@ export type Op =
   | { kind: "removeCorrection"; correctionId: string; dishName: string }
   | { kind: "close" }
   | { kind: "removeGuest"; participantId: string; name: string; reason: string | null }
-  | { kind: "restoreGuest"; participantId: string; name: string };
+  | { kind: "restoreGuest"; participantId: string; name: string }
+  | { kind: "setCohost"; participantId: string; name: string; cohost: boolean };
 
 type Status =
   | "queued" // waiting its turn
@@ -84,7 +85,7 @@ const POLL_WITHOUT_STREAM_MS = 10_000;
 /** The entry a change is about, if any (for coalescing and revision tracking). */
 export const entryOf = (op: Op): string | null => (op.kind === "update" || op.kind === "edit" || op.kind === "remove" || op.kind === "restore" ? op.entry.id : null);
 
-const OP_KINDS = new Set(["add", "update", "edit", "remove", "restore", "rename", "renameMe", "ready", "claim", "resolveClaim", "groupMembers", "confirm", "openRound", "correction", "corrections", "unavailable", "removeCorrection", "close", "removeGuest", "restoreGuest"]);
+const OP_KINDS = new Set(["add", "update", "edit", "remove", "restore", "rename", "renameMe", "ready", "claim", "resolveClaim", "groupMembers", "confirm", "openRound", "correction", "corrections", "unavailable", "removeCorrection", "close", "removeGuest", "restoreGuest", "setCohost"]);
 const isOp = (value: unknown): value is Op => typeof value === "object" && value !== null && OP_KINDS.has((value as { kind?: string }).kind ?? "");
 
 function request(sessionId: string, op: Op, latest: SessionSnapshot, ownRevisions: ReadonlyMap<string, ReadonlySet<number>>) {
@@ -138,6 +139,8 @@ function request(sessionId: string, op: Op, latest: SessionSnapshot, ownRevision
       return { path: `${base}/participants/${op.participantId}/remove`, method: "POST", body: { reason: op.reason } };
     case "restoreGuest":
       return { path: `${base}/participants/${op.participantId}/restore`, method: "POST", body: undefined };
+    case "setCohost":
+      return { path: `${base}/participants/${op.participantId}/cohost`, method: "PUT", body: { cohost: op.cohost } };
   }
 }
 
@@ -184,6 +187,8 @@ export function describeOp(op: Op): string {
       return `Remove ${op.name}`;
     case "restoreGuest":
       return `Bring back ${op.name}`;
+    case "setCohost":
+      return op.cohost ? `Make ${op.name} a co-host` : `Stop ${op.name}’s co-host role`;
   }
 }
 
@@ -351,7 +356,7 @@ export function useSession(initial: SessionSnapshot) {
             break;
           }
           // Refused (conflict, removed, confirmed, invalid…): show the latest state and say what was not saved.
-          if (err.status === 409 || err.status === 404) await refresh().catch(() => undefined);
+          if (err.status === 409 || err.status === 404 || err.status === 403) await refresh().catch(() => undefined);
           if (resolvers.current.get(item.key)?.onError) {
             // The caller reports this failure itself (e.g. confirmation): nothing to list as "not saved".
             setQueue((list) => list.filter((p) => p.key !== item.key));

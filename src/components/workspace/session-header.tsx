@@ -41,14 +41,14 @@ export function SessionHeader({ title, roundNumber, roundStatus, ended = null, s
             {onOptions ? (
               // A bigger tap target for the same options; keyboard and screen-reader users get the labelled button.
               <button type="button" tabIndex={-1} onClick={onOptions} className="block max-w-full cursor-pointer truncate text-left">
-                {title ?? <span className="opacity-80">Name this order</span>}
+                {title ?? <span className="font-normal">Name this order</span>}
               </button>
             ) : (
               (title ?? "Table order")
             )}
           </h1>
-            <div className="mt-0.5 flex min-w-0 items-center gap-2">
-              <span className="round-label truncate text-xs text-on-band opacity-90">{status}</span>
+            <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+              <span className="round-label max-w-full shrink-0 truncate text-xs text-on-band opacity-90">{status}</span>
               {ended ? null : <SyncPill state={sync} compact className="shrink-0 px-1.5 py-0.5" />}
             </div>
           </div>

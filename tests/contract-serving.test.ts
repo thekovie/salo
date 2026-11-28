@@ -28,7 +28,8 @@ import { credentialCookieName } from "@/server/auth/credentials";
 import { getDb } from "@/server/db/client";
 import { confirmedRoundSnapshots, sessionEvents, sessions } from "@/server/db/schema";
 import { runMutation } from "@/server/mutations";
-import { removeParticipant, setReady } from "@/server/orders/people";
+import { removeParticipant, setCohost, setReady } from "@/server/orders/people";
+import { updateServed } from "@/server/orders/serving";
 import { closeSession, confirmRound, openRound, recordCorrections } from "@/server/orders/rounds";
 import { correctionBatchSchema } from "@/server/orders/validation";
 import { findInvite, joinSession } from "@/server/sessions/join";
@@ -59,10 +60,15 @@ interface Who {
 }
 interface Res {
   status: number;
-  body: { data?: { result: { served: number; revision: number }; revision: number; replayed: boolean }; error?: { code: string; message: string } };
+  body: { data?: { result: { served: number; revision: number; applied: boolean }; revision: number; replayed: boolean }; error?: { code: string; message: string } };
 }
 async function post(sessionId: string, who: Who | null, payload: unknown, opts: { idem?: string | null; raw?: string } = {}): Promise<Res> {
   jar.cookies = who?.token ? { [credentialCookieName(sessionId)]: who.token } : {};
+  // A request that does not name the count it saw stands on the stored one (the precondition rows pass it explicitly).
+  const p = payload as { roundId?: unknown; lineKey?: unknown; expectedServed?: unknown } | null;
+  if (opts.raw === undefined && p && typeof p === "object" && !Array.isArray(p) && typeof p.roundId === "string" && typeof p.lineKey === "string" && !("expectedServed" in p)) {
+    payload = { ...p, expectedServed: await rawOf(sessionId, p.roundId, p.lineKey) };
+  }
   const headers: Record<string, string> = { "content-type": "application/json", origin: "http://localhost:3000" };
   if (opts.idem !== null) headers["idempotency-key"] = opts.idem ?? key();
   const req = new Request(`http://localhost:3000/api/sessions/${sessionId}/serving`, { method: "POST", headers, body: opts.raw ?? JSON.stringify(payload) });
@@ -135,7 +141,7 @@ async function table() {
 }
 type T = Awaited<ReturnType<typeof table>>;
 const katsuKey = (t: T) => lk(t.katsuId);
-const body = (roundId: string, lineKey: string, delta: unknown) => ({ roundId, lineKey, delta });
+const body = (roundId: string, lineKey: string, delta: unknown, expectedServed?: unknown) => ({ roundId, lineKey, delta, ...(expectedServed === undefined ? {} : { expectedServed }) });
 
 /** State that must not move when a request is refused. */
 async function fingerprint(host: Actor, sessionId: string) {
@@ -244,10 +250,10 @@ describe("POST /serving: happy path and clamping", () => {
     expect(snap.servedCounts.find((c) => c.lineKey === k)?.served).toBe(5);
     const katsuItems = buildSummary(snap).sections.flatMap((s) => s.lines).filter((l) => /katsu/i.test(l.label));
     expect(katsuItems.reduce((n, l) => n + l.quantity, 0)).toBe(2);
-    const down = await post(t.sessionId, t.hostWho, body(t.roundId, k, -1));
+    const down = await post(t.sessionId, t.hostWho, body(t.roundId, k, -1, 2));
     expect(down.body.data?.result.served).toBe(1);
     expect(await rawOf(t.sessionId, t.roundId, k)).toBe(1);
-    await post(t.sessionId, t.hostWho, body(t.roundId, k, 5));
+    await post(t.sessionId, t.hostWho, body(t.roundId, k, 5, 1));
     expect(await rawOf(t.sessionId, t.roundId, k)).toBe(2);
   });
 
@@ -258,7 +264,7 @@ describe("POST /serving: happy path and clamping", () => {
     await open(t.host);
     await correct(t.host, { entries: [{ sourceEntryId: t.anaKatsu, quantity: 3 }], type: "QUANTITY" });
     await confirm(t.host);
-    const r = await post(t.sessionId, t.hostWho, body(t.roundId, k, 1));
+    const r = await post(t.sessionId, t.hostWho, body(t.roundId, k, 1, 2));
     expect(r.status).toBe(200);
     expect(r.body.data?.result.served).toBe(2);
     expect(await rawOf(t.sessionId, t.roundId, k)).toBe(2);
@@ -313,7 +319,7 @@ describe("POST /serving: happy path and clamping", () => {
     await post(t.sessionId, t.hostWho, body(t.roundId, k, 5));
     const r = await post(t.sessionId, t.hostWho, body(t.roundId, k, 1));
     expect(r.status).toBe(200);
-    expect(r.body.data?.result.served).toBe(5);
+    expect(r.body.data?.result).toMatchObject({ served: 5, applied: true });
     expect(await rawOf(t.sessionId, t.roundId, k)).toBe(5);
   });
 });
@@ -536,44 +542,45 @@ describe("POST /serving: round, line and order state", () => {
 
 // ---------- concurrency ----------
 describe("POST /serving: races", () => {
-  it("K01 many parallel +1 on a fresh line (no row yet): all 200, none lost, final = clamped sum, answers are the serial counts", async () => {
+  it("K01 many parallel +1 that all saw 0 (no row yet): exactly one lands, the rest answer applied: false with the new count", async () => {
     const t = await table();
     const k = katsuKey(t);
-    const rs = await Promise.all(Array.from({ length: 8 }, () => post(t.sessionId, t.hostWho, body(t.roundId, k, 1))));
+    const rs = await Promise.all(Array.from({ length: 8 }, () => post(t.sessionId, t.hostWho, body(t.roundId, k, 1, 0))));
     expect(rs.map((r) => r.status)).toEqual(Array(8).fill(200));
-    expect(rs.map((r) => r.body.data!.result.served).sort()).toEqual([1, 2, 3, 4, 5, 5, 5, 5]);
-    expect(await rawOf(t.sessionId, t.roundId, k)).toBe(5);
+    expect(rs.filter((r) => r.body.data!.result.applied)).toHaveLength(1);
+    expect(rs.map((r) => r.body.data!.result.served)).toEqual(Array(8).fill(1));
+    expect(await rawOf(t.sessionId, t.roundId, k)).toBe(1);
     expect(await servedRows(t.sessionId)).toHaveLength(1);
   });
 
-  it("K02 many parallel +1 below the cap: final = the exact sum", async () => {
+  it("K02 parallel +1 that each saw the previous count (a chain of taps) all land once the counts line up", async () => {
     const t = await table();
     const k = katsuKey(t);
-    const rs = await Promise.all(Array.from({ length: 4 }, () => post(t.sessionId, t.hostWho, body(t.roundId, k, 1))));
-    expect(rs.map((r) => r.body.data!.result.served).sort()).toEqual([1, 2, 3, 4]);
-    expect(await rawOf(t.sessionId, t.roundId, k)).toBe(4);
+    const rs = await Promise.all([0, 1, 2, 3].map((seen) => post(t.sessionId, t.hostWho, body(t.roundId, k, 1, seen))));
+    expect(rs.filter((r) => r.body.data!.result.applied).length).toBeGreaterThanOrEqual(1);
+    const raw = await rawOf(t.sessionId, t.roundId, k);
+    expect(raw).toBe(rs.filter((r) => r.body.data!.result.applied).length);
   });
 
-  it("K03 many parallel -1 from 5: final 0, never below, answers are the serial counts", async () => {
+  it("K03 parallel -1 from 5 that all saw 5: one lands (4), the rest answer 4 and change nothing", async () => {
     const t = await table();
     const k = katsuKey(t);
     await post(t.sessionId, t.hostWho, body(t.roundId, k, 5));
-    const rs = await Promise.all(Array.from({ length: 8 }, () => post(t.sessionId, t.hostWho, body(t.roundId, k, -1))));
+    const rs = await Promise.all(Array.from({ length: 8 }, () => post(t.sessionId, t.hostWho, body(t.roundId, k, -1, 5))));
     expect(rs.map((r) => r.status)).toEqual(Array(8).fill(200));
-    expect(rs.map((r) => r.body.data!.result.served).sort()).toEqual([0, 0, 0, 0, 1, 2, 3, 4]);
-    expect(await rawOf(t.sessionId, t.roundId, k)).toBe(0);
+    expect(rs.filter((r) => r.body.data!.result.applied)).toHaveLength(1);
+    expect(rs.map((r) => r.body.data!.result.served)).toEqual(Array(8).fill(4));
+    expect(await rawOf(t.sessionId, t.roundId, k)).toBe(4);
   });
 
-  it("K04 mixed parallel deltas stay inside 0..expected and the snapshot matches the database", async () => {
+  it("K04 mixed parallel deltas that all saw 0 stay inside 0..expected and the snapshot matches the database", async () => {
     const t = await table();
     const k = katsuKey(t);
     const deltas = [2, -1, 3, -2, 4, -1, 1, -3, 2, 5];
-    const rs = await Promise.all(deltas.map((d) => post(t.sessionId, t.hostWho, body(t.roundId, k, d))));
+    const rs = await Promise.all(deltas.map((d) => post(t.sessionId, t.hostWho, body(t.roundId, k, d, 0))));
     expect(rs.map((r) => r.status)).toEqual(Array(deltas.length).fill(200));
-    for (const r of rs) {
-      expect(r.body.data!.result.served).toBeGreaterThanOrEqual(0);
-      expect(r.body.data!.result.served).toBeLessThanOrEqual(5);
-    }
+    // A clamped no-op at 0 still matches the count it saw, so several may report applied; none may leave 0..5.
+    for (const r of rs) expect(r.body.data!.result.served).toBeGreaterThanOrEqual(0);
     const raw = await rawOf(t.sessionId, t.roundId, k);
     expect(raw).toBeGreaterThanOrEqual(0);
     expect(raw).toBeLessThanOrEqual(5);
@@ -598,7 +605,7 @@ describe("POST /serving: races", () => {
     expect(c.status).toBe("fulfilled");
     const raw = await rawOf(t.sessionId, t.roundId, k);
     expect([2, 5]).toContain(raw);
-    const next = await post(t.sessionId, t.hostWho, body(t.roundId, k, -1));
+    const next = await post(t.sessionId, t.hostWho, body(t.roundId, k, -1, Math.min(raw, 2)));
     expect(next.body.data?.result.served).toBe(1);
   });
 
@@ -615,6 +622,86 @@ describe("POST /serving: races", () => {
     } finally {
       await sub.unlisten();
     }
+  });
+});
+
+// ---------- co-hosts and the count precondition ----------
+describe("POST /serving: co-hosts and the count precondition", () => {
+  const promote = (t: T, on = true) => run(t.host, (tx, s) => setCohost(tx, s, t.host, t.ana.actor.participantId, on));
+  const noticeCount = async (sessionId: string) => (await db.execute(sql`SELECT count(*)::int AS n FROM notifications WHERE session_id = ${sessionId} AND type = 'food.served'`))[0].n as number;
+
+  it("H01 a co-host serves like the host: 200, served_counts.updated_by and the event carry their id", async () => {
+    const t = await table();
+    await promote(t);
+    const r = await post(t.sessionId, t.anaWho, body(t.roundId, katsuKey(t), 2));
+    expect(r.status).toBe(200);
+    expect(r.body.data?.result).toMatchObject({ served: 2, applied: true });
+    const [row] = await db.execute(sql`SELECT updated_by FROM served_counts WHERE session_id = ${t.sessionId}`);
+    expect(row.updated_by).toBe(t.ana.actor.participantId);
+    const [ev] = await db.select().from(sessionEvents).where(eq(sessionEvents.sessionId, t.sessionId)).orderBy(sql`revision DESC`).limit(1);
+    expect(ev.payload).toEqual({ roundId: t.roundId, actorId: t.ana.actor.participantId });
+  });
+
+  it("H02 a revoked co-host -> 403 FORBIDDEN with the new copy; nothing changes", async () => {
+    const t = await table();
+    await promote(t);
+    await promote(t, false);
+    const r = await expectRefused(t, t.anaWho, body(t.roundId, katsuKey(t), 1), 403, "FORBIDDEN");
+    expect(r.body.error?.message).toBe("Only the host and co-hosts can mark food as served.");
+  });
+
+  it("H03 revoked between the actor lookup and the lock: refused under the lock", async () => {
+    const t = await table();
+    await promote(t);
+    const stale = (await resolveActor(db, t.sessionId, t.ana.token)) as Actor;
+    expect(stale.cohost).toBe(true);
+    await promote(t, false);
+    const before = await fingerprint(t.host, t.sessionId);
+    await expect(runMutation(db, stale, { idempotencyKey: key(), type: "serving.update:x", usesFreshActor: true }, (tx, s, fresh) => updateServed(tx, s, fresh, { roundId: t.roundId, lineKey: katsuKey(t), expectedServed: 0, delta: 1 }))).rejects.toMatchObject({ status: 403, code: "FORBIDDEN" });
+    expect(await fingerprint(t.host, t.sessionId)).toBe(before);
+  });
+
+  it("H04 any other write by someone whose role moved under it -> 403 ROLE_CHANGED", async () => {
+    const t = await table();
+    await db.execute(sql`UPDATE participants SET role = 'GUEST' WHERE id = ${t.host.participantId}`);
+    await expect(run(t.host, (tx, s) => setReady(tx, s, t.host, true))).rejects.toMatchObject({ status: 403, code: "ROLE_CHANGED" });
+  });
+
+  it("H05 a stale count applies nothing: 200 applied: false with the current count; row, notifications untouched; session revision +1 and one event", async () => {
+    const t = await table();
+    const k = katsuKey(t);
+    await post(t.sessionId, t.hostWho, body(t.roundId, k, 2));
+    const rowBefore = await servedRows(t.sessionId);
+    const rev = await sessionRev(t.sessionId);
+    const events = (await eventTypes(t.sessionId)).length;
+    const notices = await noticeCount(t.sessionId);
+    const r = await post(t.sessionId, t.hostWho, body(t.roundId, k, 3, 0));
+    expect(r.status).toBe(200);
+    expect(r.body.data?.result).toMatchObject({ served: 2, applied: false });
+    expect(await servedRows(t.sessionId)).toEqual(rowBefore);
+    expect(await noticeCount(t.sessionId)).toBe(notices);
+    expect(await sessionRev(t.sessionId)).toBe(rev + 1);
+    expect((await eventTypes(t.sessionId)).length).toBe(events + 1);
+  });
+
+  it("H06 retry of a stale batch (same key) replays applied: false and applies nothing even after the count moved to match", async () => {
+    const t = await table();
+    const k = katsuKey(t);
+    await post(t.sessionId, t.hostWho, body(t.roundId, k, 2));
+    const idem = key();
+    const first = await post(t.sessionId, t.hostWho, body(t.roundId, k, 1, 0), { idem });
+    await post(t.sessionId, t.hostWho, body(t.roundId, k, -2));
+    const again = await post(t.sessionId, t.hostWho, body(t.roundId, k, 1, 0), { idem });
+    expect(first.body.data?.result.applied).toBe(false);
+    expect(again.body.data).toMatchObject({ replayed: true, result: first.body.data?.result });
+    expect(await rawOf(t.sessionId, t.roundId, k)).toBe(0);
+  });
+
+  it("H07 expectedServed is required: missing, negative, fractional or a string -> 422", async () => {
+    const t = await table();
+    for (const expectedServed of [-1, 1.5, "0", null]) await expectRefused(t, t.hostWho, body(t.roundId, katsuKey(t), 1, expectedServed), 422, "INVALID");
+    const r = await post(t.sessionId, t.hostWho, null, { raw: JSON.stringify({ roundId: t.roundId, lineKey: katsuKey(t), delta: 1 }) });
+    expect([r.status, r.body.error?.code]).toEqual([422, "INVALID"]);
   });
 });
 

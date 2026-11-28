@@ -7,11 +7,13 @@ import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerTitle } fr
 import type { SessionSnapshot } from "@/lib/snapshot";
 import { track } from "@/lib/analytics";
 import { buildSummary, itemsLabel, roundsLabel, summaryText } from "@/lib/summary";
+import { dineDate } from "@/lib/time";
+import type { BillStepId } from "@/lib/bill-step";
 import { cn } from "@/lib/utils";
+import { jumpToStep } from "./bill-step-row";
 import { KkbView, MY_CARD_ID } from "./kkb-view";
 
 const noSubscribe = () => () => {};
-const DATE: Intl.DateTimeFormatOptions = { weekday: "short", month: "short", day: "numeric" };
 
 export type SummaryTab = "items" | "kkb";
 
@@ -25,6 +27,8 @@ interface SummarySheetProps {
   onRenameMe: (displayName: string) => void;
   /** "My share": once the drawer has opened, scroll to and focus the viewer's own KKB card. */
   focusMine?: boolean;
+  /** "Open bill": once the drawer has opened, scroll to and focus where this billing step lives. */
+  focusTarget?: BillStepId | null;
 }
 
 const TABS: { id: SummaryTab; label: string }[] = [
@@ -41,10 +45,10 @@ const fileName = (title: string) => `salo-${title.toLowerCase().replace(/[^a-z0-
  * "Who ordered what" (owner request): what each person, group and the table had, from the confirmed rounds, to settle
  * up later. Copy it as text for the group chat, or save it as an image.
  */
-export function SummarySheet({ open, onOpenChange, snapshot, tab, onTabChange, refresh, onRenameMe, focusMine = false }: SummarySheetProps) {
+export function SummarySheet({ open, onOpenChange, snapshot, tab, onTabChange, refresh, onRenameMe, focusMine = false, focusTarget = null }: SummarySheetProps) {
   const summary = useMemo(() => buildSummary(snapshot), [snapshot]);
-  // The date is the device's own (its time zone), on screen, in the text and in the image.
-  const dateLabel = useSyncExternalStore(noSubscribe, () => new Intl.DateTimeFormat(undefined, DATE).format(new Date()), () => "");
+  // The day the table ate (its first confirmed round, today when none), in the device's own locale and time zone, in the text and in the image.
+  const dateLabel = useSyncExternalStore(noSubscribe, () => dineDate(snapshot.rounds, new Date()), () => "");
   const canShare = useSyncExternalStore(noSubscribe, () => typeof navigator.share === "function", () => false);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const text = summaryText(summary, dateLabel);
@@ -111,6 +115,10 @@ export function SummarySheet({ open, onOpenChange, snapshot, tab, onTabChange, r
       <DrawerContent
         // "My share" opens on KKB: land on the viewer's own card.
         onOpenAutoFocus={(event) => {
+          if (focusTarget && tab === "kkb") {
+            event.preventDefault();
+            return jumpToStep(focusTarget);
+          }
           const card = focusMine && tab === "kkb" ? document.getElementById(MY_CARD_ID) : null;
           if (!card) return;
           event.preventDefault();
@@ -172,7 +180,7 @@ export function SummarySheet({ open, onOpenChange, snapshot, tab, onTabChange, r
               {summary.sections.map((s) => (
                 <li key={`${s.title}:${s.note}`} className="py-3">
                   <div className="flex items-baseline justify-between gap-3">
-                    <p className="min-w-0 text-lg leading-snug">
+                    <p className="min-w-0 text-lg leading-snug break-words">
                       {s.title}
                       {s.note ? <span className="ml-1.5 font-sans text-sm text-ink-soft">· {s.note}</span> : null}
                     </p>

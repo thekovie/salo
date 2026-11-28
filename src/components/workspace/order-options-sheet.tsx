@@ -1,8 +1,10 @@
 "use client";
 
-import { Compass, LoaderCircle, X } from "lucide-react";
-import { useId, useState } from "react";
+import { BookOpen, Compass, HandHelping, LoaderCircle, X } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { MenuLinkStep, type MenuLinkValue } from "./menu-link";
+import { HostHandover, type HandoverGuest } from "./host-handover";
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
 
 interface OrderOptionsSheetProps {
@@ -25,6 +27,14 @@ interface OrderOptionsSheetProps {
   onEnd: () => Promise<boolean>;
   /** Replay the "how Salo works" tour. */
   onTour: () => void;
+  sessionId: string;
+  /** Active guests who could take over (co-hosts first); none hides "Hand over host". */
+  handoverGuests: readonly HandoverGuest[];
+  /** Refreshes the snapshot after a hand over (marks this device's guest tour seen first). */
+  onHandoverRefresh: () => Promise<unknown>;
+  /** The saved menu link, and a snapshot refresh after it changes. */
+  menu: MenuLinkValue | null | undefined;
+  onMenuRefresh: () => Promise<unknown>;
 }
 
 /**
@@ -41,12 +51,21 @@ export function OrderOptionsSheet(props: OrderOptionsSheetProps) {
   );
 }
 
-function OptionsBody({ onOpenChange, title, anyConfirmed, unsentRound, waitingItems = 0, onRename, myName, onRenameMe, onEnd, onTour, startAt = "options" }: OrderOptionsSheetProps) {
+function OptionsBody({ onOpenChange, title, anyConfirmed, unsentRound, waitingItems = 0, onRename, myName, onRenameMe, onEnd, onTour, sessionId, handoverGuests, onHandoverRefresh, menu, onMenuRefresh, startAt = "options" }: OrderOptionsSheetProps) {
   const id = useId();
   const [draft, setDraft] = useState(title ?? "");
   const unnamed = myName.trim().toLowerCase() === "host";
   const [name, setName] = useState(unnamed ? "" : myName);
-  const [step, setStep] = useState<"options" | "confirm">(startAt);
+  const [step, setStep] = useState<"options" | "confirm" | "handover" | "menu">(startAt);
+  const menuRow = useRef<HTMLButtonElement>(null);
+  const endButton = useRef<HTMLButtonElement>(null);
+  const lastStep = useRef(step);
+  // Back from a sub-step lands on the row that opened it, not on the drawer.
+  useEffect(() => {
+    if (step === "options" && lastStep.current === "menu") menuRow.current?.focus();
+    if (step === "options" && lastStep.current === "confirm") endButton.current?.focus();
+    lastStep.current = step;
+  }, [step]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const verb = anyConfirmed ? "End" : "Cancel";
@@ -75,6 +94,14 @@ function OptionsBody({ onOpenChange, title, anyConfirmed, unsentRound, waitingIt
     </DrawerClose>
   );
 
+  if (step === "handover") {
+    return <HostHandover sessionId={sessionId} guests={handoverGuests} needsName={unnamed} refresh={onHandoverRefresh} onBack={() => setStep("options")} close={close} onDone={() => onOpenChange(false)} />;
+  }
+
+  if (step === "menu") {
+    return <MenuLinkStep sessionId={sessionId} current={menu} refresh={onMenuRefresh} onBack={() => setStep("options")} close={close} onSaved={() => setStep("options")} />;
+  }
+
   if (step === "confirm") {
     return (
       <div aria-busy={busy}>
@@ -86,7 +113,7 @@ function OptionsBody({ onOpenChange, title, anyConfirmed, unsentRound, waitingIt
           <div className="mt-2 space-y-2 text-ink-soft">
             <p>Nobody can add or change anything after this, and the invite stops working.</p>
             {anyConfirmed ? (
-              <p>Everyone can still look at the tickets for 7 days. Then the order is deleted.</p>
+              <p>Everyone can still look at the tickets for 7 days, then the order is deleted. The host can still fix prices and the bill.</p>
             ) : (
               <p>Nothing was sent to the waiter. Everyone sees it was cancelled, and it’s deleted tomorrow.</p>
             )}
@@ -160,25 +187,41 @@ function OptionsBody({ onOpenChange, title, anyConfirmed, unsentRound, waitingIt
         </Button>
       </form>
 
+      <button type="button" ref={menuRow} onClick={() => setStep("menu")} className="mt-5 flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-xl px-1 text-left hover:bg-ink/6">
+        <BookOpen className="size-5 shrink-0 text-ink-soft" aria-hidden />
+        <span className="shrink-0 whitespace-nowrap font-semibold">Menu link</span>
+        <span data-ph-mask="" className="min-w-0 flex-1 truncate text-right text-sm text-ink-soft [direction:rtl]">
+          {menu ? <bdi>{menu.domain}</bdi> : "Add a link"}
+        </span>
+      </button>
+
       <button
         type="button"
         onClick={() => {
           onOpenChange(false);
           onTour();
         }}
-        className="mt-5 flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-xl px-1 text-left hover:bg-ink/6"
+        className="mt-1 flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-xl px-1 text-left hover:bg-ink/6"
       >
         <Compass className="size-5 shrink-0 text-ink-soft" aria-hidden />
         <span className="flex-1 font-semibold">How Salo works</span>
         <span className="text-sm text-ink-soft">30-second tour</span>
       </button>
 
+      {handoverGuests.length > 0 ? (
+        <button type="button" onClick={() => setStep("handover")} className="mt-1 flex min-h-12 w-full cursor-pointer items-center gap-3 rounded-xl px-1 text-left hover:bg-ink/6">
+          <HandHelping className="size-5 shrink-0 text-ink-soft" aria-hidden />
+          <span className="shrink-0 whitespace-nowrap font-semibold">Hand over host</span>
+          <span className="min-w-0 flex-1 truncate text-right text-sm text-ink-soft">Pick a new host</span>
+        </button>
+      ) : null}
+
       <div className="mt-4 border-t-[1.5px] border-dashed border-rule pt-5">
         <p className="font-semibold">{anyConfirmed ? "All done?" : "Not ordering after all?"}</p>
         <p className="mt-0.5 text-sm text-ink-soft">
-          {anyConfirmed ? "End the order when the table is finished. Everyone can still read the tickets for a week." : "Cancel the order. Nothing has been sent to the waiter yet."}
+          {anyConfirmed ? "End the order when the table is finished. Everyone can still read the tickets for a week. You can still fix prices and the bill." : "Cancel the order. Nothing has been sent to the waiter yet."}
         </p>
-        <Button variant="danger" className="mt-3 w-full" onClick={() => setStep("confirm")}>
+        <Button ref={endButton} variant="danger" className="mt-3 w-full" onClick={() => setStep("confirm")}>
           {verb} order
         </Button>
       </div>

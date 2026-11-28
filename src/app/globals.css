@@ -24,6 +24,7 @@
   --saffron: oklch(0.83 0.15 80);
   --saffron-ink: oklch(0.47 0.1 68);
   --saffron-wash: oklch(0.95 0.06 88);
+  --on-saffron: var(--ink);
   /* Carbon copies: round 1 white, round 2 canary, round 3+ pink (the order pad's own colours). */
   --copy-1: var(--ticket);
   --copy-2: oklch(0.965 0.065 101);
@@ -62,6 +63,7 @@
   --saffron: oklch(0.8 0.14 80);
   --saffron-ink: oklch(0.83 0.13 82);
   --saffron-wash: oklch(0.31 0.05 75);
+  --on-saffron: oklch(0.17 0.02 80);
   --copy-1: var(--ticket);
   --copy-2: oklch(0.3 0.045 98);
   --copy-3: oklch(0.29 0.04 8);
@@ -96,6 +98,7 @@
     --saffron: oklch(0.8 0.14 80);
     --saffron-ink: oklch(0.83 0.13 82);
     --saffron-wash: oklch(0.31 0.05 75);
+    --on-saffron: oklch(0.17 0.02 80);
     --copy-1: var(--ticket);
     --copy-2: oklch(0.3 0.045 98);
     --copy-3: oklch(0.29 0.04 8);
@@ -129,6 +132,7 @@
   --color-saffron: var(--saffron);
   --color-saffron-ink: var(--saffron-ink);
   --color-saffron-wash: var(--saffron-wash);
+  --color-on-saffron: var(--on-saffron);
   --color-copy-1: var(--copy-1);
   --color-copy-2: var(--copy-2);
   --color-copy-3: var(--copy-3);
@@ -262,7 +266,8 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-  .tick {
+  .tick,
+  .table-plate {
     animation: none !important;
   }
   /* The wash is a colour change that says "this just changed", not movement: keep it. */
@@ -279,6 +284,29 @@
   ::view-transition-new(*) {
     animation: none !important;
   }
+}
+
+/* Salo table loader: each plate fades and scales in, holds, fades out; the next plate follows 160 ms later. The base
+   style is the set state, so no-JS, SSR and reduced motion show the set table. */
+@keyframes table-plate {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  25%,
+  70% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+.table-plate {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: table-plate 2.4s var(--ease-out-expo) calc(var(--i) * 160ms) infinite both;
 }
 
 @keyframes toast-in {
@@ -444,6 +472,18 @@ dialog.sheet {
     linear-gradient(#000, #000) bottom / 100% calc(100% - 9px) no-repeat;
   mask: var(--perf-top);
   -webkit-mask: var(--perf-top);
+}
+
+/* The floating stack sits above drawers so Undo stays reachable in a sheet; its notices (connection, arrivals) stay
+   under sheets as before, so they can't catch taps meant for the sheet. */
+body:has([data-vaul-drawer]) .floating-notices {
+  display: none;
+}
+
+/* Over a drawer the stack moves to the top, onto the overlay: any bottom offset lands on some sheet's controls. */
+body:has([data-vaul-drawer]) [data-toast-stack] {
+  top: calc(env(safe-area-inset-top) + 0.5rem);
+  bottom: auto;
 }
 
 /* Live arrivals: slide down and in (~200 ms), hold, fade up and out (~140 ms). One animation, so nothing has to

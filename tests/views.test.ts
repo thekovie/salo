@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SnapshotEntry } from "@/lib/snapshot";
-import { byGroup, byPerson, findLikelyDuplicates, readinessSummary } from "@/lib/views";
+import { byGroup, byPerson, findLikelyDuplicates, myOrderRows, orderingIds, readinessSummary } from "@/lib/views";
 
 let n = 0;
 function e(dish: string, quantity: number, submittedBy: string, attribution: SnapshotEntry["attribution"], extra: Partial<SnapshotEntry> = {}): SnapshotEntry {
@@ -8,9 +8,9 @@ function e(dish: string, quantity: number, submittedBy: string, attribution: Sna
   return { id: `e${n}`, batchId: `b${n}`, roundId: "r", dishId: `d-${dish}`, dishName: dish, quantity, variant: null, instructions: null, createdAt: `2026-11-06T12:00:${String(n).padStart(2, "0")}Z`, revision: 1, submittedBy, attribution, ...extra };
 }
 const people = [
-  { id: "h", displayName: "Host", role: "HOST" as const },
-  { id: "rafa", displayName: "Rafa", role: "GUEST" as const },
-  { id: "jd", displayName: "JD", role: "GUEST" as const },
+  { id: "h", displayName: "Host", role: "HOST" as const, cohost: false },
+  { id: "rafa", displayName: "Rafa", role: "GUEST" as const, cohost: false },
+  { id: "jd", displayName: "JD", role: "GUEST" as const, cohost: false },
 ];
 const none = { type: "UNASSIGNED" as const, label: null, participantId: null };
 
@@ -71,9 +71,62 @@ describe("findLikelyDuplicates", () => {
   });
 });
 
+const snap = (readiness: { participantId: string; ready: boolean }[], groups: { id: string; label: string; createdBy: string | null; memberIds: string[] }[] = []) => ({ participants: people, readiness, groups, removedPeople: [] });
+const forRafa = { type: "INDIVIDUAL" as const, label: null, participantId: "rafa" };
+
+describe("orderingIds", () => {
+  it("counts dishes for them, added by them, typed under their name and for their group; not table or unassigned", () => {
+    const entries = [
+      e("A", 1, "h", forRafa),
+      e("B", 1, "jd", { type: "TABLE", label: null, participantId: null }),
+      e("C", 1, "h", { type: "INDIVIDUAL", label: " jd ", participantId: null }),
+      e("D", 1, "h", { type: "GROUP", label: "OFFICE", participantId: null }),
+      e("E", 1, "h", none),
+    ];
+    const ids = orderingIds(entries, people, [{ label: "Office", memberIds: ["rafa"] }], "r");
+    expect([...ids].sort()).toEqual(["h", "jd", "rafa"]);
+  });
+
+  it("ignores other rounds", () => {
+    expect(orderingIds([e("A", 1, "h", forRafa, { roundId: "old" })], people, [], "r").has("rafa")).toBe(false);
+  });
+});
+
 describe("readinessSummary", () => {
   it("counts guests only", () => {
-    const summary = readinessSummary({ participants: people, readiness: [{ participantId: "rafa", ready: true }, { participantId: "jd", ready: false }, { participantId: "h", ready: true }] });
+    const entries = [e("A", 1, "h", forRafa), e("B", 1, "h", { type: "INDIVIDUAL", label: null, participantId: "jd" })];
+    const summary = readinessSummary(snap([{ participantId: "rafa", ready: true }, { participantId: "jd", ready: false }, { participantId: "h", ready: true }]), entries, "r");
     expect([summary.ready, summary.total]).toEqual([1, 2]);
+  });
+
+  it("leaves out guests with no order, unless they said ready", () => {
+    const entries = [e("A", 1, "h", forRafa)];
+    const quiet = readinessSummary(snap([{ participantId: "rafa", ready: true }]), entries, "r");
+    expect([quiet.ready, quiet.total, [...quiet.noOrderIds]]).toEqual([1, 1, ["jd"]]);
+    const both = readinessSummary(snap([{ participantId: "rafa", ready: true }, { participantId: "jd", ready: true }]), entries, "r");
+    expect([both.ready, both.total, both.noOrderIds.size]).toEqual([2, 2, 0]);
+  });
+});
+
+describe("myOrderRows", () => {
+  const rafaSnap = { participants: people, removedPeople: [], groups: [{ id: "g", label: "Office", createdBy: null, memberIds: ["rafa"] }] };
+  it("groups for you, typed for you, added for others and shared", () => {
+    const mine = e("Mine", 1, "rafa", forRafa);
+    const byHost = e("ByHost", 1, "h", forRafa);
+    const typed = e("Typed", 1, "h", { type: "INDIVIDUAL", label: "rafa", participantId: null });
+    const guestTyped = e("GuestTyped", 1, "jd", { type: "INDIVIDUAL", label: "rafa", participantId: null });
+    const forJd = e("ForJd", 1, "rafa", { type: "INDIVIDUAL", label: null, participantId: "jd" });
+    const table = e("Table", 1, "h", { type: "TABLE", label: null, participantId: null });
+    const myGroup = e("MyGroup", 1, "h", { type: "GROUP", label: " office", participantId: null });
+    const otherGroup = e("OtherGroup", 1, "h", { type: "GROUP", label: "Bar", participantId: null });
+    const jdOnly = e("JdOnly", 1, "h", { type: "INDIVIDUAL", label: null, participantId: "jd" });
+    const rows = myOrderRows([mine, byHost, typed, guestTyped, forJd, table, myGroup, otherGroup, jdOnly], rafaSnap, "rafa");
+    const names = (r: typeof rows.forYou) => r.map((x) => x.entry.dishName);
+    expect(names(rows.forYou)).toEqual(["Mine", "ByHost", "GuestTyped"]);
+    expect(rows.forYou[1].addedBy).toBe("Host");
+    expect(names(rows.typedForYou)).toEqual(["Typed"]);
+    expect(names(rows.byYou)).toEqual(["ForJd"]);
+    expect(rows.byYou[0].forName).toBe("JD");
+    expect(names(rows.shared)).toEqual(["Table", "MyGroup"]);
   });
 });

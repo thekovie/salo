@@ -15,7 +15,8 @@ export interface MutationEvent {
 
 export interface Applied<T> {
   result: T;
-  event: MutationEvent;
+  /** `null`: nothing changed, so no event and no revision bump (the key is still recorded). */
+  event: MutationEvent | null;
 }
 
 export interface MutationOutcome<T> {
@@ -30,6 +31,8 @@ interface Options {
   type: string;
   /** Only closing-related mutations may run on a closed session. */
   allowClosed?: boolean;
+  /** The change decides on the fresh role (serving does); every other change is refused when the role moved under it (D20). */
+  usesFreshActor?: boolean;
 }
 
 export const EVENTS_CHANNEL = "salo_events";
@@ -43,7 +46,7 @@ export async function runMutation<T>(
   db: Db,
   actor: Actor,
   options: Options,
-  apply: (tx: Tx, session: SessionRow) => Promise<Applied<T>>,
+  apply: (tx: Tx, session: SessionRow, fresh: Actor) => Promise<Applied<T>>,
 ): Promise<MutationOutcome<T>> {
   limitMutations(actor);
   const inactiveDays = getEnv().INACTIVE_RETENTION_DAYS;
@@ -52,9 +55,10 @@ export async function runMutation<T>(
     if (!session) throw notFound();
     // Checked again under the lock: a change sent just before the host removed this guest waits behind the removal
     // and must not land after it.
-    const [me] = await tx.select({ removedAt: participants.removedAt }).from(participants).where(eq(participants.id, actor.participantId));
+    const [me] = await tx.select({ removedAt: participants.removedAt, role: participants.role, cohostAt: participants.cohostAt }).from(participants).where(eq(participants.id, actor.participantId));
     if (!me) throw notFound();
     if (me.removedAt) throw new AppError(403, "REMOVED", "The host removed you from this order.");
+    const fresh: Actor = { ...actor, role: me.role, cohost: me.cohostAt !== null };
 
     const [previous] = await tx
       .select({ result: mutationRecords.result, mutationType: mutationRecords.mutationType })
@@ -78,7 +82,12 @@ export async function runMutation<T>(
     // Past its deletion date: gone (and never revived by a late change), even before the hourly cleanup runs.
     if (session.expiresAt.getTime() <= Date.now()) throw notFound();
 
-    const { result, event } = await apply(tx, session);
+    if (!options.usesFreshActor && fresh.role !== actor.role) throw new AppError(403, "ROLE_CHANGED", "Your role in this order changed. Reload to continue.");
+    const { result, event } = await apply(tx, session, fresh);
+    if (!event) {
+      await tx.insert(mutationRecords).values({ sessionId: session.id, actorId: actor.participantId, idempotencyKey: options.idempotencyKey, mutationType: options.type, result: { result, revision: session.revision } });
+      return { result, revision: session.revision, replayed: false };
+    }
     const revision = session.revision + 1;
     await tx
       .update(sessions)

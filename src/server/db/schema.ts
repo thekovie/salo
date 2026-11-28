@@ -13,6 +13,7 @@ import {
   uuid,
   bigint,
 } from "drizzle-orm/pg-core";
+import { ADJUSTMENT_CATEGORIES, ADJUSTMENT_METHODS } from "../../lib/snapshot";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 const id = () => uuid("id").primaryKey().defaultRandom();
@@ -28,6 +29,7 @@ export const ATTRIBUTION_TYPES = ["INDIVIDUAL", "GROUP", "TABLE", "UNASSIGNED"] 
 export const CLAIM_STATUSES = ["PENDING", "APPROVED", "REJECTED"] as const;
 export const CORRECTION_TYPES = ["QUANTITY", "REPLACE", "CANCEL"] as const;
 export const CORRECTION_REASONS = ["UNAVAILABLE"] as const;
+export const ADJUSTMENT_DIRECTIONS = ["discount", "charge"] as const;
 
 const inList = (column: string, values: readonly string[]) =>
   sql.raw(`${column} IN (${values.map((v) => `'${v}'`).join(", ")})`);
@@ -54,6 +56,9 @@ export const sessions = pgTable(
     /** The receipt's printed total in centavos (KKB check): null = not entered. Never split; only compared. */
     receiptTotalCentavos: integer("receipt_total_centavos"),
     receiptTotalRevision: integer("receipt_total_revision").notNull().default(0),
+    /** The restaurant's menu link (F16): normalised https URL, optional label. Never fetched by the server. */
+    menuUrl: text("menu_url"),
+    menuLabel: text("menu_label"),
   },
   (t) => [
     uniqueIndex("sessions_join_code_uq").on(t.joinCode),
@@ -61,6 +66,9 @@ export const sessions = pgTable(
     check("sessions_status_ck", inList("status", SESSION_STATUSES)),
     check("sessions_revision_ck", sql`revision >= 0`),
     check("sessions_closed_ck", sql`(status = 'CLOSED') = (closed_at IS NOT NULL)`),
+    check("sessions_menu_url_ck", sql`char_length(menu_url) <= 500`),
+    check("sessions_menu_label_ck", sql`char_length(menu_label) <= 40`),
+    check("sessions_menu_label_url_ck", sql`menu_label IS NULL OR menu_url IS NOT NULL`),
     check("sessions_service_charge_ck", sql`service_charge_centavos BETWEEN 0 AND 99999999`),
     check("sessions_service_charge_revision_ck", sql`service_charge_revision >= 0`),
     check("sessions_receipt_total_ck", sql`receipt_total_centavos BETWEEN 0 AND 99999999`),
@@ -81,11 +89,14 @@ export const participants = pgTable(
     removedAt: timestamp("removed_at", { withTimezone: true }),
     /** Optional, shown only to the removed guest. */
     removedReason: text("removed_reason"),
+    /** Set while the host lets this guest help mark food served (F04). Cleared on removal. */
+    cohostAt: timestamp("cohost_at", { withTimezone: true }),
   },
   (t) => [
     index("participants_session_idx").on(t.sessionId),
     check("participants_role_ck", inList("role", ROLES)),
     check("participants_removed_ck", sql`(removed_at IS NULL OR role = 'GUEST') AND (removed_reason IS NULL OR (removed_at IS NOT NULL AND char_length(removed_reason) <= 140))`),
+    check("participants_cohost_ck", sql`cohost_at IS NULL OR (role = 'GUEST' AND removed_at IS NULL)`),
     // Exactly one host per session.
     uniqueIndex("participants_one_host_uq").on(t.sessionId).where(sql`role = 'HOST'`),
   ],
@@ -469,5 +480,155 @@ export const notifications = pgTable(
   (t) => [
     uniqueIndex("notifications_dedup_uq").on(t.sessionId, t.recipientId, t.dedupKey),
     index("notifications_recipient_idx").on(t.recipientId, t.createdAt),
+  ],
+);
+
+/**
+ * A receipt adjustment (KKB): a discount or extra charge, in centavos or basis points. Only what the host typed is
+ * stored; each person's share is computed (`lib/adjustments.ts`). `id` is client-generated so create is idempotent.
+ */
+export const adjustments = pgTable(
+  "adjustments",
+  {
+    id: uuid("id").primaryKey(),
+    sessionId: sessionRef(),
+    direction: text("direction", { enum: ADJUSTMENT_DIRECTIONS }).notNull(),
+    category: text("category", { enum: ADJUSTMENT_CATEGORIES }).notNull(),
+    note: text("note"),
+    amountCentavos: integer("amount_centavos"),
+    percentBps: integer("percent_bps"),
+    method: text("method", { enum: ADJUSTMENT_METHODS }).notNull(),
+    revision: integer("revision").notNull().default(1),
+    createdAt: createdAt(),
+    updatedBy: uuid("updated_by").references(() => participants.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("adjustments_session_idx").on(t.sessionId),
+    check("adjustments_direction_ck", inList("direction", ADJUSTMENT_DIRECTIONS)),
+    check("adjustments_category_ck", inList("category", ADJUSTMENT_CATEGORIES)),
+    check("adjustments_method_ck", inList("method", ADJUSTMENT_METHODS)),
+    check("adjustments_note_ck", sql`char_length(note) BETWEEN 1 AND 40`),
+    check("adjustments_one_amount_ck", sql`num_nonnulls(amount_centavos, percent_bps) = 1`),
+    check("adjustments_amount_ck", sql`amount_centavos BETWEEN 1 AND 99999999`),
+    check("adjustments_percent_ck", sql`percent_bps BETWEEN 1 AND 10000`),
+    check("adjustments_percent_method_ck", sql`percent_bps IS NULL OR method IN ('proportional', 'equal', 'individual')`),
+    check("adjustments_revision_ck", sql`revision >= 1`),
+  ],
+);
+
+/** The people an adjustment is split between: a participant or a typed name (same keys as Bill to). Amount only for "manual". */
+export const adjustmentShares = pgTable(
+  "adjustment_shares",
+  {
+    id: id(),
+    adjustmentId: uuid("adjustment_id")
+      .notNull()
+      .references(() => adjustments.id, { onDelete: "cascade" }),
+    sessionId: sessionRef(),
+    // No cascade: participants are soft-removed, so a removed person's share stays (and is flagged).
+    participantId: uuid("participant_id").references(() => participants.id),
+    billToLabel: text("bill_to_label"),
+    amountCentavos: integer("amount_centavos"),
+  },
+  (t) => [
+    index("adjustment_shares_adjustment_idx").on(t.adjustmentId),
+    index("adjustment_shares_session_idx").on(t.sessionId),
+    check("adjustment_shares_one_who_ck", sql`num_nonnulls(participant_id, bill_to_label) = 1`),
+    check("adjustment_shares_label_ck", sql`char_length(bill_to_label) BETWEEN 1 AND 40`),
+    check("adjustment_shares_amount_ck", sql`amount_centavos BETWEEN 0 AND 99999999`),
+  ],
+);
+
+/** Who shares one shared dish equally (KKB split). Rows exist only for a split (2 or more people); shares are computed. */
+export const entryPayers = pgTable(
+  "entry_payers",
+  {
+    id: id(),
+    entryId: uuid("entry_id")
+      .notNull()
+      .references(() => orderEntries.id, { onDelete: "cascade" }),
+    sessionId: sessionRef(),
+    // No cascade: participants are soft-removed, so a removed payer keeps their share.
+    participantId: uuid("participant_id").references(() => participants.id),
+    billToLabel: text("bill_to_label"),
+  },
+  (t) => [
+    index("entry_payers_entry_idx").on(t.entryId),
+    index("entry_payers_session_idx").on(t.sessionId),
+    uniqueIndex("entry_payers_entry_person_uq").on(t.entryId, t.participantId),
+    uniqueIndex("entry_payers_entry_label_uq").on(t.entryId, sql`lower(${t.billToLabel})`),
+    check("entry_payers_one_who_ck", sql`num_nonnulls(participant_id, bill_to_label) = 1`),
+    check("entry_payers_label_ck", sql`char_length(bill_to_label) BETWEEN 1 AND 40`),
+  ],
+);
+
+/** An extra restaurant receipt (KKB): a label, its printed total and the people it covers. The main receipt stays on `sessions`. */
+export const receipts = pgTable(
+  "receipts",
+  {
+    id: uuid("id").primaryKey(),
+    sessionId: sessionRef(),
+    label: text("label"),
+    totalCentavos: integer("total_centavos"),
+    revision: integer("revision").notNull().default(1),
+    createdAt: createdAt(),
+    updatedBy: uuid("updated_by").references(() => participants.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("receipts_session_idx").on(t.sessionId),
+    check("receipts_label_ck", sql`char_length(label) BETWEEN 1 AND 40`),
+    check("receipts_total_ck", sql`total_centavos BETWEEN 0 AND 99999999`),
+    check("receipts_revision_ck", sql`revision >= 1`),
+  ],
+);
+
+/** The people an extra receipt covers. A person sits on one extra receipt at most; everyone else is on the main receipt. */
+export const receiptPeople = pgTable(
+  "receipt_people",
+  {
+    id: id(),
+    receiptId: uuid("receipt_id")
+      .notNull()
+      .references(() => receipts.id, { onDelete: "cascade" }),
+    sessionId: sessionRef(),
+    participantId: uuid("participant_id").references(() => participants.id),
+    billToLabel: text("bill_to_label"),
+  },
+  (t) => [
+    index("receipt_people_receipt_idx").on(t.receiptId),
+    uniqueIndex("receipt_people_session_person_uq").on(t.sessionId, t.participantId),
+    uniqueIndex("receipt_people_session_label_uq").on(t.sessionId, sql`lower(${t.billToLabel})`),
+    check("receipt_people_one_who_ck", sql`num_nonnulls(participant_id, bill_to_label) = 1`),
+    check("receipt_people_label_ck", sql`char_length(bill_to_label) BETWEEN 1 AND 40`),
+  ],
+);
+
+/** A payment toward someone's KKB share (host-recorded, never edited). A null payee is the restaurant. Balances are computed from the bill, never stored. */
+export const payments = pgTable(
+  "payments",
+  {
+    id: uuid("id").primaryKey(),
+    sessionId: sessionRef(),
+    participantId: uuid("participant_id").references(() => participants.id),
+    label: text("label"),
+    payeeParticipantId: uuid("payee_participant_id").references(() => participants.id),
+    payeeLabel: text("payee_label"),
+    amountCentavos: integer("amount_centavos").notNull(),
+    method: text("method"),
+    note: text("note"),
+    createdAt: createdAt(),
+    createdBy: uuid("created_by").references(() => participants.id, { onDelete: "set null" }),
+  },
+  (t) => [
+    index("payments_session_idx").on(t.sessionId),
+    check("payments_one_payer_ck", sql`num_nonnulls(participant_id, label) = 1`),
+    check("payments_label_ck", sql`char_length(label) BETWEEN 1 AND 40`),
+    check("payments_one_payee_ck", sql`num_nonnulls(payee_participant_id, payee_label) <= 1`),
+    check("payments_payee_label_ck", sql`char_length(payee_label) BETWEEN 1 AND 40`),
+    check("payments_amount_ck", sql`amount_centavos BETWEEN 1 AND 99999999`),
+    check("payments_method_ck", sql`method IN ('cash', 'gcash', 'maya', 'bank', 'other')`),
+    check("payments_note_ck", sql`char_length(note) BETWEEN 1 AND 40`),
   ],
 );

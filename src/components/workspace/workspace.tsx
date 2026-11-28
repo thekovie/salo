@@ -1,27 +1,26 @@
 "use client";
 
-import { CircleCheck, Coins, Hand, Lock, Plus, ReceiptText } from "lucide-react";
+import { CircleCheck, Hand, Lock, Plus, ReceiptText } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { WaiterTicket } from "@/components/ticket/waiter-ticket";
 import { Button } from "@/components/ui/button";
 import { describeOp, useSession, type AddInput, type EntryChanges, type OverlayEntry } from "@/hooks/use-session";
 import { consolidate } from "@/lib/consolidate";
 import { arrivalsBetween, type Arrival } from "@/lib/arrivals";
 import { setAnalyticsContext, track } from "@/lib/analytics";
 import { anyPrice, everyone, type SessionSnapshot } from "@/lib/snapshot";
-import { buildKkb, myShareLabel, shortShareLabel } from "@/lib/kkb";
+import { keepDots, nextBillStep, stepRowText, withoutPayments, type BillStepId } from "@/lib/bill-step";
+import { buildKkb, enterPricesLabel, myShareLabel, priceRows, pricesLeft } from "@/lib/kkb";
 import { normalizeText } from "@/lib/dish-name";
 import { confirmedIds } from "@/lib/effective-order";
 import { notificationTarget, type NotificationTarget, type NotificationView } from "@/lib/notifications";
 import { focusWhenFree } from "@/lib/focus";
 import { liveTicket } from "@/lib/ticket";
 import { withViewTransition } from "@/lib/view-transition";
-import { Ticker } from "@/components/motion/ticker";
 import { LocalTime } from "@/components/ui/local-time";
-import { cn } from "@/lib/utils";
-import { canEditEntry } from "@/lib/permissions";
+import { can, canEditEntry } from "@/lib/permissions";
 import { byGroup, readinessSummary } from "@/lib/views";
-import { Composer } from "./composer";
+import { Dock } from "./dock";
+import { MyOrderSheet } from "./my-order-sheet";
 import { GroupsView } from "./groups-view";
 import { PeopleView } from "./people-view";
 import { ReviewPanel } from "./review-panel";
@@ -34,13 +33,17 @@ import { OrderTicket, type TicketActions } from "./order-ticket";
 import { ArrivalPills, ARRIVAL_MS } from "./arrival-pills";
 import { NotificationBell, NotificationsDrawer } from "./notifications-drawer";
 import { ConnectionPill } from "./connection-pill";
+import { MenuLink } from "./menu-link";
 import { OrderOptionsSheet } from "./order-options-sheet";
 import { SummarySheet, type SummaryTab } from "./summary-sheet";
+import { PricesSheet } from "./prices-sheet";
+import { PriceStatusRow } from "./price-status";
 import { HostNamePrompt } from "./host-name-prompt";
 import { EditDishSheet } from "./edit-dish-sheet";
 import { Guide } from "@/components/onboarding/guide";
 import { TourOffer } from "@/components/onboarding/tour-offer";
 import { guideFor, markTourSeen, subscribeTourSeen, tourSeen, type GuideAction } from "@/components/onboarding/guide-steps";
+import { CollapsibleTicket } from "./collapsible-ticket";
 import { ServedSection } from "./served-section";
 import { useServedEdits } from "@/hooks/use-served-edits";
 import { trackerLines } from "@/lib/serving";
@@ -92,7 +95,8 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [summaryTab, setSummaryTab] = useState<SummaryTab>("items");
   const [focusMine, setFocusMine] = useState(false);
-  const [composerActive, setComposerActive] = useState(false);
+  const [focusTarget, setFocusTarget] = useState<BillStepId | null>(null);
+  const [myOrderOpen, setMyOrderOpen] = useState(false);
   // KKB is useful as soon as there are dishes (prices can go in while ordering); the item list needs a confirmed round.
   const hasSummary = anyConfirmed || snapshot.entries.length > 0;
   const [touring, setTouring] = useState(false);
@@ -120,6 +124,8 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
   useEffect(() => {
     if (offerVisible) track({ name: "tour_offer_shown" });
   }, [offerVisible]);
+  // The sheet is for a guest in an open round; when that stops being true it closes and stays closed.
+  if (myOrderOpen && (!isOpen || isHost)) setMyOrderOpen(false);
   useEffect(() => setAnalyticsContext({ role: role === "HOST" ? "host" : "guest" }), [role]);
   // Sync trouble is where people get confused; note each time the pill turns to a problem state.
   useEffect(() => {
@@ -128,6 +134,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
   const openSummary = (source: "auto" | "button", tab: SummaryTab = anyConfirmed ? "items" : "kkb") => {
     setSummaryTab(tab);
     setFocusMine(false);
+    setFocusTarget(null);
     setSummaryOpen(true);
     track({ name: "summary_opened", props: { source } });
   };
@@ -136,7 +143,21 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
     openSummary("button", "kkb");
     setFocusMine(true);
   };
-  const myShare = useMemo(() => (anyConfirmed ? myShareLabel(buildKkb(snapshot, snapshot.me.participantId)) : null), [anyConfirmed, snapshot]);
+  const kkb = useMemo(() => (anyConfirmed ? buildKkb(snapshot, snapshot.me.participantId) : null), [anyConfirmed, snapshot]);
+  const myShare = kkb ? myShareLabel(kkb) : null;
+  const [pricesOpen, setPricesOpen] = useState(false);
+  const hostPricing = isHost && anyConfirmed;
+  const priceCount = useMemo(() => (hostPricing ? priceRows(snapshot) : []), [hostPricing, snapshot]);
+  const left = pricesLeft(priceCount);
+  // The host's next billing step, quiet about payments here: those are prompted in the KKB tab only.
+  const billStep = useMemo(() => (kkb && hostPricing ? withoutPayments(nextBillStep(kkb, snapshot, priceCount)) : null), [kkb, hostPricing, snapshot, priceCount]);
+  const openBill = () => {
+    if (!billStep) return;
+    if (billStep.id === "prices") return setPricesOpen(true);
+    openSummary("button", "kkb");
+    setFocusTarget(billStep.id);
+  };
+  const shareLabel = left > 0 ? enterPricesLabel(left) : myShare;
   const [updatesOpen, setUpdatesOpen] = useState(false);
   const updatesTarget = useRef<NotificationTarget | null>(null);
   function openUpdate(item: NotificationView) {
@@ -218,12 +239,23 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
   }, [justConfirmed]);
   const ticket = liveTicket({ roundNumber: round.number, title: snapshot.session.title, ticket: consolidate(roundEntries), corrections: snapshot.corrections, roundId: round.id, confirmed: confirmedIds(snapshot.rounds) });
   const tracker = useMemo(() => trackerLines(snapshot), [snapshot]);
-  const served = useServedEdits(snapshot.session.id, refresh, snapshot.session.revision);
+  const canServe = can(snapshot.me, "serving.update") && sessionOpen;
+  const served = useServedEdits(snapshot.session.id, refresh, snapshot.session.revision, canServe);
   const [changeRequest, setChangeRequest] = useState<{ roundId: string; lineKey: string } | null>(null);
+  const [servedQuery, setServedQuery] = useState("");
+  const [servedShowAll, setServedShowAll] = useState(false);
   const servedSection = anyConfirmed ? (
     <ServedSection
+      query={servedQuery}
+      onQuery={setServedQuery}
+      showAll={servedShowAll}
+      onShowAll={setServedShowAll}
       tracker={tracker}
-      canEdit={isHost && sessionOpen}
+      canEdit={canServe}
+      canChange={isHost && sessionOpen}
+      me={snapshot.me}
+      people={snapshot.participants}
+      onOpenPeople={() => setView("people")}
       edits={served.edits}
       bump={served.bump}
       retry={served.retry}
@@ -235,8 +267,9 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
   ) : null;
   const confirmedTicket = round.status === "CONFIRMED" ? snapshot.tickets[round.id] : undefined;
   const correctionsThisRound = ticket.corrections.length;
-  const ready = readinessSummary(snapshot);
+  const ready = readinessSummary(snapshot, roundEntries, round.id);
   const iAmReady = ready.readyIds.has(snapshot.me.participantId);
+  const handoverGuests = useMemo(() => snapshot.participants.filter((p) => p.role === "GUEST").sort((a, b) => Number(b.cohost) - Number(a.cohost)), [snapshot.participants]);
   const groupCount = byGroup(roundEntries, snapshot.groups).length;
   const claimsForHost = isHost
     ? snapshot.claims.flatMap((claim) => {
@@ -301,7 +334,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
   }
   const actions: TicketActions = {
     canEdit: (entry) => canEditEntry(snapshot.me, entry),
-    edit: isOpen ? (entry) => setEditing(entry) : undefined,
+    edit: isOpen ? (entry) => { toasts.forEach((t) => dismissToast(t.id)); setEditing(entry); } : undefined,
     setQuantity: (entry: OverlayEntry, quantity) => {
       void mutate({ kind: "update", entry, quantity });
       show({
@@ -482,6 +515,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
       />
       {touring ? (
         <Guide
+          key={role}
           steps={guideFor(role)}
           snapshot={snapshot}
           onClose={endTour}
@@ -501,8 +535,10 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
           refresh={refresh}
           onRenameMe={(displayName) => void mutate({ kind: "renameMe", displayName })}
           focusMine={focusMine}
+          focusTarget={focusTarget}
         />
       ) : null}
+      {hostPricing ? <PricesSheet open={pricesOpen} onOpenChange={setPricesOpen} snapshot={snapshot} refresh={refresh} /> : null}
       {isHost && sessionOpen ? (
         <OrderOptionsSheet
           open={optionsOpen}
@@ -517,6 +553,15 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
           onRenameMe={(displayName) => void mutate({ kind: "renameMe", displayName })}
           onEnd={closeOrder}
           onTour={() => startTour("replay")}
+          sessionId={snapshot.session.id}
+          handoverGuests={handoverGuests}
+          onHandoverRefresh={() => {
+            // Before this device turns into a guest, or the guest guide offer would pop up right after handing over.
+            markTourSeen("GUEST");
+            return refresh();
+          }}
+          menu={snapshot.session.menu}
+          onMenuRefresh={refresh}
         />
       ) : null}
 
@@ -555,14 +600,31 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
             <Lock className="mt-0.5 size-5 shrink-0" aria-hidden />
             <div className="min-w-0 flex-1">
               <p>
-                {ended === "cancelled" ? "This order was cancelled. Nothing was sent to the waiter." : "This order has ended. Nothing can be changed."} Everything is
-                deleted on <LocalTime iso={snapshot.session.expiresAt} style="date" />.
+                {ended === "cancelled" ? (
+                  <>
+                    This order was cancelled. Nothing was sent to the waiter. Everything is deleted on <LocalTime iso={snapshot.session.expiresAt} style="date" />.
+                  </>
+                ) : (
+                  <>
+                    This order has ended. Everyone can still look at the tickets until <LocalTime iso={snapshot.session.expiresAt} style="date" />. The host can still fix prices and the bill.
+                  </>
+                )}
               </p>
               {ended === "ended" ? (
-                <Button variant="outline" className="mt-3" onClick={openMyShare}>
-                  <ReceiptText className="size-5" aria-hidden />
-                  Who ordered what
-                </Button>
+                <>
+                  {billStep ? <p className="mt-2 font-semibold text-ink">{keepDots(stepRowText(billStep, true))}</p> : null}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {billStep?.canGo ? (
+                      <Button variant="outline" onClick={openBill} aria-label={`Open bill: ${billStep.text}`}>
+                        Open bill
+                      </Button>
+                    ) : null}
+                    <Button variant="outline" onClick={openMyShare}>
+                      <ReceiptText className="size-5" aria-hidden />
+                      Who ordered what
+                    </Button>
+                  </div>
+                </>
               ) : null}
             </div>
           </div>
@@ -610,9 +672,10 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
         ) : null}
         <ViewTabs view={view} onChange={setView} counts={{ people: snapshot.participants.length, groups: groupCount, rounds: snapshot.rounds.length > 1 ? snapshot.rounds.length : 0 }} />
         <div role="tabpanel" id={`panel-${view}`} aria-labelledby={`tab-${view}`} tabIndex={-1} className="outline-none">
+          {view === "order" ? <MenuLink menu={snapshot.session.menu} title={snapshot.session.title} isHost={isHost} /> : null}
           {view === "order" && confirmedTicket ? (
             <div className="space-y-4">
-              <WaiterTicket ticket={confirmedTicket} size="compact" confirmed justConfirmed={justConfirmed === round.id} />
+              <CollapsibleTicket ticket={confirmedTicket} size="compact" confirmed justConfirmed={justConfirmed === round.id} />
               {servedSection}
               {sessionOpen ? (
                 isHost ? (
@@ -623,7 +686,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
                     ref={bringIntoView}
                     className="scroll-mb-48 rounded-2xl bg-paper p-4"
                   >
-                    <h2 id="what-next" className="text-lg">
+                    <h2 id="what-next" tabIndex={-1} className="text-lg outline-none">
                       What&rsquo;s next?
                     </h2>
                     <p className="mt-0.5 text-sm text-ink-soft">Ordering more later? Start another round. All done eating? End the order to see who ordered what.</p>
@@ -635,9 +698,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
                         <CircleCheck className="size-5" aria-hidden /> End the order
                       </Button>
                     </div>
-                    <Button variant="ghost" className="mt-2 w-full" onClick={() => openSummary("button", "kkb")}>
-                      <ReceiptText className="size-5" aria-hidden /> Enter receipt prices (KKB)
-                    </Button>
+                    {priceCount.length > 0 ? <PriceStatusRow left={left} step={billStep} onEnter={() => setPricesOpen(true)} onOpenBill={openBill} /> : null}
                   </section>
                 ) : (
                   <p className="text-center text-ink-soft">The host confirmed round {round.number} with the waiter. The host can add another round or end the order when everyone’s done.</p>
@@ -672,6 +733,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
               onRemoveDuplicate={(entry) => actions.remove(entry)}
               roundNumber={round.number}
               onRemoveGuest={isHost && sessionOpen ? removeGuest : undefined}
+              onSetCohost={isHost && sessionOpen ? async (participantId, name, cohost) => Boolean(await mutate({ kind: "setCohost", participantId, name, cohost })) : undefined}
               onSummary={hasSummary ? () => openSummary("button") : undefined}
             />
           ) : (
@@ -681,62 +743,39 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
       </main>
 
       {sessionOpen ? (
-      <div ref={dockRef} className="fixed inset-x-0 bottom-0 z-30 bg-gradient-to-t from-paper from-70% to-transparent pt-6 pb-[calc(env(safe-area-inset-bottom)+0.5rem)]">
-        <div className="mx-auto max-w-2xl space-y-2 px-3">
-          {isOpen ? <Composer dishNames={snapshot.dishNames} entries={snapshot.entries} defaults={snapshot.settlement.defaults} {...recipients} view={view} detailsSignal={detailsSignal} onActiveChange={setComposerActive} onAdd={(input) => void add({ ...input, roundId: round.id })} /> : null}
-          {isOpen && composerActive ? null : (
-          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-2">
-            <div className="min-w-0">
-              <p className="whitespace-nowrap text-ink-soft" data-testid="round-total">
-                <Ticker value={total} className="tally text-xl text-ink" /> {total === 1 ? "item" : "items"}
-                <span className="hidden sm:inline"> this round</span>
-              </p>
-              {isHost && isOpen && ready.total > 0 ? (
-                <p className="whitespace-nowrap text-sm text-ink-soft">
-                  {ready.ready}/{ready.total} {ready.total === 1 ? "guest" : "guests"} ready
-                </p>
-              ) : null}
-            </div>
-            {/* Under 360 px the count keeps its own line and the buttons share the rows below it. */}
-            <div className="flex flex-wrap gap-2 max-[359px]:basis-full max-[359px]:*:flex-1 max-[359px]:*:justify-center">
-            {myShare ? (
-              <Button variant="outline" data-tour="my-share" onClick={openMyShare} className="max-[429px]:px-3">
-                <Coins className="size-5 max-[429px]:hidden" aria-hidden />
-                <span className="max-[429px]:hidden">{myShare}</span>
-                <span className="min-[430px]:hidden">{shortShareLabel(myShare)}</span>
-              </Button>
-            ) : null}
-            {isOpen && isHost ? (
-              <Button variant="outline" data-tour="review" className="max-[429px]:px-3" onClick={() => (setMode("review"), track({ name: "review_opened" }))} disabled={total === 0 && correctionsThisRound === 0}>
-                <ReceiptText className="size-5" aria-hidden />
-                Review order
-              </Button>
-            ) : isOpen || confirmedTicket ? (
-              <Button variant="outline" data-tour="ticket" className="max-[429px]:px-3" onClick={() => (setMode("waiter"), track({ name: "waiter_view_opened" }))} disabled={!confirmedTicket && total === 0 && correctionsThisRound === 0}>
-                <ReceiptText className="size-5" aria-hidden />
-                Ticket
-              </Button>
-            ) : null}
-            {!isHost && isOpen ? (
-              <button
-                type="button"
-                aria-pressed={iAmReady}
-                data-tour="ready"
-                onClick={() => void mutate({ kind: "ready", ready: !iAmReady })}
-                className={cn(
-                  "inline-flex min-h-11 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-full px-4 font-semibold whitespace-nowrap transition-colors",
-                  iAmReady ? "bg-ok-wash text-ok" : "border-[1.5px] border-input bg-ticket text-ink hover:bg-paper",
-                )}
-              >
-                <CircleCheck className="size-5" aria-hidden />
-                {iAmReady ? "Ready" : "I’m ready"}
-              </button>
-            ) : null}
-            </div>
-          </div>
-          )}
-        </div>
-      </div>
+        <Dock
+          dockRef={dockRef}
+          snapshot={snapshot}
+          isOpen={isOpen}
+          isHost={isHost}
+          total={total}
+          ready={ready}
+          iAmReady={iAmReady}
+          shareLabel={shareLabel}
+          onShare={left > 0 ? () => setPricesOpen(true) : openMyShare}
+          hasConfirmedTicket={Boolean(confirmedTicket)}
+          correctionsThisRound={correctionsThisRound}
+          onMode={setMode}
+          recipients={recipients}
+          view={view}
+          detailsSignal={detailsSignal}
+          onAdd={(input) => void add({ ...input, roundId: round.id })}
+          onMyOrder={() => setMyOrderOpen(true)}
+        />
+      ) : null}
+      {!isHost && sessionOpen ? (
+        <MyOrderSheet
+          // Closes by itself when the round is confirmed or the order ends, and never reopens on its own.
+          open={myOrderOpen && isOpen}
+          onOpenChange={setMyOrderOpen}
+          snapshot={snapshot}
+          entries={roundEntries}
+          roundNumber={round.number}
+          actions={actions}
+          iAmReady={iAmReady}
+          onToggleReady={() => void mutate({ kind: "ready", ready: !iAmReady })}
+          onClaim={(entry) => void mutate({ kind: "claim", batchId: entry.batchId, dishName: entry.dishName })}
+        />
       ) : null}
 
       {mode === "review" && isOpen ? (

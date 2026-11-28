@@ -1,10 +1,33 @@
 import { expect, test, type Browser, type Locator, type Page } from "@playwright/test";
 
+const ROOM = /\/s\/[0-9a-f-]{36}$/;
+// Next also keeps a role=alert route announcer on every page; the bot check's alert is inside /new's <main>, and the room's own (empty) alerts are not it.
+const BOT_ALERT = 'main [role="alert"]';
+
+/**
+ * Starts an order through /new's real Cloudflare widget (test keys). A stuck check shows a role=alert: attach it,
+ * press Try again once, and fail on a second one. Neither a room nor an alert in 20 s fails with the page state.
+ */
 export async function startOrder(page: Page) {
   await page.goto("/");
   await page.getByRole("link", { name: "Start an order" }).click();
-  // Through the bot check (/new): Cloudflare's widget can take a few seconds to answer.
-  await expect(page).toHaveURL(/\/s\/[0-9a-f-]{36}$/, { timeout: 20_000 });
+  const alert = page.locator(BOT_ALERT).filter({ hasText: /\S/ });
+  for (const attempt of [1, 2]) {
+    const room = page.waitForURL(ROOM, { timeout: 20_000 }).then(() => "room" as const);
+    const shown = alert.first().waitFor({ state: "visible", timeout: 20_000 }).then(() => "alert" as const);
+    for (const loser of [room, shown]) loser.catch(() => undefined); // the race loser times out later, unobserved
+    const outcome = await Promise.race([room, shown]).catch(async () => {
+      const main = await page.locator("main").innerText({ timeout: 2_000 }).catch(() => "(no main)");
+      const status = await page.locator('[role="status"]').allInnerTexts().catch(() => []);
+      throw new Error(`startOrder: no room and no alert in 20 s. url=${page.url()} main=${JSON.stringify(main)} status=${JSON.stringify(status)}`);
+    });
+    if (outcome === "room") return;
+    const text = await alert.first().innerText();
+    await test.info().attach(`bot-check-alert-${attempt}`, { body: text, contentType: "text/plain" });
+    await test.info().attach(`bot-check-alert-${attempt}.png`, { body: await page.screenshot(), contentType: "image/png" });
+    if (attempt === 2) throw new Error(`startOrder: the bot check failed twice: ${text}`);
+    await page.getByRole("button", { name: "Try again" }).click();
+  }
 }
 
 export async function addDish(page: Page, name: string, quantity = 1) {
@@ -64,11 +87,31 @@ export async function joinAsGuest(browser: Browser, code: string, name: string) 
 
 export async function confirmRound1(page: Page) {
   await expect(page.locator('[data-sync="saved"]')).toBeVisible();
-  await page.getByRole("button", { name: "Review order" }).click();
+  // Keyboard: an arrival toast can sit over the dock, and a click would land on it.
+  await page.getByRole("button", { name: "Review order" }).focus();
+  await page.keyboard.press("Enter");
   await page.getByRole("dialog", { name: "Review round 1" }).getByRole("button", { name: "Show the waiter" }).click();
   const waiter = page.getByRole("dialog", { name: "Waiter ticket" });
   await waiter.getByRole("button", { name: "Mark confirmed with waiter" }).click();
   await page.getByRole("dialog", { name: /Confirm round 1/ }).getByRole("button", { name: "Yes, the waiter has it" }).click();
   await expect(waiter.getByRole("region", { name: "Round 1, confirmed with the waiter" })).toBeVisible({ timeout: 15_000 });
   await page.getByRole("button", { name: "Back" }).click();
+}
+
+/** Opens "Who ordered what" on its KKB tab through People (the dock now leads the host to the Prices sheet). */
+export async function openKkb(page: Page) {
+  await page.getByRole("tab", { name: /People/ }).click();
+  await page.getByRole("button", { name: "Who ordered what" }).click();
+  const sheet = page.getByRole("dialog", { name: "Who ordered what" });
+  await sheet.getByRole("tab", { name: "KKB" }).click();
+  await expect(sheet.getByRole("tab", { name: "KKB" })).toHaveAttribute("aria-selected", "true");
+}
+
+/** Ends the order from Order options and closes the summary sheet that opens. */
+export async function endOrder(page: Page) {
+  await page.getByRole("button", { name: "Order options" }).click();
+  await page.getByRole("button", { name: "End order" }).click();
+  await page.getByRole("dialog", { name: "End this order?" }).getByRole("button", { name: "Yes, end the order" }).click();
+  await expect(page.getByRole("dialog", { name: "Who ordered what" })).toBeVisible({ timeout: 15_000 });
+  await page.keyboard.press("Escape");
 }

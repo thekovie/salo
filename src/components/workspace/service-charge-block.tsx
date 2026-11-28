@@ -11,7 +11,7 @@ interface ServiceChargeBlockProps {
   live: SettlementView["serviceCharge"];
   sessionId: string;
   refresh: () => Promise<unknown>;
-  /** Host, order still open. */
+  /** Host. */
   canEdit: boolean;
   isHost: boolean;
 }
@@ -40,7 +40,7 @@ export function ServiceChargeBlock({ kkb, live, sessionId, refresh, canEdit, isH
   const id = useId();
 
   return (
-    <section aria-labelledby={`${id}-title`} className="rounded-2xl bg-paper p-4" id="kkb-service">
+    <section aria-labelledby={`${id}-title`} id="kkb-service" tabIndex={-1} className="scroll-mt-4 rounded-2xl bg-paper p-4 focus:outline-2 focus:outline-offset-2 focus:outline-ink">
       <h3 id={`${id}-title`} className="text-lg">
         Service charge
       </h3>

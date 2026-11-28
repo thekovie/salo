@@ -21,7 +21,7 @@ export interface TicketActions {
 }
 
 /** A small "Edit" control next to a dish's details (brief 5.12: the host can correct draft entries). */
-function EditButton({ entry, actions, name }: { entry: OverlayEntry; actions: TicketActions; name: string }) {
+export function EditButton({ entry, actions, name }: { entry: OverlayEntry; actions: TicketActions; name: string }) {
   if (!actions.edit) return null;
   return (
     <button
@@ -91,10 +91,10 @@ function DishRow({ dish, people, actions, readOnly, washKey, fresh, tag }: { dis
       {fresh ? <span key={washKey} aria-hidden className="wash pointer-events-none absolute inset-0" /> : null}
       <div className="flex min-h-11 items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-lg leading-snug">
+          <p className="text-lg leading-snug break-words">
             {dish.name}
             {tag ? (
-              <span key={tag.key} className="arrival-tag ml-2 inline-block rounded-full bg-saffron px-2 py-0.5 align-middle font-sans text-xs font-semibold text-ink">
+              <span key={tag.key} className="arrival-tag ml-2 inline-block rounded-full bg-saffron px-2 py-0.5 align-middle font-sans text-xs font-semibold text-on-saffron">
                 {tag.label}
               </span>
             ) : null}

@@ -3,6 +3,9 @@ import type { NotificationsView } from "./notifications";
 import type { CorrectionView, TicketSnapshot } from "./ticket";
 
 /** Everything a client needs to draw a session, at one revision. Sent by GET /sync and the initial page render. */
+/** A person by id or by typed name (Bill to, splits, receipts, adjustment shares). */
+export type PersonRef = { participantId: string | null; label: string | null };
+
 export interface SessionSnapshot {
   session: {
     id: string;
@@ -12,13 +15,15 @@ export interface SessionSnapshot {
     joinCode: string;
     closedAt: string | null;
     expiresAt: string;
+    /** The restaurant menu link; null when none, and after End (D50). */
+    menu?: { url: string; label: string | null; domain: string } | null;
   };
-  me: { participantId: string; role: "HOST" | "GUEST"; displayName: string };
+  me: { participantId: string; role: "HOST" | "GUEST"; cohost: boolean; displayName: string };
   rounds: { id: string; number: number; status: "DRAFT" | "CONFIRMED"; confirmedAt: string | null }[];
   /** The draft round, or the latest round when none is open. */
   activeRoundId: string;
   /** People in the order now. */
-  participants: { id: string; displayName: string; role: "HOST" | "GUEST" }[];
+  participants: { id: string; displayName: string; role: "HOST" | "GUEST"; cohost: boolean }[];
   /** Guests the host removed: only so their names still show on dishes and tickets they appear in. */
   removedPeople: { id: string; displayName: string }[];
   /** Active (not removed) entries of every round. */
@@ -50,7 +55,9 @@ export interface EntrySettlement {
   /** Price each in centavos; null = unknown. */
   unitCentavos: number | null;
   /** Host's settlement-only payer for a shared or unassigned dish. */
-  billTo: { participantId: string | null; label: string | null } | null;
+  billTo: PersonRef | null;
+  /** Host's equal split of a shared dish between 2 or more people; omitted when there is none. Exclusive with billTo. */
+  splitAmong?: PersonRef[];
   /** 0 when nothing was ever set. */
   revision: number;
 }
@@ -65,9 +72,59 @@ export interface SettlementView {
   serviceCharge: { centavos: number | null; revision: number };
   /** The receipt's printed total, for comparison only. null = not entered. */
   receiptTotal: { centavos: number | null; revision: number };
+  /** Discounts and extra charges, oldest first. Only what the host typed; shares are computed (`lib/adjustments.ts`). */
+  adjustments: SnapshotAdjustment[];
+  /** Extra receipts (the main one is `receiptTotal`), oldest first. */
+  receipts: SnapshotReceipt[];
+  /** Recorded payments, oldest first. Balances are computed from the bill (`lib/payments.ts`), never stored. */
+  payments: SnapshotPayment[];
 }
 
-export const EMPTY_SETTLEMENT: SettlementView = { entries: {}, corrections: {}, defaults: {}, serviceCharge: { centavos: null, revision: 0 }, receiptTotal: { centavos: null, revision: 0 } };
+export const PAYMENT_METHODS = ["cash", "gcash", "maya", "bank", "other"] as const;
+export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
+
+export interface SnapshotPayment {
+  id: string;
+  payer: PersonRef;
+  /** null = the restaurant. */
+  payee: PersonRef | null;
+  amountCentavos: number;
+  method: PaymentMethod | null;
+  note: string | null;
+  createdAt: string;
+  /** Payer and payee became the same person (a name was claimed): kept for the record, counted nowhere until the host fixes the payee. */
+  needsReview: boolean;
+}
+
+export interface SnapshotReceipt {
+  id: string;
+  label: string | null;
+  totalCentavos: number | null;
+  /** The people this receipt covers: a participant or a typed name. */
+  people: PersonRef[];
+  revision: number;
+}
+
+export const ADJUSTMENT_CATEGORIES = ["senior", "pwd", "privilege", "promo", "other"] as const;
+export const ADJUSTMENT_METHODS = ["proportional", "equal", "individual", "manual", "unallocated"] as const;
+export type AdjustmentCategory = (typeof ADJUSTMENT_CATEGORIES)[number];
+export type AdjustmentMethod = (typeof ADJUSTMENT_METHODS)[number];
+
+export interface SnapshotAdjustment {
+  id: string;
+  direction: "discount" | "charge";
+  category: AdjustmentCategory;
+  note: string | null;
+  /** Exactly one of amount and percent (basis points) is set. */
+  amountCentavos: number | null;
+  percentBps: number | null;
+  method: AdjustmentMethod;
+  /** The people it applies to: a participant or a typed name. Amount only for "manual". */
+  shares: (PersonRef & { amountCentavos: number | null })[];
+  revision: number;
+}
+
+export const EMPTY_SETTLEMENT: SettlementView = { entries: {}, corrections: {}, defaults: {}, serviceCharge: { centavos: null, revision: 0 }, receiptTotal: { centavos: null, revision: 0 }, adjustments: [], receipts: [], payments: [] };
 
 /** Any price anywhere: a line's, a replacement's or a table price. */
 export const anyPrice = (s: Pick<SessionSnapshot, "settlement">) =>
@@ -95,5 +152,5 @@ export function attributionLabel(entry: Pick<SourceEntry, "attribution">, people
 
 /** Everyone a name might be needed for: current people, then removed guests (marked as such in the name). */
 export function everyone(snapshot: Pick<SessionSnapshot, "participants" | "removedPeople">): SessionSnapshot["participants"] {
-  return [...snapshot.participants, ...snapshot.removedPeople.map((p) => ({ id: p.id, displayName: `${p.displayName} (left)`, role: "GUEST" as const }))];
+  return [...snapshot.participants, ...snapshot.removedPeople.map((p) => ({ id: p.id, displayName: `${p.displayName} (left)`, role: "GUEST" as const, cohost: false }))];
 }

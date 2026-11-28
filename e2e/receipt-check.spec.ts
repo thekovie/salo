@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { addDish, inviteCode, joinAsGuest, startOrder } from "./support/helpers";
+import { addDish, inviteCode, joinAsGuest, startOrder, openKkb } from "./support/helpers";
 
 async function confirmRound(page: Page) {
   await page.getByRole("button", { name: "Review order" }).click();
@@ -22,7 +22,7 @@ test("receipt check, price completeness and Copy summary across two phones", asy
   await expect(page.locator('[data-sync="saved"]')).toBeVisible();
   await confirmRound(page);
 
-  await page.getByRole("button", { name: "Enter receipt prices (KKB)" }).click();
+  await openKkb(page);
   const sheet = page.getByRole("dialog", { name: "Who ordered what" });
   await expect(sheet.getByText("0 of 2 dishes priced")).toBeVisible();
   await sheet.getByRole("button", { name: "Show the 2 without a price" }).click();

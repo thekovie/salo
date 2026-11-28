@@ -1,7 +1,10 @@
+import { allocate } from "./allocate";
+import { applyAdjustments, type KkbAdjustment } from "./adjustments";
 import { isPlain, preparationKey, preparationLabel } from "./consolidate";
 import { normalizeText } from "./dish-name";
 import { confirmedIds, effectiveEntry } from "./effective-order";
 import { formatPeso, formatPesoShort } from "./money";
+import { bucketOfPerson, splitLine, splitPayersOf } from "./splits";
 import { everyone, sharedPriceKey, type SessionSnapshot, type SnapshotEntry } from "./snapshot";
 
 /**
@@ -37,6 +40,10 @@ export interface KkbLine {
   /** The table price for this dish + size, when one is set (even if the line has its own). */
   tableCentavos: number | null;
   hasTable: boolean;
+  /** Equal split between this many people: on a payer's card their share, in the shared section the listed (uncounted) dish. */
+  splitWays: number | null;
+  /** On a split payer's card: the whole line's subtotal, of which `subtotalCentavos` is their share. */
+  splitOfCentavos: number | null;
   /** Revision of the price being shown (entry's or replacement's), 0 when never set. */
   priceRevision: number;
 }
@@ -61,6 +68,9 @@ export interface KkbSection {
   status: "complete" | "partial" | "none" | "empty";
   /** This payer's share of the service charge, once allocated. */
   serviceCentavos: number | null;
+  /** Discounts (negative) and extra charges (positive) applied to this payer, in creation order. */
+  adjustments: { id: string; label: string; centavos: number }[];
+  /** Food + service share + adjustments; null until a service charge is allocated or an adjustment applies. */
   totalCentavos: number | null;
 }
 
@@ -77,11 +87,16 @@ export interface Kkb {
   charge: KkbCharge;
   /** Priced confirmed food across everyone, shared included. */
   foodCentavos: number;
+  adjustments: KkbAdjustment[];
+  /** Salo's total plus every adjustment (also the not yet assigned and the flagged ones). The receipt is compared with this. */
+  adjustedTotal: number;
+  /** Some adjustment is unassigned, waiting for prices or flagged: totals are "so far". */
+  unresolved: boolean;
 }
 
 const KIND_ORDER: Record<KkbSectionKind, number> = { participant: 0, name: 1, group: 2, table: 3, unassigned: 4 };
 
-interface Bucket {
+export interface Bucket {
   key: string;
   kind: KkbSectionKind;
   title: string;
@@ -106,6 +121,13 @@ export function buildKkb(input: KkbInput, meId: string): Kkb {
     if (!line) continue;
     const origin = bucketOf(entry, nameOf);
     const billTo = isShared(origin.kind) ? payerOfBillTo(input, entry, nameOf) : null;
+    const split = !billTo && isShared(origin.kind) ? splitPayersOf(input, entry.id, nameOf) : [];
+    if (split.length > 1) {
+      const { copies, listed } = splitLine(line, split, origin.title);
+      for (const c of copies) (confirmed ? bucket(c.payer).lines : bucket(c.payer).drafts).push(c.line);
+      (confirmed ? bucket(origin).lines : bucket(origin).drafts).push(listed);
+      continue;
+    }
     if (!billTo) {
       const target = bucket(origin);
       (confirmed ? target.lines : target.drafts).push({ ...line, billable: isShared(origin.kind) });
@@ -120,7 +142,8 @@ export function buildKkb(input: KkbInput, meId: string): Kkb {
 
   const sections = [...buckets.values()].map((b) => toSection(b, meId, groupMembers));
   const ordered = [...sections.filter((s) => s.isMe), ...sections.filter((s) => !s.isMe).sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind])];
-  return withCharge(ordered, input.settlement.serviceCharge.centavos);
+  const charged = withCharge(ordered, input.settlement.serviceCharge.centavos);
+  return applyAdjustments(charged, input, billBlockers(ordered).length > 0, saloTotal(charged));
 }
 
 function isShared(kind: KkbSectionKind) {
@@ -137,10 +160,7 @@ function bucketOf(entry: SnapshotEntry, nameOf: (id: string) => string): Bucket 
 }
 
 function payerOfBillTo(input: KkbInput, entry: SnapshotEntry, nameOf: (id: string) => string): Bucket | null {
-  const billTo = input.settlement.entries[entry.id]?.billTo;
-  if (billTo?.participantId) return { key: `p:${billTo.participantId}`, kind: "participant", title: nameOf(billTo.participantId), participantId: billTo.participantId };
-  if (billTo?.label) return { key: `n:${normalizeText(billTo.label)}`, kind: "name", title: billTo.label, participantId: null };
-  return null;
+  return bucketOfPerson(input.settlement.entries[entry.id]?.billTo, nameOf);
 }
 
 function dishLabel(entry: SnapshotEntry) {
@@ -170,6 +190,8 @@ function line(entry: SnapshotEntry, quantity: number, unit: number | null, price
     pendingChange: false,
     billedFrom: null,
     billedTo: null,
+    splitWays: null,
+    splitOfCentavos: null,
     billable: false,
     submittedBy: entry.submittedBy,
     priceRevision,
@@ -222,25 +244,46 @@ function toSection(b: Bucket & { lines: KkbLine[]; drafts: KkbLine[] }, meId: st
     pendingChanges,
     status,
     serviceCentavos: null,
+    adjustments: [],
     totalCentavos: null,
   };
 }
 
-function withCharge(sections: KkbSection[], charge: number | null): Kkb {
-  const foodCentavos = sections.reduce((sum, s) => sum + s.pricedCentavos, 0);
-  if (charge == null) return { sections, charge: { state: "unset" }, foodCentavos };
-  if (charge === 0) return { sections, charge: { state: "none" }, foodCentavos };
+/** Sums counted lines once per entry: a split dish sits on several cards but is one dish. */
+function countOnce(sections: KkbSection[], pick: (l: KkbLine) => boolean, amount: (l: KkbLine) => number): number {
+  const seen = new Set<string>();
+  let sum = 0;
+  for (const l of sections.flatMap((s) => s.lines)) {
+    if (l.billedTo || !pick(l) || seen.has(l.entryId)) continue;
+    seen.add(l.entryId);
+    sum += amount(l);
+  }
+  return sum;
+}
 
+/** What stops a bill-wide amount (service charge, adjustments) from being split yet. */
+export function billBlockers(sections: KkbSection[]): KkbBlocker[] {
   const blockers: KkbBlocker[] = [];
   const unpriced = sections.filter((s) => s.unpricedUnits > 0);
-  if (unpriced.length) blockers.push({ kind: "unpriced", units: unpriced.reduce((sum, s) => sum + s.unpricedUnits, 0), where: unpriced.map((s) => s.title) });
+  if (unpriced.length) blockers.push({ kind: "unpriced", units: countOnce(sections, (l) => l.unitCentavos == null, (l) => l.quantity), where: unpriced.map((s) => s.title) });
   const unbilled = sections.filter((s) => s.shared).flatMap((s) => s.lines.filter((l) => !l.billedTo).map((l) => l.label));
   if (unbilled.length) blockers.push({ kind: "unbilled", dishes: unbilled });
-  const pending = sections.reduce((sum, s) => sum + s.pendingChanges, 0);
+  const pending = countOnce(sections, (l) => l.pendingChange, () => 1);
   if (pending) blockers.push({ kind: "pending", count: pending });
+  return blockers;
+}
+
+const EMPTY_ADJUSTED = { adjustments: [], adjustedTotal: 0, unresolved: false };
+
+function withCharge(sections: KkbSection[], charge: number | null): Kkb {
+  const foodCentavos = sections.reduce((sum, s) => sum + s.pricedCentavos, 0);
+  if (charge == null) return { sections, charge: { state: "unset" }, foodCentavos, ...EMPTY_ADJUSTED };
+  if (charge === 0) return { sections, charge: { state: "none" }, foodCentavos, ...EMPTY_ADJUSTED };
+
+  const blockers = billBlockers(sections);
   const payers = sections.filter((s) => !s.shared && s.lines.length > 0);
   if (blockers.length === 0 && payers.every((s) => s.pricedCentavos === 0)) blockers.push({ kind: "zeroFood" });
-  if (blockers.length) return { sections, charge: { state: "blocked", centavos: charge, blockers }, foodCentavos };
+  if (blockers.length) return { sections, charge: { state: "blocked", centavos: charge, blockers }, foodCentavos, ...EMPTY_ADJUSTED };
 
   const shares = allocate(
     charge,
@@ -250,24 +293,13 @@ function withCharge(sections: KkbSection[], charge: number | null): Kkb {
     const share = shares.get(s.key);
     return share === undefined ? s : { ...s, serviceCentavos: share, totalCentavos: s.pricedCentavos + share };
   });
-  return { sections: allocated, charge: { state: "allocated", centavos: charge }, foodCentavos };
+  return { sections: allocated, charge: { state: "allocated", centavos: charge }, foodCentavos, ...EMPTY_ADJUSTED };
 }
 
-/**
- * Largest remainder, in exact integers (BigInt: charge × weight can pass 2^53): each payer gets
- * floor(charge × weight / total), then the centavos left over go to the largest remainders, ties broken by payer key.
- * The shares always add up to `charge`.
- */
-export function allocate(charge: number, weights: readonly (readonly [string, number])[]): Map<string, number> {
-  const sorted = [...weights].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-  const total = sorted.reduce((sum, [, w]) => sum + BigInt(w), BigInt(0));
-  if (total === BigInt(0)) return new Map(sorted.map(([key]) => [key, 0]));
-  const big = BigInt(charge);
-  const parts = sorted.map(([key, w]) => ({ key, share: (big * BigInt(w)) / total, remainder: (big * BigInt(w)) % total }));
-  const leftover = charge - parts.reduce((sum, p) => sum + Number(p.share), 0);
-  // Stable sort keeps key order among equal remainders.
-  const winners = new Set([...parts].sort((a, b) => (a.remainder === b.remainder ? 0 : a.remainder > b.remainder ? -1 : 1)).slice(0, leftover).map((p) => p.key));
-  return new Map(parts.map((p) => [p.key, Number(p.share) + (winners.has(p.key) ? 1 : 0)]));
+/** The bill can no longer move on its own: every dish priced, nothing pending or blocked, the service charge settled, adjustments resolved. */
+export function billFinal(kkb: Kkb): boolean {
+  const { total, priced } = priceCompleteness(kkb);
+  return priced === total && billBlockers(kkb.sections).length === 0 && (kkb.charge.state === "none" || kkb.charge.state === "allocated") && !kkb.unresolved;
 }
 
 export interface PriceCompleteness {
@@ -297,13 +329,16 @@ export function priceCompleteness(kkb: Kkb): PriceCompleteness {
 export type Reconciliation =
   | { state: "incomplete"; unpriced: number }
   | { state: "pending" }
+  | { state: "waiting" }
   | { state: "matches" }
   | { state: "more" | "less"; differenceCentavos: number };
 
-/** Salo's total (food plus the service charge, when entered) against the receipt. Only compared, never split. */
+/** Salo's total (food plus the service charge, when entered), before adjustments. */
 export function saloTotal(kkb: Kkb): number {
   return kkb.foodCentavos + (kkb.charge.state === "allocated" || kkb.charge.state === "blocked" ? kkb.charge.centavos : 0);
 }
+
+export { allocate };
 
 export const hasPending = (kkb: Kkb) => kkb.sections.some((s) => s.pendingChanges > 0);
 
@@ -311,27 +346,39 @@ export function reconcile(kkb: Kkb, receiptCentavos: number): Reconciliation {
   const { total, priced } = priceCompleteness(kkb);
   if (priced < total) return { state: "incomplete", unpriced: total - priced };
   if (hasPending(kkb)) return { state: "pending" };
-  const difference = receiptCentavos - saloTotal(kkb);
+  if (kkb.adjustments.some((a) => a.state === "waiting")) return { state: "waiting" };
+  const difference = receiptCentavos - kkb.adjustedTotal;
   if (difference === 0) return { state: "matches" };
   return { state: difference > 0 ? "more" : "less", differenceCentavos: Math.abs(difference) };
 }
 
-const dishes = (n: number) => `${n} ${n === 1 ? "dish" : "dishes"}`;
+/** "Senior citizen discount" in a sentence; "PWD discount" and typed notes keep their capitals. */
+export const lowerFirst = (text: string) => (/^[A-Z]{2}/.test(text) ? text : text.charAt(0).toLowerCase() + text.slice(1));
+
+export const dishes = (n: number) => `${n} ${n === 1 ? "dish" : "dishes"}`;
 
 /** Messenger-friendly text of the KKB view, from the same calculation. `dateLabel` is formatted on the device. */
-export function kkbText(kkb: Kkb, title: string, dateLabel: string): string {
+export function kkbText(kkb: Kkb, title: string, dateLabel: string, options: { record?: string } = {}): string {
   const { charge } = kkb;
+  const final = billFinal(kkb);
   const split = charge.state === "allocated";
   const out = [`${title} · ${dateLabel}`, ""];
   const people = kkb.sections.filter((s) => !s.shared && s.status !== "empty");
   for (const s of people) {
     const food = s.status === "none" ? "no prices yet" : formatPeso(s.pricedCentavos);
-    if (s.serviceCentavos != null && s.totalCentavos != null) out.push(`${s.title}  ${food} + ${formatPeso(s.serviceCentavos)} service = ${formatPeso(s.totalCentavos)}`);
-    else out.push(`${s.title}  ${food}${s.status !== "none" && (s.unpricedUnits > 0 || s.pendingChanges > 0) ? " so far" : ""}`);
+    const soFar = !final && s.status !== "none" ? " so far" : "";
+    if (s.adjustments.length > 0 && s.totalCentavos != null) {
+      const terms = s.adjustments.map((a) => ` ${a.centavos < 0 ? "−" : "+"} ${formatPeso(Math.abs(a.centavos))} ${lowerFirst(a.label)}`).join("");
+      out.push(`${s.title}  ${food}${s.serviceCentavos != null ? ` + ${formatPeso(s.serviceCentavos)} service` : ""}${terms} = ${formatPeso(s.totalCentavos)}${soFar}`);
+    } else if (s.serviceCentavos != null && s.totalCentavos != null) out.push(`${s.title}  ${food} + ${formatPeso(s.serviceCentavos)} service = ${formatPeso(s.totalCentavos)}${soFar}`);
+    else out.push(`${s.title}  ${food}${soFar}`);
   }
   if (!split && charge.state !== "none") out.push("", charge.state === "unset" ? "Service charge not entered yet, so these are food only." : "Service charge not split yet, so these are food only.");
 
-  const open = kkb.sections.flatMap((s) => s.lines.filter((l) => !l.billedTo && (l.unitCentavos == null || s.shared)).map((l) => ({ s, l })));
+  for (const a of kkb.adjustments.filter((x) => x.state === "unallocated")) out.push("", `Not assigned: ${a.cardLabel} ${a.direction === "discount" ? "−" : "+"}${formatPeso(a.amountCentavos ?? 0)}`);
+
+  // An unpriced split dish is listed once, under its shared section, not once per payer.
+  const open = kkb.sections.flatMap((s) => s.lines.filter((l) => (l.splitWays ? !!l.billedTo && l.unitCentavos == null : !l.billedTo && (l.unitCentavos == null || s.shared))).map((l) => ({ s, l })));
   if (open.length > 0) {
     out.push("", "Not yet settled:");
     for (const { s, l } of open) out.push(`  ${l.label} ×${l.quantity} (${s.title})${l.unitCentavos == null ? ", no price" : ""}`);
@@ -344,9 +391,13 @@ export function kkbText(kkb: Kkb, title: string, dateLabel: string): string {
     unbilled > 0 && `${unbilled} shared ${unbilled === 1 ? "dish has" : "dishes have"} no payer`,
     charge.state === "unset" && "service charge not entered",
     hasPending(kkb) && "a change is pending with the waiter",
+    kkb.adjustments.some((a) => a.state === "unallocated") && "an adjustment isn't assigned",
+    kkb.adjustments.some((a) => a.state === "flagged") && "an adjustment needs fixing",
   ].filter(Boolean);
   const blocked = reasons.length > 0 || charge.state === "blocked" || open.length > 0;
-  out.push("", blocked ? `Total not final: ${reasons.join(", ") || "some items are not settled"}` : `Total ${formatPeso(saloTotal(kkb))}`, "Made with Salo");
+  out.push("", blocked ? `Total not final: ${reasons.join(", ") || "some items are not settled"}` : `Total ${formatPeso(kkb.adjustedTotal)}`);
+  if (options.record) out.push("", options.record, "");
+  out.push("Made with Salo");
   return out.join("\n");
 }
 
@@ -355,9 +406,82 @@ export function myShareLabel(kkb: Kkb): string | null {
   const mine = kkb.sections.find((s) => s.isMe);
   if (!mine || mine.lines.length === 0 || mine.status === "empty") return null;
   if (mine.status === "none") return "My share · no prices yet";
-  if (mine.totalCentavos != null) return `My share · ${formatPesoShort(mine.totalCentavos)}`;
-  return `My share${mine.status === "complete" ? "" : " so far"} · ${formatPesoShort(mine.pricedCentavos)}`;
+  const final = billFinal(kkb);
+  if (mine.totalCentavos != null) return `My share${final ? "" : " so far"} · ${formatPesoShort(mine.totalCentavos)}`;
+  return `My share${mine.status === "complete" && final ? "" : " so far"} · ${formatPesoShort(mine.pricedCentavos)}`;
 }
 
-/** The same label under 430 px: "Share ₱1,240" (also the accessible name there, WCAG 2.5.3). */
-export const shortShareLabel = (full: string): string => full.replace(/^My share(?: so far)? · (?=₱)/, "Share ").replace(/^My share/, "Share");
+/** The same label under 430 px: "Share ₱1,240" / "Share so far ₱325" (also the accessible name there, WCAG 2.5.3). */
+export const shortShareLabel = (full: string): string => full.replace(/^My share( so far)? · (?=₱)/, "Share$1 ").replace(/^My share/, "Share");
+
+/** One row of the Prices sheet: a dish + size (its table price) or one replacement dish (its own price). */
+export interface PriceRow {
+  /** Stable across saves: the table price key, or `c:<correctionId>`. */
+  key: string;
+  label: string;
+  quantity: number;
+  /** Lines the row covers, and how many of those have a price of their own (table rows only). */
+  lines: number;
+  own: number;
+  /** Portions covered by a price of their own, to set against `quantity` ("2 of 3"). */
+  ownQuantity: number;
+  dishId: string | null;
+  variant: string | null;
+  correctionId: string | null;
+  /** The table price (or the replacement's price) now, and its revision. */
+  unitCentavos: number | null;
+  revision: number;
+  needsPrice: boolean;
+}
+
+/** Entries really ordered (after confirmed cancellations) and not swapped, across all rounds: what a table price covers. */
+export function tableLines(input: KkbInput) {
+  const confirmedRounds = confirmedIds(input.rounds);
+  return input.entries.flatMap((entry) => {
+    const now = effectiveEntry(entry, input.corrections, confirmedRounds);
+    return now.quantity > 0 && !now.replacementId ? [{ entry, quantity: now.quantity, confirmed: confirmedRounds.has(entry.roundId) }] : [];
+  });
+}
+
+/**
+ * The Prices sheet's rows from confirmed rounds: one per dish + size, one per replacement. Unpriced rows first, then by
+ * first appearance (round, then ticket order). A row needs a price when there is no table price and some line has none of its own.
+ */
+export function priceRows(input: KkbInput): PriceRow[] {
+  const confirmedRounds = confirmedIds(input.rounds);
+  const roundNumber = new Map(input.rounds.map((r) => [r.id, r.number]));
+  const ordered = input.entries.map((entry, i) => ({ entry, i })).sort((a, b) => (roundNumber.get(a.entry.roundId) ?? 0) - (roundNumber.get(b.entry.roundId) ?? 0) || a.i - b.i);
+  const rows = new Map<string, PriceRow>();
+  for (const { entry } of ordered) {
+    if (!confirmedRounds.has(entry.roundId)) continue;
+    const now = effectiveEntry(entry, input.corrections, confirmedRounds);
+    if (now.quantity <= 0) continue;
+    if (now.replacementId) {
+      const price = input.settlement.corrections[now.replacementId];
+      const label = `${now.replacement} (replaces ${dishLabel(entry)})`;
+      rows.set(`c:${now.replacementId}`, { key: `c:${now.replacementId}`, label, quantity: now.quantity, lines: 1, own: 0, ownQuantity: 0, dishId: null, variant: null, correctionId: now.replacementId, unitCentavos: price?.unitCentavos ?? null, revision: price?.revision ?? 0, needsPrice: price?.unitCentavos == null });
+      continue;
+    }
+    const key = sharedPriceKey(entry.dishId, normalizeText(entry.variant ?? ""));
+    const own = input.settlement.entries[entry.id]?.unitCentavos != null ? 1 : 0;
+    const row = rows.get(key);
+    if (row) {
+      row.quantity += now.quantity;
+      row.lines += 1;
+      row.own += own;
+      row.ownQuantity += own * now.quantity;
+      continue;
+    }
+    const table = input.settlement.defaults[key];
+    const label = entry.variant ? `${entry.dishName} (${entry.variant})` : entry.dishName;
+    rows.set(key, { key, label, quantity: now.quantity, lines: 1, own, ownQuantity: own * now.quantity, dishId: entry.dishId, variant: entry.variant, correctionId: null, unitCentavos: table?.unitCentavos ?? null, revision: table?.revision ?? 0, needsPrice: false });
+  }
+  const list = [...rows.values()].map((r) => (r.correctionId ? r : { ...r, needsPrice: r.unitCentavos == null && r.own < r.lines }));
+  return [...list.filter((r) => r.needsPrice), ...list.filter((r) => !r.needsPrice)];
+}
+
+/** "n prices left": the rows still needing a price. */
+export const pricesLeft = (rows: readonly PriceRow[]) => rows.filter((r) => r.needsPrice).length;
+
+/** The host dock's button text while prices are missing; it replaces "My share" and opens the Prices sheet. */
+export const enterPricesLabel = (left: number) => `Enter prices · ${left} left`;

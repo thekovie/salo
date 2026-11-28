@@ -17,12 +17,12 @@ export type DirectSaveState =
  * idempotency key, so it applies at most once; any different request (new value, or the new revision after a
  * conflict) gets a fresh key.
  */
-export function useDirectSave(refresh: () => Promise<unknown>) {
+export function useDirectSave(refresh: () => Promise<unknown>, offlineMessage = "No connection. Your amount is kept here; try again when you're back online.") {
   const [state, setState] = useState<DirectSaveState>({ kind: "idle" });
   const attempt = useRef<{ signature: string; key: string } | null>(null);
 
   const save = useCallback(
-    async (path: string, method: "PUT" | "PATCH", body: unknown): Promise<boolean> => {
+    async (path: string, method: "PUT" | "PATCH" | "DELETE", body: unknown): Promise<boolean> => {
       const signature = `${method} ${path} ${JSON.stringify(body)}`;
       if (attempt.current?.signature !== signature) attempt.current = { signature, key: newKey() };
       setState({ kind: "saving" });
@@ -38,14 +38,14 @@ export function useDirectSave(refresh: () => Promise<unknown>) {
           await refresh().catch(() => undefined);
         } else if (error instanceof ApiError) {
           const retryable = error.isNetwork || error.status >= 500 || error.code === "RATE_LIMITED";
-          setState({ kind: "error", message: error.isNetwork ? "No connection. Your amount is kept here; try again when you're back online." : error.message, retryable });
+          setState({ kind: "error", message: error.isNetwork ? offlineMessage : error.message, retryable });
         } else {
           setState({ kind: "error", message: "Something went wrong. Try again.", retryable: true });
         }
         return false;
       }
     },
-    [refresh],
+    [refresh, offlineMessage],
   );
 
   const reset = useCallback(() => setState({ kind: "idle" }), []);

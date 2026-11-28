@@ -97,7 +97,7 @@ export const HOST_GUIDE: readonly GuideStep[] = [
   {
     id: "done",
     title: "You’re all set",
-    body: "End the order from Options when everyone’s done: tickets and KKB stay readable for 7 days. The bell at the top keeps your updates: confirmations, changes and served food. Open this guide again any time from Options → How Salo works.",
+    body: "End the order from Options when everyone’s done: tickets and KKB stay readable for 7 days, and you can still fix prices and the bill. The bell at the top keeps your updates: confirmations, changes and served food. Open this guide again any time from Options → How Salo works.",
     scene: "done",
     action: null,
     label: "",
@@ -126,11 +126,11 @@ export const GUEST_GUIDE: readonly GuideStep[] = [
   },
   {
     id: "ready",
-    title: "Tell the host you’re done",
-    body: "Tap I’m ready when you’ve chosen. The host sees who is still deciding. Changing your dishes afterwards sets it back.",
+    title: "Check your order",
+    body: "Tap My order to see everything that’s yours this round, fix mistakes, then tap I’m ready. The host sees who is still deciding.",
     scene: "people",
     action: "ready",
-    label: "Mark yourself ready",
+    label: "Open My order",
     done: (s) => s.readiness.some((r) => r.participantId === s.me.participantId && r.ready),
   },
   {

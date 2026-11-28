@@ -22,7 +22,7 @@ test("review, waiter view, host-only confirmation, round 2 with a correction, en
   await page.getByRole("button", { name: "Review order" }).click();
   const review = page.getByRole("dialog", { name: "Review round 1" });
   await expect(review.getByText("Everything is saved.")).toBeVisible();
-  await expect(review.getByText(/0 of 1 guest ready/)).toBeVisible();
+  await expect(review.getByText(/0 of 1 ready/)).toBeVisible();
   expect((await axe(page)).violations).toEqual([]);
   await review.getByRole("button", { name: "Show the waiter" }).click();
   const waiter = page.getByRole("dialog", { name: "Waiter ticket" });

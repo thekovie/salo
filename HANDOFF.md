@@ -92,17 +92,15 @@ Verification on `chore/v1-3-final`: typecheck, lint and build pass; 596 unit and
 - Removing a guest also takes them out of their groups, so a shared group dish lists only the remaining members in "Who ordered what".
 - Performance numbers in `docs/testing.md` are local measurements, not production benchmarks.
 - KKB: prices appear only in the KKB tab; Items' Copy text and Save image stay price-free (an explicit "include prices" option is a later step built on `buildKkb`). Every member sees everyone's prices. Limits: ₱99,999.99 per dish, ₱999,999.99 service charge. A shared dish goes to one payer (Bill to) or stays unallocated; no splitting. Guests can't rename themselves yet (the endpoint is host-only).
-- The virtual keyboard isn't handled: `interactive-widget` was never applied, so the fixed dock may sit under the Android keyboard. The other D1 native-feel fixes (dark `theme-color` matching the header band, long-press guard on buttons, a WebKit/iPhone Playwright project) were decided but not built either; all are planned in slice 8.
-- `html` `scroll-padding-bottom` is a fixed 10rem, smaller than the 320 px dock.
-- Offline price, served and receipt saves don't retry on reconnect until Try again (follow-up 21 in `.shots/follow-ups.md`).
+- The virtual keyboard on real Android/iOS phones is unchecked: `interactive-widget` and the dark `theme-color` are set (`src/app/layout.tsx`), and `scroll-padding-bottom` follows `var(--dock-h)` (`globals.css`), but nobody has tried it on a device.
 - Notification read state isn't live across one person's devices until refresh.
+- A save whose response is lost, followed by closing or reloading the sheet and saving again, makes a second adjustment, receipt or payment: the sheet's idempotency id is minted per open (`docs/realtime.md`, Reliability scenarios). The first row shows in the list via the live stream.
+- Safari and the iOS Home Screen app don't share cookies: a guest who joined in Safari is a stranger in the installed app and uses the code shown on the invite page. Real-device Android/iOS link behaviour is unchecked (`docs/pwa-invites.md`).
 - Group members are matched by group label because `batch.groupId` is never set.
 
 ## Next steps
 
-Slice 8 (owner feedback 17–20): compact Served, composer height at 320, round label consistency, and a guest "My share" entry point. The plan is in `docs/plans/salo-v1-3.md`, Slice 8. Research is done; the decisions are pending.
-
-Open follow-ups are in `.shots/follow-ups.md`, which is git-ignored and so local only. Items 9, 10, 12 and 13 are decided. The rest are open, and 17–20 belong to slice 8.
+v1.4 slice 9 (functional validation and stabilization) is in progress; slice 10 (the logo) is next. The plan is in `docs/plans/salo-v1-4.md`. The v1.3 follow-ups in `.shots/follow-ups.md` (git-ignored, local only) are all done.
 
 KKB pilot (owner): a real table of 7–12 doing KKB. Watch whether the host can price the receipt and enter the service charge quickly, whether diners find their own totals, whether "Not yet allocated" reasons make sense, and record any difference from the receipt against the table's usual Notes/calculator.
 

@@ -1,17 +1,26 @@
 "use client";
 
-import { Check, CircleAlert, CircleCheck, Copy, Pencil, Share2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Check, Circle, CircleAlert, CircleCheck, Contrast, Copy, Pencil, Share2 } from "lucide-react";
+import { Fragment, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { personKey } from "@/lib/adjustments";
 import { normalizeText } from "@/lib/dish-name";
-import { confirmedIds, effectiveEntry } from "@/lib/effective-order";
 import { track } from "@/lib/analytics";
-import { buildKkb, kkbText, priceCompleteness, type Kkb, type KkbLine, type KkbSection } from "@/lib/kkb";
+import { buildKkb, kkbText, priceCompleteness, priceRows, tableLines, type Kkb, type KkbLine, type KkbSection } from "@/lib/kkb";
 import { formatPeso } from "@/lib/money";
+import { nextBillStep } from "@/lib/bill-step";
+import { recordText } from "@/lib/kkb-record";
+import { billFinal, hasShare, paidByKey, paymentStatus, paymentTotals, type PaymentStatus } from "@/lib/payments";
 import type { SessionSnapshot } from "@/lib/snapshot";
 import { cn } from "@/lib/utils";
+import { BillStepRow } from "./bill-step-row";
 import { HostNamePrompt } from "./host-name-prompt";
+import { PricesSheet } from "./prices-sheet";
 import { PriceEditor, type Payer, type TablePrice } from "./price-editor";
+import { AdjustmentsBlock } from "./adjustments-block";
+import { FixPaymentSheet } from "./fix-payment-sheet";
+import { PaymentSheet } from "./payment-sheet";
+import { CardPaymentRows, PaymentsBlock } from "./payments-block";
 import { ReceiptCheckBlock } from "./receipt-check-block";
 import { ServiceChargeBlock } from "./service-charge-block";
 
@@ -26,6 +35,7 @@ interface KkbViewProps {
 /** The viewer's own card: "My share" in the dock lands here. */
 export const MY_CARD_ID = "kkb-mine";
 
+const MANY_CARDS = 6;
 const items = (n: number) => `${n} ${n === 1 ? "item" : "items"}`;
 const lineKey = (section: KkbSection, line: KkbLine, draft: boolean) => `${section.key}|${line.entryId}|${line.correctionId ?? ""}|${draft ? "d" : "c"}`;
 
@@ -40,13 +50,19 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
   const isOpen = snapshot.session.status === "OPEN";
   const kkb = useMemo(() => buildKkb(snapshot, meId), [snapshot, meId]);
   const [editing, setEditing] = useState<string | null>(null);
+  const [pricesOpen, setPricesOpen] = useState(false);
+  const [paying, setPaying] = useState<string | null>(null);
+  const [fixing, setFixing] = useState<string | null>(null);
   const [copy, setCopy] = useState<"idle" | "copied" | "error">("idle");
   // Which cards start open is decided once, so a card doesn't snap shut while the host is pricing it.
-  const [startOpen] = useState(() => new Set(kkb.sections.filter((s) => s.shared || (isHost && (s.unpricedUnits > 0 || s.drafts.some((l) => l.unitCentavos == null)))).map((s) => s.key)));
+  // Past this many cards only your own and the shared ones start open (a table of 14 is 20,000 px of cards otherwise).
+  const [startOpen] = useState(() => new Set(kkb.sections.filter((s) => s.shared || (kkb.sections.length <= MANY_CARDS && isHost && (s.unpricedUnits > 0 || s.drafts.some((l) => l.unitCentavos == null)))).map((s) => s.key)));
+  const [record, setRecord] = useState(false);
+  const step = useMemo(() => nextBillStep(kkb, snapshot, priceRows(snapshot)), [kkb, snapshot]);
   const payers: Payer[] = useMemo(
     () => [
       ...snapshot.participants.map((p) => ({ key: `p:${p.id}`, title: p.id === meId ? `${p.displayName} (you)` : p.displayName, participantId: p.id, label: null })),
-      ...kkb.sections.filter((s) => s.kind === "name").map((s) => ({ key: `n:${s.title.toLowerCase()}`, title: s.title, participantId: null, label: s.title })),
+      ...kkb.sections.filter((s) => s.kind === "name").map((s) => ({ key: `n:${normalizeText(s.title)}`, title: s.title, participantId: null, label: s.title })),
     ],
     [snapshot.participants, kkb.sections, meId],
   );
@@ -55,45 +71,66 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
     return <p className="mt-6 rounded-2xl bg-paper px-4 py-6 text-center text-ink-soft">Nothing ordered yet. Prices show up here once there are dishes.</p>;
   }
 
-  const confirmedRounds = confirmedIds(snapshot.rounds);
+  const allLines = tableLines(snapshot);
   /** The table price a line could set: its dish + size, and how many lines would follow it (replacements never do). */
   const tableFor = (line: KkbLine): TablePrice | null => {
     const entry = snapshot.entries.find((e) => e.id === line.entryId);
     if (!entry || line.correctionId || !line.tableKey) return null;
     const size = normalizeText(entry.variant ?? "");
-    const followers = snapshot.entries.filter((e) => {
-      if (e.dishId !== entry.dishId || normalizeText(e.variant ?? "") !== size) return false;
-      if (e.id !== entry.id && snapshot.settlement.entries[e.id]?.unitCentavos != null) return false;
-      const now = effectiveEntry(e, snapshot.corrections, confirmedRounds);
-      return now.quantity > 0 && !now.replacementId;
-    });
+    const followers = allLines.filter(({ entry: e }) => e.dishId === entry.dishId && normalizeText(e.variant ?? "") === size && (e.id === entry.id || snapshot.settlement.entries[e.id]?.unitCentavos == null));
     const live = snapshot.settlement.defaults[line.tableKey];
     return { dishId: entry.dishId, variant: entry.variant, label: entry.variant ? `${entry.dishName} (${entry.variant})` : entry.dishName, lines: followers.length, live: { unitCentavos: live?.unitCentavos ?? null, revision: live?.revision ?? 0 } };
   };
 
   const lineProps = (section: KkbSection, line: KkbLine, draft: boolean): LineProps => {
     const key = lineKey(section, line, draft);
-    const live = line.correctionId
-      ? { unitCentavos: snapshot.settlement.corrections[line.correctionId]?.unitCentavos ?? null, billTo: null, revision: snapshot.settlement.corrections[line.correctionId]?.revision ?? 0 }
-      : (snapshot.settlement.entries[line.entryId] ?? { unitCentavos: null, billTo: null, revision: 0 });
-    const canPrice = isOpen && (line.correctionId ? isHost : isHost || line.submittedBy === meId);
+    const entry = snapshot.settlement.entries[line.entryId] ?? { unitCentavos: null, billTo: null, revision: 0 };
+    const live = line.correctionId ? { unitCentavos: snapshot.settlement.corrections[line.correctionId]?.unitCentavos ?? null, revision: snapshot.settlement.corrections[line.correctionId]?.revision ?? 0 } : entry;
+    const leftPayers: Payer[] = (entry.splitAmong ?? []).flatMap((p) => {
+      const k = personKey(p);
+      return payers.some((x) => x.key === k) ? [] : [{ key: k, title: kkb.sections.find((s) => s.key === k)?.title ?? p.label ?? "Someone", participantId: p.participantId, label: p.label }];
+    });
+    const canPrice = line.correctionId ? isHost : isHost || (isOpen && line.submittedBy === meId);
     const table = isHost && canPrice ? tableFor(line) : null;
-    const canBillTo = isOpen && isHost && line.billable && !line.correctionId && !draft;
+    const canBillTo = isHost && line.billable && !draft;
     return {
       rowKey: key,
       line,
       editing: editing === key,
       canEdit: canPrice || canBillTo,
       onEdit: () => setEditing(key),
-      editor: <PriceEditor key={key} line={line} sessionId={snapshot.session.id} refresh={refresh} canPrice={canPrice} canBillTo={canBillTo} payers={payers} table={table} live={live} onDone={() => setEditing((open) => (open === key ? null : open))} />,
+      unbilled: !draft && section.shared && line.billable && !line.billedTo && !line.billedFrom,
+      editor: <PriceEditor key={key} line={line} sessionId={snapshot.session.id} refresh={refresh} canPrice={canPrice} canBillTo={canBillTo} payers={payers} table={table} live={live} bill={entry} leftPayers={leftPayers} onDone={() => setEditing((open) => (open === key ? null : open))} />,
     };
   };
+
+  const { payments } = snapshot.settlement;
+  const final = billFinal(kkb);
+  const paid = paidByKey(payments);
+  const statusOf = (s: KkbSection) => (s.shared ? null : paymentStatus(s, paid.get(s.key) ?? 0, final));
+  const payOf = (s: KkbSection): PayProps => ({
+    status: statusOf(s),
+    chip: payments.length > 0 && hasShare(s),
+    rows: (
+      <CardPaymentRows
+        status={statusOf(s)}
+        payments={payments.filter((p) => personKey(p.payer) === s.key)}
+        snapshot={snapshot}
+        isHost={isHost}
+        refresh={refresh}
+        onRecord={isHost && hasShare(s) ? () => setPaying(s.key) : null}
+        onFix={isHost ? setFixing : null}
+        showBalance={payments.length > 0 && hasShare(s)}
+      />
+    ),
+  });
+  const payingSection = kkb.sections.find((s) => s.key === paying) ?? null;
 
   const mine = kkb.sections.find((s) => s.isMe);
   const people = kkb.sections.filter((s) => !s.isMe && !s.shared);
   const shared = kkb.sections.filter((s) => s.shared);
   const title = snapshot.session.title ?? "Table order";
-  const text = kkbText(kkb, title, dateLabel);
+  const text = kkbText(kkb, title, dateLabel, { record: record ? recordText(kkb, snapshot) : undefined });
 
   async function copySummary() {
     try {
@@ -119,7 +156,8 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
 
   return (
     <div className="mt-4 space-y-4" data-ph-mask="">
-      <StatusStrip kkb={kkb} />
+      {priceCompleteness(kkb).total > 0 && !(isHost && step.id === "prices") ? <BillStepRow step={step} isHost={isHost} /> : null}
+      <StatusStrip kkb={kkb} onEnterPrices={isHost ? () => setPricesOpen(true) : undefined} />
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="outline" onClick={() => void copySummary()}>
           {copy === "copied" ? <Check className="size-5" aria-hidden /> : <Copy className="size-5" aria-hidden />}
@@ -135,10 +173,14 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
           {copy === "copied" ? "Summary copied" : copy === "error" ? "Couldn’t copy. Try Share, or select the text yourself." : ""}
         </p>
       </div>
+      <label className="flex min-h-11 items-center gap-2">
+        <input type="checkbox" className="size-5 accent-tomato" checked={record} onChange={(e) => setRecord(e.target.checked)} />
+        Include the full record
+      </label>
       {needsName ? <HostNamePrompt onSave={onRenameMe} label="Add your name so the table knows which dishes are yours" /> : null}
 
       {mine ? (
-        <Card section={mine} isMe>
+        <Card section={mine} isMe final={final} pay={payOf(mine)}>
           <Lines section={mine} lineProps={lineProps} draftRound={draftRound} />
         </Card>
       ) : null}
@@ -146,7 +188,7 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
       {people.length > 0 ? (
         <section aria-label="Everyone else" className="space-y-2">
           {people.map((s) => (
-            <Card key={s.key} section={s} collapsible defaultOpen={startOpen.has(s.key)}>
+            <Card key={s.key} section={s} collapsible final={final} defaultOpen={startOpen.has(s.key)} pay={payOf(s)}>
               <Lines section={s} lineProps={lineProps} draftRound={draftRound} />
             </Card>
           ))}
@@ -157,15 +199,20 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
         <section aria-label="Shared and unassigned" className="space-y-2">
           <h3 className="px-1 font-sans text-sm font-semibold text-ink-soft">Shared · settle at the table</h3>
           {shared.map((s) => (
-            <Card key={s.key} section={s} collapsible defaultOpen={startOpen.has(s.key)}>
+            <Card key={s.key} section={s} collapsible final={final} defaultOpen={startOpen.has(s.key)}>
               <Lines section={s} lineProps={lineProps} draftRound={draftRound} />
             </Card>
           ))}
         </section>
       ) : null}
 
-      <ServiceChargeBlock kkb={kkb} live={snapshot.settlement.serviceCharge} sessionId={snapshot.session.id} refresh={refresh} canEdit={isHost && isOpen} isHost={isHost} />
-      <ReceiptCheckBlock kkb={kkb} live={snapshot.settlement.receiptTotal} sessionId={snapshot.session.id} refresh={refresh} canEdit={isHost && isOpen} />
+      <ServiceChargeBlock kkb={kkb} live={snapshot.settlement.serviceCharge} sessionId={snapshot.session.id} refresh={refresh} canEdit={isHost} isHost={isHost} />
+      <AdjustmentsBlock kkb={kkb} snapshot={snapshot} refresh={refresh} isHost={isHost} />
+      <ReceiptCheckBlock kkb={kkb} live={snapshot.settlement.receiptTotal} sessionId={snapshot.session.id} refresh={refresh} canEdit={isHost} snapshot={snapshot} />
+      <PaymentsBlock totals={paymentTotals(kkb, payments)} snapshot={snapshot} isHost={isHost} onFix={isHost ? setFixing : null} refresh={refresh} />
+      {isHost ? <PaymentSheet section={payingSection} status={payingSection ? statusOf(payingSection) : null} snapshot={snapshot} cards={kkb.sections.filter((s) => !s.shared)} refresh={refresh} onClose={() => setPaying(null)} /> : null}
+      {isHost ? <FixPaymentSheet payment={payments.find((p) => p.id === fixing && p.needsReview) ?? null} snapshot={snapshot} cards={kkb.sections.filter((s) => !s.shared)} refresh={refresh} onClose={() => setFixing(null)} /> : null}
+      {isHost ? <PricesSheet open={pricesOpen} onOpenChange={setPricesOpen} snapshot={snapshot} refresh={refresh} /> : null}
     </div>
   );
 }
@@ -180,28 +227,45 @@ function showFirstUnpriced(key: string) {
   target?.focus();
 }
 
-function Completeness({ kkb }: { kkb: Kkb }) {
+function Completeness({ kkb, onEnterPrices }: { kkb: Kkb; onEnterPrices?: () => void }) {
   const { total, priced, first } = priceCompleteness(kkb);
   if (total === 0) return null;
-  if (!first) return <p className="text-sm font-semibold text-ink">All {total === 1 ? "1 dish" : `${total} dishes`} priced</p>;
+  const link = "min-h-11 cursor-pointer font-semibold text-tomato-ink underline underline-offset-2";
+  const prices = onEnterPrices ? (
+    <>
+      {" "}
+      <span className="whitespace-nowrap">
+        {"· "}
+        <button type="button" onClick={onEnterPrices} className={link}>
+          {first ? "Enter prices" : "Edit prices"}
+        </button>
+      </span>
+    </>
+  ) : null;
   const missing = total - priced;
   return (
-    <p className="text-sm text-ink">
-      <span className="font-semibold">
-        {priced} of {total} dishes priced
-      </span>
-      {" · "}
-      <button type="button" onClick={() => showFirstUnpriced(lineKey(kkb.sections.find((x) => x.key === first.sectionKey)!, first.line, false))} className="min-h-11 cursor-pointer font-semibold text-tomato-ink underline underline-offset-2">
-        Show the {missing === 1 ? "1 without a price" : `${missing} without a price`}
-      </button>
+    <p id="kkb-completeness" tabIndex={-1} className="text-sm text-ink outline-none">
+      <span className="font-semibold whitespace-nowrap">{first ? `${priced} of ${total} dishes priced` : `All ${total === 1 ? "1 dish" : `${total} dishes`} priced`}</span>
+      {first ? (
+        <>
+          {" "}
+          <span className="whitespace-nowrap">
+            {"· "}
+            <button type="button" onClick={() => showFirstUnpriced(lineKey(kkb.sections.find((x) => x.key === first.sectionKey)!, first.line, false))} className={link}>
+              Show the {missing === 1 ? "1 without a price" : `${missing} without a price`}
+            </button>
+          </span>
+        </>
+      ) : null}
+      {prices}
     </p>
   );
 }
 
-function StatusStrip({ kkb }: { kkb: Kkb }) {
+function StatusStrip({ kkb, onEnterPrices }: { kkb: Kkb; onEnterPrices?: () => void }) {
   return (
     <div className="space-y-2">
-      <Completeness kkb={kkb} />
+      <Completeness kkb={kkb} onEnterPrices={onEnterPrices} />
       <ChargeStrip kkb={kkb} />
     </div>
   );
@@ -240,58 +304,88 @@ function noteOf(section: KkbSection, isMe: boolean) {
   return null;
 }
 
-function Card({ section, isMe = false, collapsible = false, defaultOpen = false, children }: { section: KkbSection; isMe?: boolean; collapsible?: boolean; defaultOpen?: boolean; children: React.ReactNode }) {
+/** What a person's card shows about payments: the chip beside the amount (once anything is recorded) and the rows at the end. */
+type PayProps = { status: PaymentStatus | null; chip: boolean; rows: React.ReactNode };
+
+const CHIP = {
+  unpaid: { icon: Circle, text: "Unpaid", tone: "bg-paper text-ink-soft" },
+  partly: { icon: Contrast, text: "Partly paid", tone: "bg-saffron-wash text-saffron-ink" },
+  paid: { icon: CircleCheck, text: "Paid", tone: "bg-ok-wash text-ok" },
+} as const;
+
+function PayChip({ status }: { status: PaymentStatus | null }) {
+  if (!status?.chip) return null;
+  const { icon: Icon, text, tone } = CHIP[status.chip];
+  return (
+    <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 font-sans text-xs font-semibold", tone)}>
+      <Icon className="size-3.5" aria-hidden />
+      {text}
+    </span>
+  );
+}
+
+function Card({ section, final, isMe = false, collapsible = false, defaultOpen = false, pay, children }: { section: KkbSection; final: boolean; isMe?: boolean; collapsible?: boolean; defaultOpen?: boolean; pay?: PayProps; children: React.ReactNode }) {
   const note = noteOf(section, isMe);
+  const unpaid = pay?.status?.chip && pay.status.chip !== "paid" ? "" : undefined;
   const heading = (
     <div className="flex items-baseline justify-between gap-3">
-      <p className="min-w-0 text-lg leading-snug">
+      <p className="min-w-0 text-lg leading-snug break-words">
         {section.title}
         {note ? <span className="ml-1.5 font-sans text-sm text-ink-soft">· {note}</span> : null}
       </p>
-      <SummaryAmount section={section} />
+      <span className="flex shrink-0 flex-col items-end gap-y-1">
+        <SummaryAmount section={section} final={final} />
+        {pay?.chip ? <PayChip status={pay.status} /> : null}
+      </span>
     </div>
   );
   if (!collapsible) {
     return (
       <section
         id={isMe ? MY_CARD_ID : undefined}
+        data-unpaid={unpaid}
         tabIndex={isMe ? -1 : undefined}
         aria-label={`${section.title}, your share`}
         className={cn("ticket px-5 py-3", isMe && "ring-2 ring-tomato/40 focus:outline-2 focus:outline-offset-2 focus:outline-ink")}
       >
         {heading}
         {children}
-        <Footer section={section} />
+        <Footer section={section} final={final} />
+        {pay?.rows}
       </section>
     );
   }
   return (
-    <details open={defaultOpen} className="ticket px-5 py-1">
+    <details open={defaultOpen} data-unpaid={unpaid} className="ticket px-5 py-1">
       <summary className="flex min-h-12 cursor-pointer list-none items-center py-2 [&::-webkit-details-marker]:hidden">
         <div className="min-w-0 flex-1">{heading}</div>
       </summary>
       <div className="pb-3">
         {children}
-        <Footer section={section} />
+        <Footer section={section} final={final} />
+        {pay?.rows}
       </div>
     </details>
   );
 }
 
 /** The one number on a card's heading: the total once allocated, else the food so far, plus what's missing. */
-function SummaryAmount({ section }: { section: KkbSection }) {
+function SummaryAmount({ section, final }: { section: KkbSection; final: boolean }) {
+  // Person cards read "so far" until the bill is final; shared cards say what is shared, not what is owed.
+  const soFar = !final && !section.shared ? <span className="ml-1.5 font-sans text-xs text-ink-soft">so far</span> : null;
   if (section.shared && section.lines.length > 0 && section.lines.every((l) => l.billedTo)) return <span className="shrink-0 text-sm text-ink-soft">All billed</span>;
-  if (section.totalCentavos != null) return <span className="tally shrink-0 text-ink">{formatPeso(section.totalCentavos)}</span>;
+  if (section.totalCentavos != null) return <span className="shrink-0 text-right"><span className="tally text-ink">{formatPeso(section.totalCentavos)}</span>{soFar}</span>;
   if (section.status === "none" || section.status === "empty") return <span className="shrink-0 text-sm text-ink-soft">{section.status === "none" ? "No prices yet" : "Not confirmed"}</span>;
   return (
     <span className="shrink-0 text-right">
       <span className="tally text-ink">{formatPeso(section.pricedCentavos)}</span>
-      {section.unpricedUnits > 0 ? <span className="ml-1.5 rounded-full bg-saffron-wash px-2 py-0.5 font-sans text-xs font-semibold text-saffron-ink">{items(section.unpricedUnits)} no price</span> : null}
+      {soFar}
+      {section.unpricedUnits > 0 ? <span className="mt-1 ml-auto block w-fit rounded-full bg-saffron-wash px-2 py-0.5 font-sans text-xs font-semibold text-saffron-ink">{items(section.unpricedUnits)} no price</span> : null}
     </span>
   );
 }
 
-function Footer({ section }: { section: KkbSection }) {
+function Footer({ section, final }: { section: KkbSection; final: boolean }) {
   if (section.shared && section.lines.length > 0) {
     // Never "₱0.00 shared" for dishes nobody has priced yet: that reads like they were free.
     const counted = section.lines.filter((l) => !l.billedTo);
@@ -315,14 +409,22 @@ function Footer({ section }: { section: KkbSection }) {
         </dt>
         {section.status !== "none" ? <dd className="tally text-ink">{formatPeso(section.pricedCentavos)}</dd> : null}
       </div>
-      {section.serviceCentavos != null && section.totalCentavos != null ? (
+      {section.totalCentavos != null && (section.serviceCentavos != null || section.adjustments.length > 0) ? (
         <>
-          <div className="flex items-baseline justify-between gap-3">
-            <dt className="text-sm text-ink-soft">Service charge</dt>
-            <dd className="tally text-ink">{formatPeso(section.serviceCentavos)}</dd>
-          </div>
+          {section.serviceCentavos != null ? (
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-sm text-ink-soft">Service charge</dt>
+              <dd className="tally text-ink">{formatPeso(section.serviceCentavos)}</dd>
+            </div>
+          ) : null}
+          {section.adjustments.map((a) => (
+            <div key={a.id} className="flex items-baseline justify-between gap-3">
+              <dt className="text-sm text-ink-soft">{a.label}</dt>
+              <dd className="tally text-ink">{a.centavos < 0 ? "−" : "+"}{formatPeso(Math.abs(a.centavos))}</dd>
+            </div>
+          ))}
           <div className="flex items-baseline justify-between gap-3 pt-1">
-            <dt className="font-semibold">Total with service charge</dt>
+            <dt className="font-semibold">{final ? (section.adjustments.length > 0 ? "Total" : "Total with service charge") : "Total so far"}</dt>
             <dd className="tally text-2xl text-ink">{formatPeso(section.totalCentavos)}</dd>
           </div>
         </>
@@ -331,7 +433,7 @@ function Footer({ section }: { section: KkbSection }) {
   );
 }
 
-type LineProps = { rowKey: string; line: KkbLine; editing: boolean; canEdit: boolean; onEdit: () => void; editor: React.ReactNode };
+type LineProps = { rowKey: string; unbilled: boolean; line: KkbLine; editing: boolean; canEdit: boolean; onEdit: () => void; editor: React.ReactNode };
 
 function Lines({ section, lineProps, draftRound }: { section: KkbSection; lineProps: (s: KkbSection, l: KkbLine, draft: boolean) => LineProps; draftRound: number | null }) {
   return (
@@ -357,21 +459,37 @@ function Lines({ section, lineProps, draftRound }: { section: KkbSection; linePr
   );
 }
 
-function LineRow({ rowKey, line, editing, canEdit, onEdit, editor }: LineProps) {
-  const tags = [line.pendingChange ? "Change pending with the waiter" : null, line.billedFrom ? `from ${line.billedFrom}` : null, line.billedTo ? `Billed to ${line.billedTo}` : null].filter(Boolean);
+function LineRow({ rowKey, unbilled, line, editing, canEdit, onEdit, editor }: LineProps) {
+  const split = line.splitWays ? `split ${line.splitWays} ways` : null;
+  // Short tags never break inside; the names tag may, for long names.
+  const tags = [
+    line.pendingChange ? { text: "Change pending with the waiter", keep: false } : null,
+    split && line.billedFrom ? { text: split, keep: true } : null,
+    line.billedFrom ? { text: `from ${line.billedFrom}`, keep: true } : null,
+    line.billedTo ? { text: split ? `Split ${line.splitWays} ways: ${line.billedTo}` : `Billed to ${line.billedTo}`, keep: false } : null,
+  ].filter((t) => t !== null);
   const amount = line.subtotalCentavos != null ? formatPeso(line.subtotalCentavos) : null;
   const action = amount ?? (line.billable && line.unitCentavos != null ? "Bill to…" : "Add price");
   return (
-    <li data-line={rowKey} tabIndex={-1} className="rounded-lg focus-visible:bg-saffron-wash focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink">
+    <li data-line={rowKey} data-unbilled={unbilled ? "" : undefined} tabIndex={-1} className="rounded-lg focus-visible:bg-saffron-wash focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0 py-1 text-ink-soft">
           <p className={cn("break-words text-ink", line.billedTo && "text-ink-soft")}>
             {line.label} <span className="tally text-tomato-ink">×{line.quantity}</span>
           </p>
           <p className="text-xs">
-            {line.unitCentavos != null ? <span className="tally">{formatPeso(line.unitCentavos)} each</span> : "No price yet"}
-            {line.priceSource === "table" ? " · table price" : line.priceSource === "line" && line.hasTable ? " · this line only" : ""}
-            {tags.length ? ` · ${tags.join(" · ")}` : ""}
+            {line.splitOfCentavos != null ? (
+              <span className="whitespace-nowrap">
+                <span className="tally">{formatPeso(line.subtotalCentavos ?? 0)}</span> of <span className="tally">{formatPeso(line.splitOfCentavos)}</span>
+              </span>
+            ) : line.unitCentavos != null ? <span className="tally">{formatPeso(line.unitCentavos)} each</span> : "No price yet"}
+            {line.splitOfCentavos != null ? "" : line.priceSource === "table" ? " · table price" : line.priceSource === "line" && line.hasTable ? " · this line only" : ""}
+            {tags.map((t) => (
+              <Fragment key={t.text}>
+                {" · "}
+                <span className={t.keep ? "whitespace-nowrap" : undefined}>{t.text}</span>
+              </Fragment>
+            ))}
           </p>
         </div>
         {canEdit && !editing ? (

@@ -39,7 +39,7 @@ export function SyncPill({ state, className, compact = false }: { state: SyncSta
       data-sync={state}
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors duration-200",
-        alarming ? "bg-saffron text-ink" : "bg-black/25 text-on-band",
+        alarming ? "bg-saffron text-on-saffron" : "bg-black/25 text-on-band",
         className,
       )}
     >

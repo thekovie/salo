@@ -2,9 +2,10 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { normalizeText, tidyText } from "@/lib/dish-name";
 import { can, canEditPrice, type Actor } from "@/lib/permissions";
 import type { Tx } from "@/server/db/client";
-import { correctionSettlements, dishes, entrySettlements, orderBatches, orderCorrections, orderEntries, participants, sessions, sharedPrices } from "@/server/db/schema";
-import { AppError, forbidden } from "@/server/errors";
+import { correctionSettlements, dishes, entryPayers, entrySettlements, orderBatches, orderCorrections, orderEntries, participants, rounds, sessions, sharedPrices } from "@/server/db/schema";
+import { AppError, closed, forbidden } from "@/server/errors";
 import { audienceOfEntries, notify, withMembers } from "@/server/notifications";
+import { keyOfRow, resolvePeople } from "./person-refs";
 import type { Applied, SessionRow } from "@/server/mutations";
 import type { CorrectionPriceInput, EntrySettlementInput, RenameMeInput, ReceiptTotalInput, ServiceChargeInput, SharedPriceInput } from "./validation";
 
@@ -12,19 +13,27 @@ import type { CorrectionPriceInput, EntrySettlementInput, RenameMeInput, Receipt
  * Changes that never touch what the waiter is told (prices, the receipt's service charge, a person's name). Confirming
  * a round still passes when only these happened since the host looked (owner decision, KKB brief §6).
  */
-export const NON_TICKET_EVENTS = ["entry.settled", "correction.priced", "session.serviceCharge", "session.receiptTotal", "participant.renamed", "price.defaultSet", "dish.unavailableTold", "serving.updated"] as const;
+export const NON_TICKET_EVENTS = ["entry.settled", "correction.priced", "session.serviceCharge", "session.receiptTotal", "receipt.set", "receipt.removed", "participant.renamed", "adjustment.set", "adjustment.removed", "price.defaultSet", "dish.unavailableTold", "serving.updated", "participant.cohostSet", "participant.cohostRevoked", "payment.recorded", "payment.updated", "payment.deleted", "host.transferred", "session.menuSet"] as const;
 
 /** Length is checked again after tidying: NFKC can expand a few characters into many (DB CHECK is 1–40). */
-function tidyName(raw: string, message: string): string {
+export function tidyName(raw: string, message: string): string {
   const name = tidyText(raw);
   if (!name || name.length > 40) throw new AppError(422, "INVALID", message);
   return name;
 }
 
-const conflict = (what: string) => new AppError(409, "CONFLICT", `Someone changed ${what} just now. Check the latest amount and try again.`);
+export const conflict = (what: string) => new AppError(409, "CONFLICT", `Someone changed ${what} just now. Check the latest amount and try again.`);
+
+/** Billing stays editable after End (host), but a cancelled order (ended before any round was confirmed) has nothing to bill. */
+export async function assertBillable(tx: Tx, session: SessionRow): Promise<void> {
+  if (session.status !== "CLOSED") return;
+  const [confirmed] = await tx.select({ id: rounds.id }).from(rounds).where(and(eq(rounds.sessionId, session.id), eq(rounds.status, "CONFIRMED"))).limit(1);
+  if (!confirmed) throw closed();
+}
 
 /** Price each and (host) Bill to for one source entry. Works on confirmed rounds: settlement rows are not order data. */
 export async function setEntrySettlement(tx: Tx, session: SessionRow, actor: Actor, entryId: string, input: EntrySettlementInput): Promise<Applied<{ entryId: string; revision: number }>> {
+  await assertBillable(tx, session);
   const [entry] = await tx
     .select({ id: orderEntries.id, deletedAt: orderEntries.deletedAt, submittedBy: orderBatches.submittedBy, attributionType: orderBatches.attributionType, attributedParticipantId: orderBatches.attributedParticipantId, collectiveLabel: orderBatches.collectiveLabel })
     .from(orderEntries)
@@ -33,7 +42,8 @@ export async function setEntrySettlement(tx: Tx, session: SessionRow, actor: Act
   if (!entry) throw new AppError(404, "ENTRY_NOT_FOUND", "That dish isn’t in this order any more.");
   if (entry.deletedAt) throw new AppError(409, "ENTRY_REMOVED", "That dish was removed. Undo the removal first.");
   if (input.unitPriceCentavos !== undefined && !canEditPrice(actor, entry)) throw forbidden("Only the host or the person who added this dish can price it.");
-  if (input.billTo !== undefined) {
+  if (input.unitPriceCentavos !== undefined && session.status === "CLOSED" && !can(actor, "price.editAny")) throw forbidden("Only the host can change prices after the order has ended.");
+  if (input.billTo !== undefined || input.splitAmong !== undefined) {
     if (!can(actor, "billTo.set")) throw forbidden("Only the host can choose who pays for a shared dish.");
     const individual = entry.attributionType === "INDIVIDUAL" && (entry.attributedParticipantId || entry.collectiveLabel);
     if (individual) throw new AppError(422, "INVALID", "This dish is already for one person.");
@@ -45,11 +55,12 @@ export async function setEntrySettlement(tx: Tx, session: SessionRow, actor: Act
 
   const [current] = await tx.select().from(entrySettlements).where(eq(entrySettlements.entryId, entryId)).for("update");
   if ((current?.revision ?? 0) !== input.expectedRevision) throw conflict("this price");
+  const payers = input.splitAmong ? await resolvePeople(tx, session.id, input.splitAmong, new Set((await tx.select().from(entryPayers).where(eq(entryPayers.entryId, entryId))).map(keyOfRow))) : null;
   const billTo =
-    input.billTo === undefined
-      ? {}
-      : input.billTo === null
-        ? { billToParticipantId: null, billToLabel: null }
+    payers || input.billTo === null
+      ? { billToParticipantId: null, billToLabel: null }
+      : input.billTo === undefined
+        ? {}
         : "participantId" in input.billTo
           ? { billToParticipantId: input.billTo.participantId, billToLabel: null }
           : { billToParticipantId: null, billToLabel: tidyName(input.billTo.label, "Keep the name under 40 characters.") };
@@ -60,12 +71,16 @@ export async function setEntrySettlement(tx: Tx, session: SessionRow, actor: Act
   } else {
     await tx.insert(entrySettlements).values({ entryId, sessionId: session.id, ...price, ...billTo, revision, updatedBy: actor.participantId });
   }
+  // One mode at a time: a one-person Bill to (or clearing it) drops the split, a split clears Bill to.
+  if (payers || input.billTo !== undefined) await tx.delete(entryPayers).where(eq(entryPayers.entryId, entryId));
+  if (payers) await tx.insert(entryPayers).values(payers.map((p) => ({ entryId, sessionId: session.id, ...p })));
   // Prices never reset "I'm ready": they don't change what anyone ordered.
   return { result: { entryId, revision }, event: { type: "entry.settled", payload: { entryId } } };
 }
 
 /** Price each for a replacement ("Change it to …"). Host only, like corrections themselves. */
 export async function setCorrectionPrice(tx: Tx, session: SessionRow, actor: Actor, correctionId: string, input: CorrectionPriceInput): Promise<Applied<{ correctionId: string; revision: number }>> {
+  await assertBillable(tx, session);
   if (!can(actor, "price.editAny")) throw forbidden("Only the host can price a change.");
   const [correction] = await tx.select({ type: orderCorrections.correctionType }).from(orderCorrections).where(and(eq(orderCorrections.id, correctionId), eq(orderCorrections.sessionId, session.id)));
   if (!correction) throw new AppError(404, "CORRECTION_NOT_FOUND", "That change isn’t in this order any more.");
@@ -86,6 +101,7 @@ export async function setCorrectionPrice(tx: Tx, session: SessionRow, actor: Act
  * same change ("Every … here"), so the line follows the table price. Lines with their own price are never touched otherwise.
  */
 export async function setSharedPrice(tx: Tx, session: SessionRow, actor: Actor, input: SharedPriceInput): Promise<Applied<{ revision: number }>> {
+  await assertBillable(tx, session);
   if (!can(actor, "price.default")) throw forbidden("Only the host can set a table price.");
   const [dish] = await tx.select({ id: dishes.id, name: dishes.canonicalName }).from(dishes).where(and(eq(dishes.id, input.dishId), eq(dishes.sessionId, session.id)));
   if (!dish) throw new AppError(404, "DISH_NOT_FOUND", "That dish isn’t in this order any more.");
@@ -136,6 +152,7 @@ export async function setSharedPrice(tx: Tx, session: SessionRow, actor: Actor, 
 
 /** The receipt's service charge: null = not entered, 0 = none on the receipt. Host only. */
 export async function setServiceCharge(tx: Tx, session: SessionRow, actor: Actor, input: ServiceChargeInput): Promise<Applied<{ revision: number }>> {
+  await assertBillable(tx, session);
   if (!can(actor, "serviceCharge.set")) throw forbidden("Only the host can enter the service charge.");
   if (session.serviceChargeRevision !== input.expectedRevision) throw conflict("the service charge");
   const revision = session.serviceChargeRevision + 1;
@@ -145,6 +162,7 @@ export async function setServiceCharge(tx: Tx, session: SessionRow, actor: Actor
 
 /** The receipt's printed total, only compared with Salo's (never split). null = not entered. Host only. */
 export async function setReceiptTotal(tx: Tx, session: SessionRow, actor: Actor, input: ReceiptTotalInput): Promise<Applied<{ revision: number }>> {
+  await assertBillable(tx, session);
   if (!can(actor, "receipt.set")) throw forbidden("Only the host can enter the receipt total.");
   if (session.receiptTotalRevision !== input.expectedRevision) throw conflict("the receipt total");
   const revision = session.receiptTotalRevision + 1;

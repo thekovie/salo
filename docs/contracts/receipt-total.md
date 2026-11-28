@@ -56,7 +56,7 @@ Interpretations the spec leaves open (suite accepts either): a removed guest get
 | A04 | Removed guest | 403 REMOVED or 404 | S |
 | A05 | No / foreign / look-alike Origin on PUT /api | 403 FORBIDDEN_ORIGIN (proxy); own origin passes | A CSRF |
 | A06 | Unknown or malformed session id | 404 | A |
-| C03 | Closed order, set or clear | 409 SESSION_CLOSED; value stays | A |
+| C03 | Ended order (a round was confirmed), set or clear | 200; the host can still fix the bill. A cancelled order (nothing confirmed) is 409 SESSION_CLOSED | A |
 | C04 | Closed order | host and guest still read the last value | A, U |
 | C05 | Replay of applied key after close | 200 or 409, nothing re-applied | A |
 

@@ -21,7 +21,7 @@ const entry = (id: string, dishName: string, quantity: number, createdAt: string
 const gyoza = entry("e1", "Gyoza", 2, "2026-11-06T12:00:00.000Z");
 const snapshot = {
   session: { id: "s", title: null, status: "OPEN", revision: 5, joinCode: "ABC234", closedAt: null, expiresAt: "" },
-  me: { participantId: "h", role: "HOST", displayName: "Host" },
+  me: { participantId: "h", role: "HOST", cohost: false, displayName: "Host" },
   rounds: [{ id: "r1", number: 1, status: "DRAFT", confirmedAt: null }],
   activeRoundId: "r1",
   participants: [],

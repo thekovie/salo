@@ -41,6 +41,11 @@ export async function notify(tx: Tx, sessionId: string, input: NotifyInput): Pro
 
 const overlaps = (sources: readonly string[]) => sql`${notifications.source} && ARRAY[${sql.join(sources.map((s) => sql`${s}`), sql`, `)}]::text[]`;
 
+/** A change that is taken back (a deleted payment) takes the notices it caused with it. */
+export async function deleteNoticesBySource(tx: Tx, sessionId: string, sources: readonly string[]): Promise<void> {
+  await tx.delete(notifications).where(and(eq(notifications.sessionId, sessionId), overlaps(sources)));
+}
+
 /**
  * Undo of "Mark unavailable" for these draft entries. A notice that only said "removed" goes; one that also carries a told
  * cancel or swap (which Undo cannot take back) stays, minus the removal.

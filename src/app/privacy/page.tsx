@@ -12,7 +12,7 @@ export default function PrivacyPage() {
   return (
     <PolicyPage
       title="Privacy policy"
-      intro="Salo helps a table collect its restaurant order. It has no accounts, no ads and no payments. This page explains, in plain words, what Salo keeps, why, and for how long."
+      intro="Salo helps a table collect its restaurant order. It has no accounts, no ads and no payment processing. This page explains, in plain words, what Salo keeps, why, and for how long."
     >
       <PolicySection id="who" title="Who we are">
         <p>
@@ -23,7 +23,7 @@ export default function PrivacyPage() {
       <PolicySection id="what" title="What we collect">
         <ul>
           <li>
-            <strong>What you type into an order:</strong> display names, dishes, sizes and notes, group names, the order&rsquo;s name, and a reason if the host removes someone.
+            <strong>What you type into an order:</strong> display names, dishes, sizes and notes, group names, the order&rsquo;s name, a reason if the host removes someone, and any payments the host records (amount, method label and note; Salo never moves money).
             Everyone in that order can see it; nobody else can.
           </li>
           <li>

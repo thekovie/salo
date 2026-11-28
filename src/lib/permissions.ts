@@ -5,6 +5,8 @@ export interface Actor {
   sessionId: string;
   role: Role;
   displayName: string;
+  /** A guest the host lets help mark food served. Only meaningful for guests. */
+  cohost?: boolean;
 }
 
 export type Action =
@@ -24,13 +26,19 @@ export type Action =
   | "billTo.set"
   | "serviceCharge.set"
   | "receipt.set"
+  | "adjustment.set"
   | "participant.renameSelf"
-  | "serving.update";
+  | "serving.update"
+  | "cohost.set"
+  | "settlement.record"
+  | "host.transfer"
+  | "session.menu";
 
-const HOST_ONLY: ReadonlySet<Action> = new Set(["entry.editAny", "session.rename", "round.confirm", "round.open", "session.close", "claim.approve", "participant.remove", "price.editAny", "price.default", "dish.unavailable", "billTo.set", "serviceCharge.set", "receipt.set", "participant.renameSelf", "serving.update"]);
+const HOST_ONLY: ReadonlySet<Action> = new Set(["entry.editAny", "session.rename", "round.confirm", "round.open", "session.close", "claim.approve", "participant.remove", "price.editAny", "price.default", "dish.unavailable", "billTo.set", "serviceCharge.set", "receipt.set", "adjustment.set", "participant.renameSelf", "serving.update", "cohost.set", "settlement.record", "host.transfer", "session.menu"]);
 
 /** Role × action (brief 4). Roles come from the server-side credential, never from a request body. */
-export function can(actor: Pick<Actor, "role">, action: Action): boolean {
+export function can(actor: Pick<Actor, "role" | "cohost">, action: Action): boolean {
+  if (action === "serving.update" && actor.cohost) return true;
   return actor.role === "HOST" || !HOST_ONLY.has(action);
 }
 

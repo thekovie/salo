@@ -19,11 +19,11 @@ No restaurant integration, no menu setup, no accounts. A host can use it alone i
 Used at the table, often one-handed, in noisy and variably lit restaurants (bright food courts to dim bars), on mid-range Android phones and iPhones over patchy mobile data. The waiter view is both read aloud by the host and handed or shown to the waiter. Orders come in rounds: a first order, then add-ons.
 
 ## Capabilities and Constraints
-Next.js PWA, PostgreSQL, Server-Sent Events, self-hosted on Coolify. Host-only: confirm a round, open rounds, end the session. Closed sessions stay read-only for 7 days, then are deleted. Out of scope: payments, automatic bill splitting, menus, AI/OCR, restaurant accounts. KKB (optional prices per dish, each person's food subtotal and their share of one receipt service charge) is in scope since the KKB brief, together with a receipt-total check (a comparison, never split) and a plain-text Copy summary; food arrival tracking and the in-app updates bell are in scope too; taxes, discounts, tips, splitting shared dishes and tracking who paid are not.
+Next.js PWA, PostgreSQL, Server-Sent Events, self-hosted on Coolify. Host-only: confirm a round, open rounds, end the session. Closed sessions stay read-only for 7 days, then are deleted. Out of scope: payments, automatic bill splitting, in-app menus (a restaurant menu link the host adds is in scope; Salo never fetches or embeds it), AI/OCR, restaurant accounts. KKB (optional prices per dish, each person's food subtotal and their share of one receipt service charge) is in scope since the KKB brief, together with a receipt-total check (a comparison, never split) and a plain-text Copy summary; food arrival tracking and the in-app updates bell are in scope too; taxes, discounts, tips, splitting shared dishes and tracking who paid are not.
 
 ## Brand Commitments
 - Name: **Salo** (from *salu-salo*, a shared meal). Tagline: "One table. Everyone's order."
-- Logo: top-down round table whose plate dots read as a speech bubble.
+- Logo: top-down round table with four plates and a serving dish.
 - Visual direction pinned by the owner: "Order ticket" (warm paper, tomato red, saffron accents, perforated ticket cards, big tabular quantities, rounded light-weight type, bottom dock, light and dark). The owner dislikes sidebars and heavy type.
 - Voice: plain warm English with light Taglish touches in empty states and success messages ("Ayos!", "Kain na"). Buttons, labels and errors stay in plain English.
 

@@ -1,11 +1,14 @@
 import { and, count, eq, inArray, isNull } from "drizzle-orm";
 import { normalizeText, tidyText } from "@/lib/dish-name";
+import { orderingIds, readinessOf } from "@/lib/views";
 import { can, type Actor } from "@/lib/permissions";
 import type { Tx } from "@/server/db/client";
 import { entryClaims, orderBatches, orderEntries, orderGroupMembers, orderGroups, participantRoundReadiness, participants, rounds } from "@/server/db/schema";
 import { AppError, forbidden } from "@/server/errors";
-import { notify } from "@/server/notifications";
+import { notify, withMembers } from "@/server/notifications";
 import type { Applied, SessionRow } from "@/server/mutations";
+import { adoptLabelShares } from "./adjustments";
+import { tidyName } from "./settlement";
 import { LIMITS } from "./validation";
 
 async function draftRoundId(tx: Tx, sessionId: string): Promise<string> {
@@ -28,14 +31,31 @@ export async function setReady(tx: Tx, session: SessionRow, actor: Actor, ready:
       target: [participantRoundReadiness.participantId, participantRoundReadiness.roundId],
       set: { ready, acknowledgedRevision: session.revision + 1, updatedAt: new Date() },
     });
-  if (ready) {
-    const guests = await tx.select({ id: participants.id }).from(participants).where(and(eq(participants.sessionId, session.id), eq(participants.role, "GUEST"), isNull(participants.removedAt)));
-    const [{ n }] = await tx.select({ n: count() }).from(participantRoundReadiness).where(and(eq(participantRoundReadiness.roundId, roundId), eq(participantRoundReadiness.ready, true), inArray(participantRoundReadiness.participantId, guests.map((g) => g.id))));
-    const [host] = await tx.select({ id: participants.id }).from(participants).where(and(eq(participants.sessionId, session.id), eq(participants.role, "HOST")));
-    const [round] = await tx.select({ number: rounds.roundNumber }).from(rounds).where(eq(rounds.id, roundId));
-    if (n === guests.length) await notify(tx, session.id, { type: "guests.ready", subject: { roundId, roundNumber: round.number }, recipients: [host.id], dedupKey: `guests.ready:${roundId}`, actorId: actor.participantId });
-  }
+  if (ready) await notifyIfAllReady(tx, session, actor, roundId);
   return { result: { ready }, event: { type: "readiness.changed", payload: { participantId: actor.participantId } } };
+}
+
+/** "Everyone who's ordering is ready" (D38): guests with nothing in the round don't hold it back, and it never fires with nobody ordering. */
+async function notifyIfAllReady(tx: Tx, session: SessionRow, actor: Actor, roundId: string) {
+  const guests = await tx.select({ id: participants.id, displayName: participants.displayName }).from(participants).where(and(eq(participants.sessionId, session.id), eq(participants.role, "GUEST"), isNull(participants.removedAt)));
+  const entries = await tx
+    .select({ roundId: orderEntries.roundId, submittedBy: orderBatches.submittedBy, type: orderBatches.attributionType, participantId: orderBatches.attributedParticipantId, label: orderBatches.collectiveLabel })
+    .from(orderEntries)
+    .innerJoin(orderBatches, eq(orderBatches.id, orderEntries.batchId))
+    .where(and(eq(orderEntries.roundId, roundId), isNull(orderEntries.deletedAt)));
+  const groups = await withMembers(tx, session.id, entries.flatMap((e) => (e.type === "GROUP" ? [{ label: e.label }] : [])));
+  const readyRows = await tx.select({ id: participantRoundReadiness.participantId }).from(participantRoundReadiness).where(and(eq(participantRoundReadiness.roundId, roundId), eq(participantRoundReadiness.ready, true)));
+  const ordering = orderingIds(
+    entries.map((e) => ({ roundId: e.roundId, submittedBy: e.submittedBy, attribution: { type: e.type, label: e.label, participantId: e.participantId } })),
+    guests,
+    groups.map((g) => ({ label: g.label ?? "", memberIds: g.memberIds })),
+    roundId,
+  );
+  const summary = readinessOf(guests.map((g) => g.id), ordering, new Set(readyRows.map((r) => r.id)));
+  if (!guests.some((g) => ordering.has(g.id)) || summary.ready !== summary.total) return;
+  const [host] = await tx.select({ id: participants.id }).from(participants).where(and(eq(participants.sessionId, session.id), eq(participants.role, "HOST")));
+  const [round] = await tx.select({ number: rounds.roundNumber }).from(rounds).where(eq(rounds.id, roundId));
+  await notify(tx, session.id, { type: "guests.ready", subject: { roundId, roundNumber: round.number }, recipients: [host.id], dedupKey: `guests.ready:${roundId}`, actorId: actor.participantId });
 }
 
 /**
@@ -88,7 +108,7 @@ export async function setGroupMembers(tx: Tx, session: SessionRow, actor: Actor,
 /** The batch with its owner and round, scoped to the session. */
 async function loadBatch(tx: Tx, sessionId: string, batchId: string) {
   const [batch] = await tx
-    .select({ id: orderBatches.id, roundId: orderBatches.roundId, submittedBy: orderBatches.submittedBy, roundStatus: rounds.status, attributionType: orderBatches.attributionType, attributedParticipantId: orderBatches.attributedParticipantId })
+    .select({ id: orderBatches.id, roundId: orderBatches.roundId, submittedBy: orderBatches.submittedBy, roundStatus: rounds.status, attributionType: orderBatches.attributionType, attributedParticipantId: orderBatches.attributedParticipantId, collectiveLabel: orderBatches.collectiveLabel })
     .from(orderBatches)
     .innerJoin(rounds, eq(rounds.id, orderBatches.roundId))
     .where(and(eq(orderBatches.id, batchId), eq(orderBatches.sessionId, sessionId)));
@@ -155,6 +175,7 @@ export async function resolveClaim(tx: Tx, session: SessionRow, actor: Actor, cl
       .set({ status: "REJECTED", resolvedAt: new Date() })
       .where(and(eq(entryClaims.batchId, claim.batchId), eq(entryClaims.status, "PENDING")));
     await resetReadiness(tx, batch.roundId, [claim.requestedBy, batch.attributedParticipantId]);
+    if (batch.collectiveLabel) await adoptLabelShares(tx, session.id, batch.collectiveLabel, claim.requestedBy, actor.participantId);
   }
   await tx.update(entryClaims).set({ status, resolvedAt: new Date() }).where(eq(entryClaims.id, claimId));
   return { result: { claimId, status }, event: { type: "attribution.changed", payload: { claimId, batchId: claim.batchId, status } } };
@@ -177,13 +198,18 @@ async function openEntriesOf(tx: Tx, sessionId: string, participantId: string, d
     );
 }
 
-async function loadGuest(tx: Tx, sessionId: string, participantId: string) {
+async function loadTarget(tx: Tx, sessionId: string, participantId: string) {
   const [person] = await tx
-    .select({ id: participants.id, role: participants.role, removedAt: participants.removedAt })
+    .select({ id: participants.id, role: participants.role, removedAt: participants.removedAt, cohostAt: participants.cohostAt })
     .from(participants)
     .where(and(eq(participants.id, participantId), eq(participants.sessionId, sessionId)))
     .for("update");
   if (!person) throw new AppError(404, "PERSON_NOT_FOUND", "That person isn’t in this order.");
+  return person;
+}
+
+async function loadGuest(tx: Tx, sessionId: string, participantId: string) {
+  const person = await loadTarget(tx, sessionId, participantId);
   if (person.role === "HOST") throw new AppError(409, "CANNOT_REMOVE_HOST", "The host can’t be removed.");
   return person;
 }
@@ -203,11 +229,25 @@ export async function removeParticipant(tx: Tx, session: SessionRow, actor: Acto
   for (const entry of entries) {
     await tx.update(orderEntries).set({ deletedAt: now, updatedAt: now, revision: entry.revision + 1 }).where(eq(orderEntries.id, entry.id));
   }
-  await tx.update(participants).set({ removedAt: now, removedReason: reason }).where(eq(participants.id, participantId));
+  await tx.update(participants).set({ removedAt: now, removedReason: reason, cohostAt: null }).where(eq(participants.id, participantId));
   await tx.update(entryClaims).set({ status: "REJECTED", resolvedAt: now }).where(and(eq(entryClaims.requestedBy, participantId), eq(entryClaims.status, "PENDING")));
   await tx.delete(participantRoundReadiness).where(eq(participantRoundReadiness.participantId, participantId));
   await tx.delete(orderGroupMembers).where(eq(orderGroupMembers.participantId, participantId));
   return { result: { removedEntries: entries.length }, event: { type: "participant.removed", payload: { participantId } } };
+}
+
+/** The host lets a guest help mark food served, or takes that back. Same value again is a no-op (no second notice). */
+export async function setCohost(tx: Tx, session: SessionRow, actor: Actor, participantId: string, cohost: boolean): Promise<Applied<{ cohost: boolean }>> {
+  if (!can(actor, "cohost.set")) throw forbidden("Only the host can do that.");
+  const person = await loadTarget(tx, session.id, participantId);
+  if (person.role === "HOST") throw new AppError(409, "NOT_A_GUEST", "The host can already mark food as served.");
+  if (person.removedAt) throw new AppError(409, "ALREADY_REMOVED", "They were already removed.");
+  const type = cohost ? "participant.cohostSet" : "participant.cohostRevoked";
+  const event = { type, payload: { participantId } };
+  if ((person.cohostAt !== null) === cohost) return { result: { cohost }, event };
+  await tx.update(participants).set({ cohostAt: cohost ? new Date() : null }).where(eq(participants.id, participantId));
+  await notify(tx, session.id, { type, subject: { host: actor.displayName }, recipients: [participantId], dedupKey: `cohost:${participantId}:${session.revision + 1}`, actorId: actor.participantId });
+  return { result: { cohost }, event };
 }
 
 /** The host's Undo: the guest is back, and the dishes that left with them return if their round is still open. */
@@ -232,4 +272,23 @@ async function assertRoomForPerson(tx: Tx, sessionId: string) {
     .from(participants)
     .where(and(eq(participants.sessionId, sessionId), isNull(participants.removedAt)));
   if (value >= LIMITS.participantsPerSession) throw new AppError(422, "TABLE_FULL", `This order already has ${LIMITS.participantsPerSession} people.`);
+}
+
+/**
+ * The host hands the order to an active guest (F09). One transaction under the session lock: the old host becomes a
+ * plain guest first and the target is promoted second (one HOST per session is a unique index). The target's pending
+ * claims close, as for a removal: a host can't claim from themself.
+ */
+export async function transferHost(tx: Tx, session: SessionRow, fresh: Actor, targetId: string, rawName?: string): Promise<Applied<{ hostId: string }>> {
+  if (!can(fresh, "host.transfer")) throw forbidden("Only the host can hand over the order.");
+  if (targetId === fresh.participantId) throw new AppError(422, "ALREADY_HOST", "You’re already the host.");
+  const target = await loadTarget(tx, session.id, targetId);
+  if (target.removedAt) throw new AppError(409, "ALREADY_REMOVED", "They were removed from this order.");
+  const name = rawName === undefined ? fresh.displayName : tidyName(rawName, "Type your name (up to 40 characters) so the table knows who handed over.");
+  if (name !== fresh.displayName) await tx.update(participants).set({ displayName: name }).where(eq(participants.id, fresh.participantId));
+  await tx.update(participants).set({ role: "GUEST", cohostAt: null }).where(eq(participants.id, fresh.participantId));
+  await tx.update(participants).set({ role: "HOST", cohostAt: null }).where(eq(participants.id, targetId));
+  await tx.update(entryClaims).set({ status: "REJECTED", resolvedAt: new Date() }).where(and(eq(entryClaims.requestedBy, targetId), eq(entryClaims.status, "PENDING")));
+  await notify(tx, session.id, { type: "host.transferred", subject: { host: name }, recipients: [targetId], dedupKey: `host.transferred:${targetId}:${session.revision + 1}`, actorId: fresh.participantId });
+  return { result: { hostId: targetId }, event: { type: "host.transferred", payload: { fromId: fresh.participantId, toId: targetId } } };
 }

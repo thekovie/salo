@@ -6,7 +6,11 @@ export default function manifest(): MetadataRoute.Manifest {
     name: SITE.name,
     short_name: SITE.name,
     description: SITE.description,
+    id: "/",
     start_url: "/",
+    scope: "/",
+    // Reuse an open app window where Chromium supports it; ignored elsewhere.
+    launch_handler: { client_mode: "navigate-existing" },
     display: "standalone",
     background_color: BRAND_HEX.paper,
     theme_color: BRAND_HEX.tomato,

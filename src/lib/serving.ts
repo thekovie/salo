@@ -124,3 +124,21 @@ export function groupServed(tracker: Tracker): { waiting: ServedRow[]; done: Ser
   const rows = tracker.rounds.flatMap((r) => r.lines.map((line): ServedRow => ({ roundId: r.roundId, number: r.number, line })));
   return { waiting: rows.filter((r) => r.line.shown < r.line.expected), done: rows.filter((r) => r.line.shown >= r.line.expected) };
 }
+
+/** Above this many Waiting rows only the first ones show until "Show all". */
+export const WAITING_CAP = 10;
+
+/** `keep` rows (unsaved edits, the focus-follow row) survive the cap; `failed` rows survive a query so Try again stays
+ * visible, without counting as matches. */
+export function visibleServed(groups: { waiting: ServedRow[]; done: ServedRow[] }, query: string, showAll: boolean, keep: (row: ServedRow) => boolean, failed: (row: ServedRow) => boolean = () => false) {
+  const needle = normalizeText(query);
+  if (needle) {
+    const hit = (r: ServedRow) => normalizeText(r.line.label).includes(needle);
+    const shown = (r: ServedRow) => hit(r) || failed(r);
+    const matches = groups.waiting.filter(hit).length + groups.done.filter(hit).length;
+    return { waiting: groups.waiting.filter(shown), done: groups.done.filter(shown), matches, capped: false };
+  }
+  const capped = groups.waiting.length > WAITING_CAP;
+  const waiting = capped && !showAll ? groups.waiting.filter((r, i) => i < WAITING_CAP || keep(r)) : groups.waiting;
+  return { waiting, done: groups.done, matches: null, capped };
+}
