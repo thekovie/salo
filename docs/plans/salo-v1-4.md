@@ -19,8 +19,8 @@ Each slice ships as its own branch and squash PR into `dev` (HANDOFF working rul
 | 8a | F16 | Menu link: `sessions.menu_url`/`menu_label`, URL validator, View menu on the Order tab | 0017 | landed (PR #58) |
 | 8b | F17 | Creation animation (tail-less table: current mark has a speech-bubble tail, `brand/logo.tsx:14`; aligned to the final logo in slice 10), Turnstile expiry/timeout states | — | landed (PR #59) |
 | 8c | F14 | Large-order navigation: measure a real-guest large order first, keep only what moves the number | — | landed (PR #60) |
-| 8d | F11, F13 | Billing next-step prompts, estimate vs final labels, export options (share `kkb.ts`, `kkb-view.tsx`, `summary-sheet.tsx`) | — | landed (PR pending) |
-| 9 | Phase 9 | Full regression, money property tests, a11y sweep; real phones and pilot stay owner tasks | — | not started |
+| 8d | F11, F13 | Billing next-step prompts, estimate vs final labels, export options (share `kkb.ts`, `kkb-view.tsx`, `summary-sheet.tsx`) | — | landed (PR #61) |
+| 9 | Phase 9 | Full regression, money property tests, a11y sweep; real phones and pilot stay owner tasks | — | landed (PR pending) |
 | 10 | F15 | Shared Table logo and icon set (last, alone) | — | not started |
 
 ## Ask ledger
@@ -2036,7 +2036,7 @@ M2c 320 header: `[Migs ⌄] (Still choosing) 4 ⋯` on one row (count word is al
 
 ## Slice 8d: billing next step, estimate vs final, session record (F11, F13)
 
-Status: landed (PR pending)
+Status: landed (PR #61)
 
 Verify 2026-11-28: checker typecheck/lint/1268 unit/build + full e2e pass (flakes: startOrder stuck at /new in rounds/food-tracker/onboarding, each passed alone); billing specs 30/30 on mobile + webkit after the last fixes. reviewer NOT SHIPPABLE → fixed → SHIPPABLE (re-check); qa NOT SHIPPABLE → fixed → SHIPPABLE (re-check); ui-critic SHIPPABLE (4 fix-in-loop fixed, measured). Fixed: full-record Payments called a no-price card "paid so far" (now "no price yet"/"nothing to pay", unit test); What's next step text squeezed to 59 px at 320 (`flex-1` set basis 0; now `grow basis-36`, buttons wrap below); pending icon consistent; `dishes` dedup; no-price badge on its own line; Completeness strip no longer overflows (separator space outside `whitespace-nowrap`); no line starts with "·" (`keepDots`). KKB sheet seed A at 375: host 20,134 → 6,541 px (−68%; group and Whole table cards count as shared under D69, so the ~3,000 projection was low), guest 4,858 → 5,117. Webkit `testMatch` doesn't include bill-flow/payments (config, unchanged). Follow-ups 8–9 in `.shots/follow-ups.md`. Follow-ups 8, 9 done 2026-11-28: a receipt mismatch (step 8) shows the saffron "next" row with arrow + Go for the host (`BillStep.differs`), guests stay green; What's next drops the ok tone there; Go sits beside two-line text at 320 (`grow basis-36`, measured: text 174×40, Go same row, no overflow); "1 of 3 paid" kept on one line (`keepDots`, unit test, not reshot); bill-flow e2e locator scoped to `main` (the KKB sheet auto-opens after End). Unit 1268 pass (before the keepDots test; bill-step 17/17 after), bill-flow + receipt-check e2e pass; reviewer, qa, ui-critic re-checks SHIPPABLE.
 
@@ -2313,3 +2313,123 @@ Collapsed (>6 sections): "▸ Carlo ─── ₱410.00 so far", one row each.
 Checkbox row: "[☐] Include the full record" (44 px, wraps under the buttons).
 Step 5 (zeroFood): "→ Next: service charge: no priced food to split it across yet [Go]".
 ```
+
+## Slice 9: functional validation and stabilization (Phase 9)
+
+Status: landed (PR pending)
+
+Verify 2026-11-28: checker typecheck/lint/1325 unit/build + full e2e (167 passed, 19 skipped, 0 failed, mobile + webkit) + drill (26 tables, every probe named its constraint) + money properties 3/3; re-check after fixes: typecheck/lint/unit/a11y-sweep pass. reviewer SHIPPABLE; qa SHIPPABLE (real taps at 320 hit every control incl. with arrival pills, so keyboard activation in tests hides no tap defect; dark contrast tag 10.17, pill 7.82); ui-critic SHIPPABLE. Fixed in loop: drawer opener check uses `canFocus` (`src/lib/focus.ts`); a11y-sweep 320 describe serial (CI retry can recover); collapsed People name wraps (`min-w-0 wrap-anywhere`; measured 3 lines, no overflow at 320 with 9 people); header round label no longer truncates with the offline pill (pill wraps to a second line; measured scrollWidth = clientWidth at 375/320, header +20 px offline only); HANDOFF stale offline-retry line removed (fixed in #49). Tried and reverted: waiter "Back to order" `whitespace-nowrap` (pushed Copy 19 px off-screen, follow-up 12). CI drill step not run locally (no host pg_dump): first proof is CI. Follow-ups 10-13 in `.shots/follow-ups.md`. Follow-ups 10, 12 done 2026-11-28: "Keep the order" returns focus to End/Cancel order (`order-options-sheet.tsx` `lastStep`; tap + keyboard, both entry points); waiter "Back to order" shows "Back" below 360 px, accessible name unchanged (measured one line, no overflow at 320/359/360/375/768). Checks: 1325 unit, 8 e2e specs 51/52 + notifications flaky (passed alone, follow-up 14); reviewer re-check, qa re-check, ui-critic re-check SHIPPABLE. Follow-up 14 done: not the keyboard helper — the guest's dish could land after the host opened Review, and the server correctly refused the confirm (STALE_REVISION); `notifications.spec.ts` now waits for the host to see "JD added Sisig" (16/16 with retries off). Same pass: the sweep's offline axe check failed when adding a dish scrolled the steppers under the sticky header; it now scrolls to top first (sweep 47/48 with retries off across 1 and 4 workers; the 1 failure is follow-up 16). Bot-check failures seen only under parallel load are Cloudflare's test widget, not the app (CI retries once). Follow-ups 15, 16 added.
+
+Kickoff 2026-11-28. Goal: "slice 9 of docs/plans/salo-v1-4.md." Research: researcher brief + plan-critic pass (this session). Type: feature (tests + stabilization) with small defect fixes; touches tests, CI, one ops script, and UI only where the sweep finds violations. No migration. Baseline: no screenshot baseline (no layout change planned); the a11y sweep's first run (RED, before any fix) is the baseline, its violation list saved to `.shots/s9/axe-before.json`.
+
+### Ask ledger (slice 9)
+
+Brief Phase 9 (`salo-v1-4-brief.md:1254-1264`), updated roadmap (`:1696-1698`), §5.2 (`:986-999`), §5.3, §8.1-8.5 (`:1065-1150`), plan row 9 (`:23`).
+
+| # | Owner's words | Planned change | Status |
+|---|---|---|---|
+| Q1 | "Complete full regression testing." / "Complete … end-to-end regression tests." | Full `pnpm typecheck/lint/test/build` + full `pnpm e2e` (mobile + webkit) green; gaps below closed | done |
+| Q2 | "Validate financial calculations." / §5.2 "Establish explicit invariants for: allocated item costs, adjustments, participant obligations, receipt totals, payments, remaining balances." | `tests/money-properties.test.ts` (fast-check, D76) over `allocate`, `percentOf`, `parsePeso`/`toPesoInput`, `buildKkb`, `applyAdjustments`, `splitLine`, `reconcileReceipts`, `paymentStatus`/`paymentTotals` (invariants in Approach) | done |
+| Q3 | §5.2 "an unpriced dish must never be treated as a free dish." | Property on confirmed lines: a null price keeps line `subtotalCentavos == null`, is excluded from `foodCentavos`, section `status` is "none"/"partial", `billFinal` false, `reconcile` "incomplete"; card reads "no prices yet" (no priced line, `kkb.ts:408`) or "so far" (partial). Drafts are outside `priceCompleteness` (`kkb.ts:316-323`) | done |
+| Q4 | "Verify data integrity." / "Validate production deployment and backups." | Fix `scripts/backup-restore-drill.sh` (lists 15 of 26 tables, `:27-28`; 11 money/billing tables missing), add constraint-named probes, run it in the CI `e2e` job (D78); production restore drill stays owner | done |
+| Q4b | §5.3 new records "removed under session cleanup" / §8.2 "Session cleanup." | Vitest: every `public` table except `sessions` reaches `sessions` through `ON DELETE CASCADE` FKs (query `pg_constraint`); today `cleanup.test.ts` / `db-integrity.test.ts:93-100` touch none of the 11 v1.3/v1.4 tables | done |
+| Q5 | "Complete security … tests." / §8.2 "Authorized and unauthorized writes." | `tests/contract-authz-sweep.test.ts`: one row per mutating handler (33 route files, 38 handlers) × stranger / removed guest / plain guest (D81) | done |
+| Q6 | "Complete … accessibility … tests." / §8.4 "Target WCAG 2.2 AA." / plan :2133 "App-wide a11y sweep (slice 9)." | Shared `axeClean` helper (`e2e/support/a11y.ts`) + `e2e/a11y-sweep.spec.ts` over every surface with no axe today, light and dark, at 320; fix what it finds (D77, D80) | done |
+| Q7 | §8.4 "Focus restoration." | Sweep asserts focus returns to the trigger on close for invite, order options, notifications, summary, payment, fix-payment, adjustment, receipt, correction, remove-guest sheets | done |
+| Q8 | §8.4 "320px through desktop widths." / "Long dish names." | Sweep checks no horizontal overflow at 320/768/1280 on landing, Order, People, KKB, ended, with a 60-char no-space dish name and a 40-char guest name | done |
+| Q9 | §8.3 #4 "A restaurant gives a whole-table privilege-card discount." | E2E in `adjustments.spec.ts` (Approach A4); today only one guest is covered (`adjustments.spec.ts:40`) | done |
+| Q10 | "Complete … realtime … tests." | Existing coverage kept (`tests/realtime.test.ts`, `collaboration.spec.ts`, `reconnect-retry.spec.ts`, CI `proxy` job); no new realtime test | done (no change) |
+| Q11 | "Address critical defects." | `startOrder` diagnoses and retries the stuck-at-`/new` flake (A6); sweep fixes; drill fix (Q4) | done |
+| Q12 | "Conduct mobile device testing." / "Conduct real-table usability testing." / §8.5 "Do not fabricate usability results." | Owner tasks (You need to do); nothing reported as done | owner |
+| Q13 | (research, not a brief ask) Mobile baseline has no test (`layout.tsx:36-52`) | Not doing (D82: baseline present, not a brief ask) | done (not doing) |
+| Q14 | §8.1 unit list | Covered: `permissions.test.ts`, `shared-prices.test.ts`, `kkb.test.ts`, `adjustments.test.ts`, `splits.test.ts`, `receipts.test.ts`, `payments.test.ts`, `corrections.test.ts`; rounding gets properties (Q2) | done (existing) + Q2 |
+| Q15 | §8.2 integration list | Covered: `contract-cohosts`, `contract-host-transfer*`, `contract-serving`, `contract-adjustments`, `hardening.test.ts` (idempotent), `cleanup.test.ts` + Q4b, `db-integrity.test.ts` + Q4 probes, `realtime.test.ts`; writes: Q5 | done (existing) + Q4b/Q5 |
+| Q16 | §8.3 15 scenarios | 1 `standalone.spec.ts:24`; 2 `collaboration.spec.ts:18`; 3 `quick-prices.spec.ts:18`, `bill-flow.spec.ts:37`; 4 Q9; 5 `adjustments.spec.ts:40`; 6, 7 `receipts-splits.spec.ts:39`; 8 `cohosts.spec.ts:60`; 9 `cohosts.spec.ts:30,91`; 10 `payments.spec.ts:42,118`; 11 `host-transfer.spec.ts:7`; 12, 13 owner (proxies `invite-continuity.spec.ts:76,90`, webkit project); 14 `offline.spec.ts:14-47`, `reliability.spec.ts`; 15 `summary.spec.ts:4`, `bill-flow.spec.ts:110`. Implementer confirms 1-3, 5-7 by test title | done (existing) + Q9 |
+| Q17 | §8.4 remaining items | Keyboard `keyboard.spec.ts:5` (sweep adds Escape-close + focus return per sheet); reduced motion `motion.spec.ts` (sweep uses it only to settle frames); large lists `large-order.spec.ts`; dark/light: sweep; touch targets: axe `target-size`; error states: `new-order.spec.ts:188` + sweep's offline pill; screen reader, virtual keyboard: owner | done (existing) + Q6 |
+
+### Today
+- Tests: Vitest `tests/**` (`vitest.config.mts`, local Postgres 5433, `tests/global-setup.ts` migrates `salo_test`), 1268 unit; Playwright `mobile` (all) + `webkit` (6 specs, `playwright.config.ts:25`); CI `verify` + `e2e` + `docker` + `proxy` (`.github/workflows/ci.yml`). The `salo` DB is migrated only by the app at boot (`src/instrumentation-node.ts:10`), i.e. in the `e2e` job's webServer.
+- No property-test library (`package.json`); money tests are hand-picked examples.
+- Axe: `AxeBuilder…withTags(["wcag2a","wcag2aa","wcag21aa","wcag22aa"])` copy-pasted in 19 specs, no shared helper. No axe on: notifications drawer, invite sheet, order options sheet, remove-guest sheet / End confirm, correction / edit / unavailable sheets, fix-payment sheet, summary Items tab, `/i/[code]` (stranger + name form), standalone `/s/[id]/waiter` page (the ticket dialog and Review sheet are axe'd in light, `rounds.spec.ts:26,31`), 404, removed notice, Groups dark (light at `groups.spec.ts:74`), dish/recipient pickers, composer details, host name prompt, landing resume list, offline/sync pills, empty KKB/People, host ended state.
+- Authz: stranger → 404 `NOT_FOUND`, removed guest → 403 `REMOVED` (`http.ts:81-87`); check order `requireActor` → `readJson` (422) → `runMutation` → `assertBillable` (409, billing routes) → role. `POST /api/sessions` (Turnstile) and `POST /join` have no `requireActor`. Per-route 403s spread over `tests/contract-*.test.ts`; no sweep.
+- Guest-allowed (2xx for a plain guest): POST entries; PATCH/DELETE entries/[id] + POST restore on own entries (`entries.ts:116`); PUT entries/[id]/settlement with a price on own entry while open (`settlement.ts:44-45`; `billTo`/`splitAmong` host-only); POST claims on a host entry (`people.ts:124-130`; host gets 403); PUT groups as host or creator (`people.ts:92`); PUT readiness; POST notifications/read; POST join. Everything else is host-only (incl. PATCH `/me`, `participant.renameSelf` in HOST_ONLY); POST serving is co-host or host.
+- Backup drill: `TABLES` has 15 names (`scripts/backup-restore-drill.sh:27-28`), `schema.ts` has 26; probes (`:57-90`) predate v1.3 and use bare `WHEN check_violation THEN NULL` (any CHECK passes them); PGHOST mode doesn't default `PGUSER`/`PGPORT` (`:16-23`); not in CI; last run 2026-11-07. Runner ships PG 16 client; service is `postgres:17-alpine` (`ci.yml:9,51`).
+- `startOrder` (`helpers.ts:3-8`) clicks the "Start an order" link on `/` and waits 20 s for `/s/<id>`; `/new` uses the real Cloudflare widget with test keys (stub only in `new-order.spec.ts:15-18`), `create()` fires from the widget callback; stuck states show `role="alert"` (15 s watchdog, error/timeout/expired callback, `BOT_CHECK_UNAVAILABLE`, connection error) with Try again (same Idempotency-Key). Masked by the CI retry.
+- `HANDOFF.md` stale: `:95` says `interactive-widget` and dark theme-color were never applied (both present, `layout.tsx:36-52`); "Next steps" names v1.3; `docs/backups.md:30,39` "all 15".
+
+### Approach
+- **Property tests (A1):** add `fast-check` (devDependency); `tests/money-properties.test.ts` reusing `tests/kkb.test.ts:1-45` builders. Arbitraries: people 1-12 (unique keys), confirmed lines priced or null, shared/billed/split, quantity 1-20, service charge none/amount, adjustments (discount/charge; proportional/equal/individual/percent; manual with Σ shares == amount as `validation.ts:209` enforces; waiting/unallocated), receipts 1-3, payments incl. needsReview and orphans. Invariants:
+  - `allocate`: Σ == charge when Σweights > 0 (all 0 when Σweights == 0); shares ≥ 0; order-independent.
+  - `percentOf(bps, basis)`, bps 1..10000: in [0, basis], monotonic in bps, 10000 → basis.
+  - `parsePeso(toPesoInput(c)).centavos == c` for 0 ≤ c ≤ `MAX_UNIT_PRICE_CENTAVOS`; blank → null.
+  - No blockers, all confirmed lines priced, every adjustment applied ⇒ Σ non-shared card totals (`totalCentavos ?? pricedCentavos`) == `adjustedTotal`.
+  - Flagged/unallocated adjustments: `adjustedTotal == base ± amount`, no card changes; waiting (Decide later) moves neither until decided (`adjustments.ts`), `reconcile` gates on it.
+  - Applied adjustment shares Σ == amount.
+  - `splitLine`: Σ copies == subtotal; null stays null.
+  - `reconcileReceipts`: every receipt entered at its `expectedCentavos` ⇒ each state "matches" and `overall.matches`; an extra receipt's expected == Σ its people's card totals + their flagged shares.
+  - Payments: `left == Σ max(0, owed − paid)`; needsReview counts 0; `paymentStatus(s, paid, false)` never "paid"; `collected` == Σ non-review payments incl. orphans.
+  - Q3 unpriced properties.
+  - Seed policy per D83.
+- **A11y sweep (A2):** `e2e/support/a11y.ts` exports `axeClean(page, { include? })` (WCAG 2.2 AA tags, reduced motion, waits for `.arrival-pill, .arrival-tag` to unmount) and `expectNoOverflow(page)`. New `e2e/a11y-sweep.spec.ts` (mobile project, default run): one order per describe, visits each surface in Today's no-axe list in light and dark at 320, Escape/close and asserts focus on the trigger (Q7), overflow at 320/768/1280 with long names (Q8). Existing specs keep their own axe calls.
+- **Fixes:** violations the sweep finds are fixed in the slice when contained (D80), existing tokens only.
+- **Authz sweep (A3):** `tests/contract-authz-sweep.test.ts`, contract harness from `tests/contract-cohosts.test.ts`. One row per handler with a valid minimal body and required state (confirmed round for billing routes, real entity ids, a host-owned entry for claims). Stranger → 404 `NOT_FOUND` (all `requireActor` handlers); removed guest → 403 `REMOVED`; plain guest → 403 `FORBIDDEN` on host-only, 2xx on the guest-allowed list (Today), asserting `error.code`. `POST /api/sessions` and `/join` get their own cases (no actor). Rate limit 120/min/participant (`limits.ts:8`) fits.
+- **Whole-table discount (A4):** extend `addDiscount` (`adjustments.spec.ts:32-38`) to choose "Split by what each ordered" (all ticked by default, `adjustment-sheet.tsx:155`). On `pricedOrder` (host ₱120 + JD ₱60): "Privilege card discount", 10 %, proportional, all ticked → title "Privilege card discount for everyone", host −₱12.00, JD −₱6.00, adjusted total ₱162.00; receipt total 162 → "Matches the receipt."
+- **Drill (A5):** `TABLES` from `information_schema.tables` (`table_schema='public' AND table_type='BASE TABLE'`; drizzle's table is in schema `drizzle`). Probes read `GET STACKED DIAGNOSTICS … CONSTRAINT_NAME` and fail unless it equals the named one: `entry_settlements_price_ck` (-1, 10000000), `shared_prices_price_ck`, `correction_settlements_price_ck`, `payments_amount_ck` (0, -1), `adjustments_amount_ck` (0), `adjustments_percent_ck` (10001), `adjustments_one_amount_ck` (both null), `receipts_total_ck` (-1), `sessions_service_charge_ck` / `sessions_receipt_total_ck` (100000000), `served_counts_served_ck` (-1), `adjustment_shares_amount_ck`; the entry fixture uses `RETURNING id`. CI: last step of the `e2e` job after `pnpm e2e` (real rows), install `postgresql-client-17` from PGDG (`/usr/share/postgresql-common/pgdg/apt.postgresql.org.sh`), `/usr/lib/postgresql/17/bin` first on PATH, `PGHOST=localhost PGPORT=5433 PGUSER=salo SALO_DB=salo`.
+- **Flake (A6):** `startOrder` waits for `toHaveURL(/\/s\/…/)` OR `getByRole("alert")` on `/new`. On alert: attach its text + screenshot, click Try again once, fail on a second alert. Neither in 20 s: record `page.url()`, `main` text and status text in the failure. Root cause goes in the handoff; flake-free is not claimed from two runs.
+- **Docs (A7, D79):** `HANDOFF.md` known limitations / next steps refreshed; `docs/backups.md` table count; `docs/testing.md` names the new files.
+- Rejected: hand-rolled seeded loop instead of fast-check (no shrinking). Rejected: migrating existing axe calls to the helper (churn, no new coverage).
+
+### Reuse
+- `tests/kkb.test.ts:1-45` builders; `scene()` builders in `adjustments/splits/receipts.test.ts`.
+- `e2e/support/helpers.ts`; `pricedOrder`/`addDiscount` in `adjustments.spec.ts`; `largeOrder` in `large-order.spec.ts`.
+- Contract harness from `tests/contract-cohosts.test.ts`.
+- `menu-link.spec.ts:6-11` light/dark loop as the helper's model.
+
+### Not doing
+- Real phones, installed-PWA invite (§8.3 #12, #13), virtual keyboard and screen-reader announcements on device (§8.4), real-table pilot (§8.5), production restore drill, production SSE proxy check: owner.
+- New realtime tests (Q10). Migrating existing axe calls. New UI/features; logo (slice 10); PDF export.
+
+### States
+- Sweep surfaces (light and dark at 320): Today's list. Each axe clean, focus back on its trigger after close.
+- Overflow: 320, 768, 1280 on landing, Order, People, KKB, ended, with long names.
+- Properties: randomized; failures print seed + shrunk case.
+- Drill: local compose mode unchanged; CI PGHOST mode.
+
+### Decisions
+Owner answers 2026-11-28: D76-D83 = recommended (a); D82 skip.
+
+- **D76 [decided: (a)] Property library**: (a) add `fast-check` devDependency; (b) hand-rolled seeded loop. Recommend (a): shrinking gives the minimal failing bill; dev-only (plan :262, :339, audit :156).
+- **D77 [decided: (a)] Where the a11y sweep runs**: (a) default `pnpm e2e` (CI); (b) opt-in env var. Recommend (a): opt-in specs never run in CI, so regressions return silently.
+- **D78 [decided: (a)] Backup drill**: (a) fix tables + named probes + CI step in the `e2e` job; (b) fix tables only, manual. Recommend (a): last run predates every money table; CI has Postgres 17.
+- **D80 [decided: (a)] Sweep findings**: (a) fix every contained violation (token, label, role, focus target), structural ones become follow-ups; (b) critical/serious only. Recommend (a): last stop before branding; WCAG 2.2 AA.
+- **D81 [decided: (a)] Authz sweep**: (a) one contract test over all 38 handlers; (b) rely on per-feature 403s. Recommend (a): nothing catches a new route that forgets its role check.
+- **D79 [decided: (a)] HANDOFF/docs refresh**: (a) include; (b) skip. Recommend (a): HANDOFF contradicts the code (`HANDOFF.md:95` vs `layout.tsx:36-52`).
+- **D82 [decided: (a) skip] Mobile baseline test (Q13)**: (a) skip, not a brief ask; (b) assert viewport meta + theme-colors; (c) also assert no input under 16 px (may surface UI changes). Recommend (a): baseline is present and §8.4 doesn't ask; the sweep's axe and overflow checks already run at 320.
+- **D84 [decided: (a)] Text on saffron (raised in build)**: the sweep found dark-mode contrast failures on saffron (dark `--ink` is light, `globals.css:55`). (a) new `--on-saffron` token (light = ink, dark oklch(0.17 0.02 80)) on the sync pill and every `bg-saffron` + ink spot (arrival tags/pills, landing scenes); (b) sync pill only; (c) existing tokens. Owner chose (a) 2026-11-28.
+- **D83 [decided: (a)] Property seed policy**: (a) random seed each run, printed on failure, replay with `FC_SEED`; (b) fixed seed in CI. Recommend (a): a fixed seed reruns the same 200 cases forever; failures stay reproducible from the printed seed.
+
+### Assumptions
+- Mobile scope: responsive + native feel (D6 carried); baseline present (`layout.tsx:36-52`, `globals.css:171-213`, dvh everywhere).
+- Touch targets: axe `target-size` (WCAG 2.2 AA 24 px); no 44 px assertion.
+- Webkit `testMatch` unchanged; the sweep runs on `mobile` only.
+- CI `e2e` job reaches `challenges.cloudflare.com` and siteverify (it does today).
+
+### Done when
+- `pnpm typecheck && pnpm lint && pnpm test && pnpm build` and full `pnpm e2e` (mobile + webkit) pass locally; CI green incl. the drill step.
+- New files pass: `tests/money-properties.test.ts`, `tests/contract-authz-sweep.test.ts`, cascade test, `e2e/a11y-sweep.spec.ts`; whole-table discount e2e.
+- `.shots/s9/axe-before.json` vs a clean final run; fixes listed in the verify line.
+- Drill passes locally (compose) with all 26 tables and every probe naming its constraint, and in CI.
+- `startOrder` failures, if any, carry the alert text or page state.
+
+### Skills
+- `e2e-testing`, `accessibility` + `frontend-a11y` (WCAG 2.2 AA, focus), `tdd-workflow`, `security-review` (authz table).
+- Repo rules: HANDOFF working rules, no prettier on src, no secret-looking literals in tests, `AGENTS.md` Next docs.
+
+### You need to do (slice 9)
+- [ ] Real phones: Android Chrome + installed PWA open an invite link (`docs/pwa-invites.md:19-31`); iPhone opens an invite from Messenger; virtual keyboard on Prices and Composer.
+- [ ] TalkBack and VoiceOver pass on Order, KKB and the Prices sheet.
+- [ ] Real-table pilot, 7-12 people (brief §8.5); record results yourself.
+- [ ] Production: Coolify backup schedule + S3 + failure alerts, then one restore drill (`docs/backups.md`); `scripts/sse-proxy-check.mjs` against production with `SALO_ORDER`/`SALO_CODE`.
+
+### Mockups (slice 9)
+- None: no layout change planned.

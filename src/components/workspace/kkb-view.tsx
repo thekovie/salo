@@ -329,7 +329,7 @@ function Card({ section, final, isMe = false, collapsible = false, defaultOpen =
   const unpaid = pay?.status?.chip && pay.status.chip !== "paid" ? "" : undefined;
   const heading = (
     <div className="flex items-baseline justify-between gap-3">
-      <p className="min-w-0 text-lg leading-snug">
+      <p className="min-w-0 text-lg leading-snug break-words">
         {section.title}
         {note ? <span className="ml-1.5 font-sans text-sm text-ink-soft">· {note}</span> : null}
       </p>

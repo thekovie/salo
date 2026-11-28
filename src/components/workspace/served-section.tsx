@@ -112,7 +112,7 @@ export function ServedSection({ tracker, canEdit, canChange, me, people, onOpenP
     return (
       <li key={rowKey(row)} data-serve-row data-serve-group="waiting" data-serve-key={rowKey(row)} className="py-2.5">
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3">
-          <p className="font-semibold">{line.label}</p>
+          <p className="font-semibold break-words">{line.label}</p>
           {canEdit ? <div className="col-start-2 row-start-1">{stepper(row)}</div> : null}
           <p className="col-span-full flex flex-wrap items-baseline gap-x-2 text-sm text-ink-soft">
             {tag(row)}
@@ -122,7 +122,7 @@ export function ServedSection({ tracker, canEdit, canChange, me, people, onOpenP
                 ? `✓ Served ${shown}`
                 : `${shown} of ${line.expected} served · ${line.expected - shown} waiting`}
           </p>
-          {line.people ? <p className="col-span-full text-sm text-ink-soft">{line.people}</p> : null}
+          {line.people ? <p className="col-span-full text-sm text-ink-soft break-words">{line.people}</p> : null}
         </div>
         {canEdit ? (
           <div className="mt-1 flex flex-wrap gap-2">
@@ -154,7 +154,7 @@ export function ServedSection({ tracker, canEdit, canChange, me, people, onOpenP
     const head = (
       <>
         <span className="flex items-baseline justify-between gap-3">
-          <span className="min-w-0 font-semibold">
+          <span className="min-w-0 font-semibold break-words">
             {line.label}
             {line.history ? null : <span className="tally ml-1.5 text-tomato-ink">×{line.expected}</span>}
           </span>

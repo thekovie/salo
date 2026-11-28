@@ -58,11 +58,13 @@ function OptionsBody({ onOpenChange, title, anyConfirmed, unsentRound, waitingIt
   const [name, setName] = useState(unnamed ? "" : myName);
   const [step, setStep] = useState<"options" | "confirm" | "handover" | "menu">(startAt);
   const menuRow = useRef<HTMLButtonElement>(null);
-  const wasMenu = useRef(false);
-  // Back from the menu step lands on the "Menu link" row, not on the drawer.
+  const endButton = useRef<HTMLButtonElement>(null);
+  const lastStep = useRef(step);
+  // Back from a sub-step lands on the row that opened it, not on the drawer.
   useEffect(() => {
-    if (step === "options" && wasMenu.current) menuRow.current?.focus();
-    wasMenu.current = step === "menu";
+    if (step === "options" && lastStep.current === "menu") menuRow.current?.focus();
+    if (step === "options" && lastStep.current === "confirm") endButton.current?.focus();
+    lastStep.current = step;
   }, [step]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -219,7 +221,7 @@ function OptionsBody({ onOpenChange, title, anyConfirmed, unsentRound, waitingIt
         <p className="mt-0.5 text-sm text-ink-soft">
           {anyConfirmed ? "End the order when the table is finished. Everyone can still read the tickets for a week. You can still fix prices and the bill." : "Cancel the order. Nothing has been sent to the waiter yet."}
         </p>
-        <Button variant="danger" className="mt-3 w-full" onClick={() => setStep("confirm")}>
+        <Button ref={endButton} variant="danger" className="mt-3 w-full" onClick={() => setStep("confirm")}>
           {verb} order
         </Button>
       </div>

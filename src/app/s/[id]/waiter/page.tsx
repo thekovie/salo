@@ -27,8 +27,11 @@ export default async function WaiterPage({ params }: Props) {
   return (
     <div className="min-h-dvh bg-paper pt-[env(safe-area-inset-top)] pb-[calc(env(safe-area-inset-bottom)+1.5rem)]">
       <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-3 py-2">
-        <Link href={`/s/${snapshot.session.id}`} className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 font-semibold hover:bg-ink/6">
-          <ArrowLeft className="size-5" aria-hidden /> Back to order
+        <Link href={`/s/${snapshot.session.id}`} className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full px-3 font-semibold whitespace-nowrap hover:bg-ink/6">
+          <ArrowLeft className="size-5" aria-hidden />
+          <span>
+            Back<span className="max-[360px]:sr-only"> to order</span>
+          </span>
         </Link>
         <WaiterActions text={snapshotText(ticket)} />
       </div>

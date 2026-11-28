@@ -10,6 +10,9 @@ test("scenario C: a confirmed dish goes unavailable; the guest's bell goes up li
   await addDish(page, "Sisig");
   await addDish(guest.page, "Sisig");
   await expect(guest.page.getByRole("button", { name: "Updates", exact: true })).toBeVisible();
+  // Confirming before the host has seen JD's dish is refused as stale (STALE_REVISION), so wait for it to arrive.
+  await expect(guest.page.locator('[data-sync="saved"]')).toBeVisible(SLOW);
+  await expect(page.getByRole("status").filter({ hasText: "JD added Sisig" })).toBeVisible(SLOW);
 
   // Round confirmed: the guest hears it, the host (who did it) does not.
   await confirmRound1(page);

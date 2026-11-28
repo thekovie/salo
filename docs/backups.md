@@ -27,16 +27,18 @@ When the live database is lost or must be rolled back:
 
 ## Restore drill (periodic test)
 
-`scripts/backup-restore-drill.sh` dumps the database, restores the dump into a scratch database on the same server, compares row counts for **every table** (all 15 in `schema.ts`), then checks that the restored schema still enforces its rules, and drops the scratch database. It never changes the source database.
+`scripts/backup-restore-drill.sh` dumps the database, restores the dump into a scratch database on the same server, compares row counts for **every table** in the `public` schema (the list is read from `information_schema` on the source, 26 today, so a new table is covered without editing the script), then checks that the restored schema still enforces its rules, and drops the scratch database. It never changes the source database.
 
-The rule checks build their own fixture inside a transaction that is rolled back, so they work even on an empty backup. Each probe must be refused with its rule, or the drill fails:
-- a zero quantity;
-- removing the host;
+The rule checks build their own fixture inside a transaction that is rolled back, so they work even on an empty backup. Each probe reads the violated constraint's name and must match the one named, or the drill fails (a different CHECK firing is a failure too):
+- a zero quantity (`order_entries_quantity_ck`);
+- removing the host (`participants_removed_ck`);
+- bad money values: prices below 0 or above 9,999,999 (`entry_settlements_price_ck`, `shared_prices_price_ck`, `correction_settlements_price_ck`), payments of 0 or less (`payments_amount_ck`), adjustment amount, percent and one-of-the-two rules (`adjustments_amount_ck`, `adjustments_percent_ck`, `adjustments_one_amount_ck`), `adjustment_shares_amount_ck`, `receipts_total_ck`, `sessions_service_charge_ck`, `sessions_receipt_total_ck`, `served_counts_served_ck`;
 - changing a confirmed snapshot;
 - reopening a confirmed round;
 - changing a confirmed dish's attribution.
 
-- Locally: `pnpm db:up && scripts/backup-restore-drill.sh`. Last run 2026-11-07: PASS, with all 15 tables identical (855 sessions, 4,963 entries, 7,143 events), and all five probes refused. The first attempt that day correctly failed on a database that hadn't applied migration 0006 yet.
+- CI: the `e2e` job runs it after `pnpm e2e` against the job's PostgreSQL 17 service (client 17 installed from PGDG), with `PGHOST=localhost PGPORT=5433 PGUSER=salo SALO_DB=salo`.
+- Locally: `pnpm db:up && scripts/backup-restore-drill.sh`. Last local run 2026-11-28: PASS, all 26 tables identical and every probe refused by its named constraint.
 - Production: run it monthly against a **downloaded Coolify backup** restored into a throwaway PostgreSQL (e.g. `docker run --rm -e POSTGRES_HOST_AUTH_METHOD=trust -p 5499:5432 postgres:17-alpine`, then `PGHOST=localhost PGPORT=5499 PGUSER=postgres SALO_DB=salo scripts/backup-restore-drill.sh` after `pg_restore`). Record the date in HANDOFF.md.
 
 Not yet done (owner): configure the schedule, S3 destination and alerts in Coolify, and run the first production restore test.
