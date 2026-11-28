@@ -1,6 +1,7 @@
 "use client";
 
-import { CircleCheck, Clock, ReceiptText } from "lucide-react";
+import { ChevronDown, CircleCheck, Clock, ReceiptText } from "lucide-react";
+import { useId, useState } from "react";
 import { hasSubLines, preparationLabel } from "@/lib/consolidate";
 import { everyone, type SessionSnapshot, type SnapshotEntry } from "@/lib/snapshot";
 import { cn } from "@/lib/utils";
@@ -68,8 +69,13 @@ function Lines({ bucket, forOthers = 0, isMe = false, claimable, canClaimEntry, 
   );
 }
 
+/** Above this many cards each starts as its header only. */
+const COLLAPSE_ABOVE = 6;
+
 /** By person (brief 5.3, 5.8): who ordered what, who hasn't ordered, who is ready; guests claim dishes recorded for them. */
 export function PeopleView({ snapshot, entries, canClaim, onClaim, onRemoveDuplicate, onRemoveGuest, onSetCohost, roundNumber, onSummary }: PeopleViewProps) {
+  const panelId = useId();
+  const [toggled, setToggled] = useState<Readonly<Record<string, boolean>>>({});
   // The host usually orders for others; an empty host card is noise. Guests with nothing yet stay visible.
   // Removed guests only show while something is still marked for them.
   const draftOpen = snapshot.rounds.find((r) => r.id === snapshot.activeRoundId)?.status === "DRAFT";
@@ -78,7 +84,11 @@ export function PeopleView({ snapshot, entries, canClaim, onClaim, onRemoveDupli
   // A guest sees dishes the host typed under their own name inside their own card, not as a second "them".
   const myName = normalizeText(snapshot.me.displayName);
   const forMe = snapshot.me.role === "HOST" ? undefined : all.find((b) => b.kind === "name" && normalizeText(b.title) === myName);
-  const buckets = all.filter((b) => b !== forMe);
+  const rest = all.filter((b) => b !== forMe);
+  const collapsible = rest.length > COLLAPSE_ABOVE;
+  // On a large table the guest's own card leads (the host's stays in place, collapsed).
+  const leads = (b: PersonBucket) => snapshot.me.role !== "HOST" && b.participantId === snapshot.me.participantId;
+  const buckets = collapsible ? [...rest].sort((a, b) => Number(leads(b)) - Number(leads(a))) : rest;
   const ready = readinessSummary(snapshot, entries, snapshot.activeRoundId);
   const isHost = snapshot.me.role === "HOST";
   const hints = isHost ? findLikelyDuplicates(entries, snapshot.participants) : [];
@@ -122,27 +132,45 @@ export function PeopleView({ snapshot, entries, canClaim, onClaim, onRemoveDupli
         </section>
       ) : null}
 
-      {buckets.map((bucket) => {
+      {buckets.map((bucket, index) => {
         const isMe = bucket.participantId === snapshot.me.participantId;
         const guestReady = bucket.participantId ? ready.readyIds.has(bucket.participantId) : false;
         const noOrder = bucket.participantId ? ready.noOrderIds.has(bucket.participantId) : false;
         // Dishes the host added under a typed name, for nobody, or straight onto this guest's own card can be claimed.
         const claimable = canClaim && (bucket.kind === "name" || bucket.kind === "unassigned" || isMe) && bucket.entries.some((e) => hostIds.has(e.submittedBy));
+        const open = !collapsible || (toggled[bucket.key] ?? (leads(bucket) || claimable));
+        const regionId = `${panelId}-${index}`; // bucket keys can hold spaces, which split an id list
+        const name = (
+          <>
+            {bucket.title}
+            {isMe ? <span className="ml-1.5 font-sans text-sm text-ink-soft">(you)</span> : null}
+            {bucket.role === "HOST" ? <span className="ml-1.5 font-sans text-sm text-ink-soft">· host</span> : null}
+            {bucket.cohost ? <span className="ml-1.5 whitespace-nowrap font-sans text-sm text-ink-soft">· co-host</span> : null}
+            {bucket.kind === "name" ? <span className="ml-1.5 font-sans text-sm text-ink-soft">· added by the host</span> : null}
+          </>
+        );
         return (
           <section key={bucket.key} className="ticket px-5">
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+            <div className={cn("flex flex-wrap items-center justify-between gap-y-1", collapsible ? "gap-x-2" : "gap-x-3", open && "mb-2")}>
               <h3 className="text-lg">
-                {bucket.title}
-                {isMe ? <span className="ml-1.5 font-sans text-sm text-ink-soft">(you)</span> : null}
-                {bucket.role === "HOST" ? <span className="ml-1.5 font-sans text-sm text-ink-soft">· host</span> : null}
-                {bucket.cohost ? <span className="ml-1.5 whitespace-nowrap font-sans text-sm text-ink-soft">· co-host</span> : null}
-                {bucket.kind === "name" ? <span className="ml-1.5 font-sans text-sm text-ink-soft">· added by the host</span> : null}
+                {collapsible ? (
+                  <button type="button" aria-expanded={open} aria-controls={regionId} onClick={() => setToggled({ ...toggled, [bucket.key]: !open })} className="inline-flex min-h-11 cursor-pointer items-center gap-1 text-left">
+                    <span>
+                      {name}
+                      <span className="sr-only"> · Show {bucket.title}&rsquo;s order</span>
+                    </span>
+                    <ChevronDown className={cn("size-4 shrink-0 text-ink-soft", open && "rotate-180")} aria-hidden />
+                  </button>
+                ) : (
+                  name
+                )}
               </h3>
-              <div className="ml-auto flex shrink-0 items-center gap-2">
+              <div className={cn("ml-auto flex shrink-0 items-center", collapsible ? "gap-1.5" : "gap-2")}>
                 {bucket.role === "GUEST" && !(bucket.participantId && removedIds.has(bucket.participantId)) ? (
                   <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold", guestReady ? "bg-ok-wash text-ok" : "bg-ink/6 text-ink-soft")}>
                     {guestReady ? <CircleCheck className="size-3.5" aria-hidden /> : <Clock className="size-3.5" aria-hidden />}
-                    {guestReady ? "Ready" : noOrder ? "No order yet" : "Still choosing"}
+                    {/* Icon only below 400 px (v4 `max-*` is strict <) with collapsed cards, so the header stays one row. */}
+                    <span className={collapsible ? "max-[400px]:sr-only" : undefined}>{guestReady ? "Ready" : noOrder ? "No order yet" : "Still choosing"}</span>
                   </span>
                 ) : null}
                 <span className="tally whitespace-nowrap text-sm text-ink-soft">
@@ -159,6 +187,8 @@ export function PeopleView({ snapshot, entries, canClaim, onClaim, onRemoveDupli
                 ) : null}
               </div>
             </div>
+            <div id={collapsible ? regionId : undefined} hidden={!open}>
+            {open ? (<>
             {onSetCohost && bucket.role === "GUEST" && bucket.participantId && !removedIds.has(bucket.participantId) ? (
               <CohostToggle name={bucket.title} isCohost={bucket.cohost} onSet={(cohost) => onSetCohost(bucket.participantId as string, bucket.title, cohost)} />
             ) : null}
@@ -169,6 +199,8 @@ export function PeopleView({ snapshot, entries, canClaim, onClaim, onRemoveDupli
                 <Lines bucket={forMe} claimable={canClaim} canClaimEntry={(e) => hostIds.has(e.submittedBy) && !e.id.startsWith("pending:")} myClaims={myClaims} onClaim={onClaim} />
               </div>
             ) : null}
+            </>) : null}
+            </div>
           </section>
         );
       })}

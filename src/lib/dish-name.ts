@@ -17,3 +17,6 @@ export function optionalText(value: string | null | undefined): string | null {
   const tidy = tidyText(value);
   return tidy === "" ? null : tidy;
 }
+
+/** From this many rows or dishes a list gets a search field. */
+export const SEARCH_FROM = 8;
