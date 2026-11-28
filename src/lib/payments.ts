@@ -1,15 +1,11 @@
 import { personKey } from "./adjustments";
-import { billBlockers, priceCompleteness, type Kkb, type KkbSection } from "./kkb";
+import { billFinal, type Kkb, type KkbSection } from "./kkb";
 import type { SnapshotPayment } from "./snapshot";
 
 /** A card the viewer can pay toward: one person's (not shared) with something confirmed on it. */
 export const hasShare = (s: KkbSection) => !s.shared && s.lines.length > 0;
 
-/** The bill can no longer move on its own: every dish priced, nothing pending or blocked, the service charge settled, adjustments resolved. */
-export function billFinal(kkb: Kkb): boolean {
-  const { total, priced } = priceCompleteness(kkb);
-  return priced === total && billBlockers(kkb.sections).length === 0 && (kkb.charge.state === "none" || kkb.charge.state === "allocated") && !kkb.unresolved;
-}
+export { billFinal };
 
 export const obligationOf = (s: KkbSection) => s.totalCentavos ?? s.pricedCentavos;
 

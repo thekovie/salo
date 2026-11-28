@@ -296,6 +296,12 @@ function withCharge(sections: KkbSection[], charge: number | null): Kkb {
   return { sections: allocated, charge: { state: "allocated", centavos: charge }, foodCentavos, ...EMPTY_ADJUSTED };
 }
 
+/** The bill can no longer move on its own: every dish priced, nothing pending or blocked, the service charge settled, adjustments resolved. */
+export function billFinal(kkb: Kkb): boolean {
+  const { total, priced } = priceCompleteness(kkb);
+  return priced === total && billBlockers(kkb.sections).length === 0 && (kkb.charge.state === "none" || kkb.charge.state === "allocated") && !kkb.unresolved;
+}
+
 export interface PriceCompleteness {
   /** Distinct dish lines (dish + size + notes) in confirmed rounds. */
   total: number;
@@ -347,23 +353,25 @@ export function reconcile(kkb: Kkb, receiptCentavos: number): Reconciliation {
 }
 
 /** "Senior citizen discount" in a sentence; "PWD discount" and typed notes keep their capitals. */
-const lowerFirst = (text: string) => (/^[A-Z]{2}/.test(text) ? text : text.charAt(0).toLowerCase() + text.slice(1));
+export const lowerFirst = (text: string) => (/^[A-Z]{2}/.test(text) ? text : text.charAt(0).toLowerCase() + text.slice(1));
 
-const dishes = (n: number) => `${n} ${n === 1 ? "dish" : "dishes"}`;
+export const dishes = (n: number) => `${n} ${n === 1 ? "dish" : "dishes"}`;
 
 /** Messenger-friendly text of the KKB view, from the same calculation. `dateLabel` is formatted on the device. */
-export function kkbText(kkb: Kkb, title: string, dateLabel: string): string {
+export function kkbText(kkb: Kkb, title: string, dateLabel: string, options: { record?: string } = {}): string {
   const { charge } = kkb;
+  const final = billFinal(kkb);
   const split = charge.state === "allocated";
   const out = [`${title} · ${dateLabel}`, ""];
   const people = kkb.sections.filter((s) => !s.shared && s.status !== "empty");
   for (const s of people) {
     const food = s.status === "none" ? "no prices yet" : formatPeso(s.pricedCentavos);
+    const soFar = !final && s.status !== "none" ? " so far" : "";
     if (s.adjustments.length > 0 && s.totalCentavos != null) {
       const terms = s.adjustments.map((a) => ` ${a.centavos < 0 ? "−" : "+"} ${formatPeso(Math.abs(a.centavos))} ${lowerFirst(a.label)}`).join("");
-      out.push(`${s.title}  ${food}${s.serviceCentavos != null ? ` + ${formatPeso(s.serviceCentavos)} service` : ""}${terms} = ${formatPeso(s.totalCentavos)}`);
-    } else if (s.serviceCentavos != null && s.totalCentavos != null) out.push(`${s.title}  ${food} + ${formatPeso(s.serviceCentavos)} service = ${formatPeso(s.totalCentavos)}`);
-    else out.push(`${s.title}  ${food}${s.status !== "none" && (s.unpricedUnits > 0 || s.pendingChanges > 0) ? " so far" : ""}`);
+      out.push(`${s.title}  ${food}${s.serviceCentavos != null ? ` + ${formatPeso(s.serviceCentavos)} service` : ""}${terms} = ${formatPeso(s.totalCentavos)}${soFar}`);
+    } else if (s.serviceCentavos != null && s.totalCentavos != null) out.push(`${s.title}  ${food} + ${formatPeso(s.serviceCentavos)} service = ${formatPeso(s.totalCentavos)}${soFar}`);
+    else out.push(`${s.title}  ${food}${soFar}`);
   }
   if (!split && charge.state !== "none") out.push("", charge.state === "unset" ? "Service charge not entered yet, so these are food only." : "Service charge not split yet, so these are food only.");
 
@@ -387,7 +395,9 @@ export function kkbText(kkb: Kkb, title: string, dateLabel: string): string {
     kkb.adjustments.some((a) => a.state === "flagged") && "an adjustment needs fixing",
   ].filter(Boolean);
   const blocked = reasons.length > 0 || charge.state === "blocked" || open.length > 0;
-  out.push("", blocked ? `Total not final: ${reasons.join(", ") || "some items are not settled"}` : `Total ${formatPeso(kkb.adjustedTotal)}`, "Made with Salo");
+  out.push("", blocked ? `Total not final: ${reasons.join(", ") || "some items are not settled"}` : `Total ${formatPeso(kkb.adjustedTotal)}`);
+  if (options.record) out.push("", options.record, "");
+  out.push("Made with Salo");
   return out.join("\n");
 }
 
@@ -396,8 +406,9 @@ export function myShareLabel(kkb: Kkb): string | null {
   const mine = kkb.sections.find((s) => s.isMe);
   if (!mine || mine.lines.length === 0 || mine.status === "empty") return null;
   if (mine.status === "none") return "My share · no prices yet";
-  if (mine.totalCentavos != null) return `My share${kkb.unresolved ? " so far" : ""} · ${formatPesoShort(mine.totalCentavos)}`;
-  return `My share${mine.status === "complete" && !kkb.unresolved ? "" : " so far"} · ${formatPesoShort(mine.pricedCentavos)}`;
+  const final = billFinal(kkb);
+  if (mine.totalCentavos != null) return `My share${final ? "" : " so far"} · ${formatPesoShort(mine.totalCentavos)}`;
+  return `My share${mine.status === "complete" && final ? "" : " so far"} · ${formatPesoShort(mine.pricedCentavos)}`;
 }
 
 /** The same label under 430 px: "Share ₱1,240" / "Share so far ₱325" (also the accessible name there, WCAG 2.5.3). */
@@ -471,3 +482,6 @@ export function priceRows(input: KkbInput): PriceRow[] {
 
 /** "n prices left": the rows still needing a price. */
 export const pricesLeft = (rows: readonly PriceRow[]) => rows.filter((r) => r.needsPrice).length;
+
+/** The host dock's button text while prices are missing; it replaces "My share" and opens the Prices sheet. */
+export const enterPricesLabel = (left: number) => `Enter prices · ${left} left`;

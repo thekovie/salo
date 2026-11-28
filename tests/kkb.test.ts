@@ -263,7 +263,7 @@ describe("reconcile and kkbText", () => {
 
   it("kkbText is honest when the charge is missing or dishes have no price", () => {
     const unset = kkbText(priced(null), "T", "D");
-    expect(unset).toContain("Ana  ₱300.00\n");
+    expect(unset).toContain("Ana  ₱300.00 so far\n");
     expect(unset).toContain("Service charge not entered yet, so these are food only.");
     expect(unset).toContain("Total not final: service charge not entered");
     const platter = e("Gyoza", 3, TABLE);
@@ -308,7 +308,8 @@ describe("My share label", () => {
   it("shows whole pesos when everything is priced, and 'so far' when something is missing", () => {
     const a = e("Katsu", 2, me("ana"));
     const b = e("Gyoza", 1, me("ana"));
-    expect(label([a], { [a.id]: price(24000) })).toBe("My share · ₱480");
+    expect(label([a], { [a.id]: price(24000) }, 0)).toBe("My share · ₱480");
+    expect(label([a], { [a.id]: price(24000) })).toBe("My share so far · ₱480");
     expect(label([a, b], { [a.id]: price(24000) })).toBe("My share so far · ₱480");
   });
 

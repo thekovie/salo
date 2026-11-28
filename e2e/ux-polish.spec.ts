@@ -87,14 +87,14 @@ test("My share: one tap opens KKB on your own card, for the guest and the host; 
   await guestSheet.getByRole("form", { name: "Price for Iced Tea" }).getByLabel("Price each (₱)").fill("60");
   await guestSheet.getByRole("form", { name: "Price for Iced Tea" }).getByRole("button", { name: "Save" }).click();
   await guest.page.keyboard.press("Escape");
-  await expect(guest.page.getByRole("button", { name: "Share ₱60", exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(guest.page.getByRole("button", { name: "Share so far ₱60", exact: true })).toBeVisible({ timeout: 15_000 });
   // Nothing is missing any more: the host's dock is "My share" again.
   // Under 430 px the visible short label is the whole accessible name (WCAG 2.5.3).
-  const hostShare = page.getByRole("button", { name: "Share ₱240", exact: true });
+  const hostShare = page.getByRole("button", { name: "Share so far ₱240", exact: true });
   await expect(hostShare).toBeVisible();
   await expect(hostShare).toHaveAccessibleName((await hostShare.innerText()).trim());
   await page.setViewportSize({ width: 430, height: 640 });
-  await expect(page.getByRole("button", { name: "My share · ₱240", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "My share so far · ₱240", exact: true })).toBeVisible();
   await page.setViewportSize({ width: 320, height: 640 });
   await hostShare.click();
   const sheet = page.getByRole("dialog", { name: "Who ordered what" });

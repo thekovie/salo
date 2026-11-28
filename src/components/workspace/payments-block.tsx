@@ -121,7 +121,7 @@ export function CardPaymentRows({ status, payments, snapshot, isHost, refresh, o
         </p>
       ) : null}
       {onRecord ? (
-        <Button variant="outline" className="mt-2 w-full" onClick={onRecord}>
+        <Button variant="outline" className="mt-2 w-full" onClick={onRecord} data-record-payment="">
           Record payment
         </Button>
       ) : null}
@@ -134,7 +134,7 @@ export function PaymentsBlock({ totals, snapshot, isHost, onFix, refresh }: { to
   const id = useId();
   if (snapshot.settlement.payments.length === 0) return null;
   return (
-    <section aria-labelledby={`${id}-title`} className="rounded-2xl bg-paper p-4" id="kkb-payments">
+    <section aria-labelledby={`${id}-title`} id="kkb-payments" tabIndex={-1} className="scroll-mt-4 rounded-2xl bg-paper p-4 focus:outline-2 focus:outline-offset-2 focus:outline-ink">
       <h3 id={`${id}-title`} className="text-lg">
         Payments
       </h3>

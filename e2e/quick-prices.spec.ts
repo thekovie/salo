@@ -60,13 +60,13 @@ test("quick prices: three prices without closing the sheet, guest share live, ow
   await expect(sheet).toBeVisible();
 
   // The guest's share arrives live: Katsu 120 + their Sinigang at the table price 250.
-  await expect(guest.page.getByRole("button", { name: "Share ₱370" })).toBeVisible(T);
+  await expect(guest.page.getByRole("button", { name: /^Share( so far)? ₱370$/ })).toBeVisible(T);
 
   // Closing: the host's own Sinigang kept its 300 (not the table price); focus returns to the dock button.
   await sheet.getByRole("button", { name: "Close" }).click();
   await expect(sheet).toBeHidden(T);
-  await expect(page.getByRole("button", { name: "Share ₱540" })).toBeFocused(T);
-  await expect(page.getByRole("region", { name: "What’s next?" }).getByText("All prices in")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Share( so far)? ₱540$/ })).toBeFocused(T);
+  await expect(page.getByRole("region", { name: "What’s next?" }).getByText("Next: add the service charge from the receipt")).toBeVisible();
   await guest.context.close();
 });
 
@@ -104,7 +104,7 @@ test("quick prices: an unsaved value is restored on reopen as Not saved, and Try
   await expect(sheet.getByText("All prices in")).toBeVisible(T);
   await expect(sheet.getByRole("alert")).toHaveCount(0);
   await sheet.getByRole("button", { name: "Close" }).click();
-  await expect(page.getByRole("button", { name: "Share ₱450" })).toBeVisible(T);
+  await expect(page.getByRole("button", { name: /^Share( so far)? ₱450$/ })).toBeVisible(T);
 });
 
 test("quick prices: a change from another phone shows the conflict, also when the draft is reopened later", async ({ page, context }) => {
@@ -193,7 +193,7 @@ test("quick prices: a price changed again while its first save is in flight is s
   await expect(field(page, "Sisig")).toHaveValue("125.00", T);
   await expect(sheet.getByText("Saved")).toBeVisible(T);
   await sheet.getByRole("button", { name: "Close" }).click();
-  await expect(page.getByRole("button", { name: "Share ₱375" })).toBeVisible(T);
+  await expect(page.getByRole("button", { name: /^Share( so far)? ₱375$/ })).toBeVisible(T);
 });
 
 test("quick prices: Enter on an invalid amount keeps focus on the field", async ({ page }) => {

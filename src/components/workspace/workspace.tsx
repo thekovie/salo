@@ -8,7 +8,8 @@ import { consolidate } from "@/lib/consolidate";
 import { arrivalsBetween, type Arrival } from "@/lib/arrivals";
 import { setAnalyticsContext, track } from "@/lib/analytics";
 import { anyPrice, everyone, type SessionSnapshot } from "@/lib/snapshot";
-import { buildKkb, myShareLabel, priceRows, pricesLeft } from "@/lib/kkb";
+import { keepDots, nextBillStep, stepRowText, withoutPayments, type BillStepId } from "@/lib/bill-step";
+import { buildKkb, enterPricesLabel, myShareLabel, priceRows, pricesLeft } from "@/lib/kkb";
 import { normalizeText } from "@/lib/dish-name";
 import { confirmedIds } from "@/lib/effective-order";
 import { notificationTarget, type NotificationTarget, type NotificationView } from "@/lib/notifications";
@@ -36,7 +37,7 @@ import { MenuLink } from "./menu-link";
 import { OrderOptionsSheet } from "./order-options-sheet";
 import { SummarySheet, type SummaryTab } from "./summary-sheet";
 import { PricesSheet } from "./prices-sheet";
-import { enterPricesLabel, PriceStatusRow } from "./price-status";
+import { PriceStatusRow } from "./price-status";
 import { HostNamePrompt } from "./host-name-prompt";
 import { EditDishSheet } from "./edit-dish-sheet";
 import { Guide } from "@/components/onboarding/guide";
@@ -94,6 +95,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [summaryTab, setSummaryTab] = useState<SummaryTab>("items");
   const [focusMine, setFocusMine] = useState(false);
+  const [focusTarget, setFocusTarget] = useState<BillStepId | null>(null);
   const [myOrderOpen, setMyOrderOpen] = useState(false);
   // KKB is useful as soon as there are dishes (prices can go in while ordering); the item list needs a confirmed round.
   const hasSummary = anyConfirmed || snapshot.entries.length > 0;
@@ -132,6 +134,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
   const openSummary = (source: "auto" | "button", tab: SummaryTab = anyConfirmed ? "items" : "kkb") => {
     setSummaryTab(tab);
     setFocusMine(false);
+    setFocusTarget(null);
     setSummaryOpen(true);
     track({ name: "summary_opened", props: { source } });
   };
@@ -140,11 +143,20 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
     openSummary("button", "kkb");
     setFocusMine(true);
   };
-  const myShare = useMemo(() => (anyConfirmed ? myShareLabel(buildKkb(snapshot, snapshot.me.participantId)) : null), [anyConfirmed, snapshot]);
+  const kkb = useMemo(() => (anyConfirmed ? buildKkb(snapshot, snapshot.me.participantId) : null), [anyConfirmed, snapshot]);
+  const myShare = kkb ? myShareLabel(kkb) : null;
   const [pricesOpen, setPricesOpen] = useState(false);
   const hostPricing = isHost && anyConfirmed;
   const priceCount = useMemo(() => (hostPricing ? priceRows(snapshot) : []), [hostPricing, snapshot]);
   const left = pricesLeft(priceCount);
+  // The host's next billing step, quiet about payments here: those are prompted in the KKB tab only.
+  const billStep = useMemo(() => (kkb && hostPricing ? withoutPayments(nextBillStep(kkb, snapshot, priceCount)) : null), [kkb, hostPricing, snapshot, priceCount]);
+  const openBill = () => {
+    if (!billStep) return;
+    if (billStep.id === "prices") return setPricesOpen(true);
+    openSummary("button", "kkb");
+    setFocusTarget(billStep.id);
+  };
   const shareLabel = left > 0 ? enterPricesLabel(left) : myShare;
   const [updatesOpen, setUpdatesOpen] = useState(false);
   const updatesTarget = useRef<NotificationTarget | null>(null);
@@ -523,6 +535,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
           refresh={refresh}
           onRenameMe={(displayName) => void mutate({ kind: "renameMe", displayName })}
           focusMine={focusMine}
+          focusTarget={focusTarget}
         />
       ) : null}
       {hostPricing ? <PricesSheet open={pricesOpen} onOpenChange={setPricesOpen} snapshot={snapshot} refresh={refresh} /> : null}
@@ -598,10 +611,20 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
                 )}
               </p>
               {ended === "ended" ? (
-                <Button variant="outline" className="mt-3" onClick={openMyShare}>
-                  <ReceiptText className="size-5" aria-hidden />
-                  Who ordered what
-                </Button>
+                <>
+                  {billStep ? <p className="mt-2 font-semibold text-ink">{keepDots(stepRowText(billStep, true))}</p> : null}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {billStep?.canGo ? (
+                      <Button variant="outline" onClick={openBill} aria-label={`Open bill: ${billStep.text}`}>
+                        Open bill
+                      </Button>
+                    ) : null}
+                    <Button variant="outline" onClick={openMyShare}>
+                      <ReceiptText className="size-5" aria-hidden />
+                      Who ordered what
+                    </Button>
+                  </div>
+                </>
               ) : null}
             </div>
           </div>
@@ -675,7 +698,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
                         <CircleCheck className="size-5" aria-hidden /> End the order
                       </Button>
                     </div>
-                    {priceCount.length > 0 ? <PriceStatusRow left={left} onEnter={() => setPricesOpen(true)} /> : null}
+                    {priceCount.length > 0 ? <PriceStatusRow left={left} step={billStep} onEnter={() => setPricesOpen(true)} onOpenBill={openBill} /> : null}
                   </section>
                 ) : (
                   <p className="text-center text-ink-soft">The host confirmed round {round.number} with the waiter. The host can add another round or end the order when everyone’s done.</p>
