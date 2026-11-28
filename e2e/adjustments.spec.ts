@@ -46,7 +46,7 @@ test("adjustments: a senior discount for one guest updates their card, the dock 
   await expect(block.getByText("Senior citizen discount for JD")).toBeVisible(T);
   await expect(block.getByText("−₱10.00")).toBeVisible();
 
-  const dock = guest.page.getByRole("button", { name: /^(My share|Share) · ₱50$|^Share ₱50$/ });
+  const dock = guest.page.getByRole("button", { name: /^(My share|Share)( so far)?[ ·]+₱50$/ });
   await expect(dock).toBeVisible(T);
   await dock.click();
   await expect(guest.page.getByRole("region", { name: /JD, your share/ })).toContainText("₱50.00", T);

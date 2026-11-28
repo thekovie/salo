@@ -6,11 +6,14 @@ import { Button } from "@/components/ui/button";
 import { personKey } from "@/lib/adjustments";
 import { normalizeText } from "@/lib/dish-name";
 import { track } from "@/lib/analytics";
-import { buildKkb, kkbText, priceCompleteness, tableLines, type Kkb, type KkbLine, type KkbSection } from "@/lib/kkb";
+import { buildKkb, kkbText, priceCompleteness, priceRows, tableLines, type Kkb, type KkbLine, type KkbSection } from "@/lib/kkb";
 import { formatPeso } from "@/lib/money";
+import { nextBillStep } from "@/lib/bill-step";
+import { recordText } from "@/lib/kkb-record";
 import { billFinal, hasShare, paidByKey, paymentStatus, paymentTotals, type PaymentStatus } from "@/lib/payments";
 import type { SessionSnapshot } from "@/lib/snapshot";
 import { cn } from "@/lib/utils";
+import { BillStepRow } from "./bill-step-row";
 import { HostNamePrompt } from "./host-name-prompt";
 import { PricesSheet } from "./prices-sheet";
 import { PriceEditor, type Payer, type TablePrice } from "./price-editor";
@@ -32,6 +35,7 @@ interface KkbViewProps {
 /** The viewer's own card: "My share" in the dock lands here. */
 export const MY_CARD_ID = "kkb-mine";
 
+const MANY_CARDS = 6;
 const items = (n: number) => `${n} ${n === 1 ? "item" : "items"}`;
 const lineKey = (section: KkbSection, line: KkbLine, draft: boolean) => `${section.key}|${line.entryId}|${line.correctionId ?? ""}|${draft ? "d" : "c"}`;
 
@@ -51,7 +55,10 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
   const [fixing, setFixing] = useState<string | null>(null);
   const [copy, setCopy] = useState<"idle" | "copied" | "error">("idle");
   // Which cards start open is decided once, so a card doesn't snap shut while the host is pricing it.
-  const [startOpen] = useState(() => new Set(kkb.sections.filter((s) => s.shared || (isHost && (s.unpricedUnits > 0 || s.drafts.some((l) => l.unitCentavos == null)))).map((s) => s.key)));
+  // Past this many cards only your own and the shared ones start open (a table of 14 is 20,000 px of cards otherwise).
+  const [startOpen] = useState(() => new Set(kkb.sections.filter((s) => s.shared || (kkb.sections.length <= MANY_CARDS && isHost && (s.unpricedUnits > 0 || s.drafts.some((l) => l.unitCentavos == null)))).map((s) => s.key)));
+  const [record, setRecord] = useState(false);
+  const step = useMemo(() => nextBillStep(kkb, snapshot, priceRows(snapshot)), [kkb, snapshot]);
   const payers: Payer[] = useMemo(
     () => [
       ...snapshot.participants.map((p) => ({ key: `p:${p.id}`, title: p.id === meId ? `${p.displayName} (you)` : p.displayName, participantId: p.id, label: null })),
@@ -92,6 +99,7 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
       editing: editing === key,
       canEdit: canPrice || canBillTo,
       onEdit: () => setEditing(key),
+      unbilled: !draft && section.shared && line.billable && !line.billedTo && !line.billedFrom,
       editor: <PriceEditor key={key} line={line} sessionId={snapshot.session.id} refresh={refresh} canPrice={canPrice} canBillTo={canBillTo} payers={payers} table={table} live={live} bill={entry} leftPayers={leftPayers} onDone={() => setEditing((open) => (open === key ? null : open))} />,
     };
   };
@@ -122,7 +130,7 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
   const people = kkb.sections.filter((s) => !s.isMe && !s.shared);
   const shared = kkb.sections.filter((s) => s.shared);
   const title = snapshot.session.title ?? "Table order";
-  const text = kkbText(kkb, title, dateLabel);
+  const text = kkbText(kkb, title, dateLabel, { record: record ? recordText(kkb, snapshot) : undefined });
 
   async function copySummary() {
     try {
@@ -148,6 +156,7 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
 
   return (
     <div className="mt-4 space-y-4" data-ph-mask="">
+      {priceCompleteness(kkb).total > 0 && !(isHost && step.id === "prices") ? <BillStepRow step={step} isHost={isHost} /> : null}
       <StatusStrip kkb={kkb} onEnterPrices={isHost ? () => setPricesOpen(true) : undefined} />
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="outline" onClick={() => void copySummary()}>
@@ -164,10 +173,14 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
           {copy === "copied" ? "Summary copied" : copy === "error" ? "Couldn’t copy. Try Share, or select the text yourself." : ""}
         </p>
       </div>
+      <label className="flex min-h-11 items-center gap-2">
+        <input type="checkbox" className="size-5 accent-tomato" checked={record} onChange={(e) => setRecord(e.target.checked)} />
+        Include the full record
+      </label>
       {needsName ? <HostNamePrompt onSave={onRenameMe} label="Add your name so the table knows which dishes are yours" /> : null}
 
       {mine ? (
-        <Card section={mine} isMe pay={payOf(mine)}>
+        <Card section={mine} isMe final={final} pay={payOf(mine)}>
           <Lines section={mine} lineProps={lineProps} draftRound={draftRound} />
         </Card>
       ) : null}
@@ -175,7 +188,7 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
       {people.length > 0 ? (
         <section aria-label="Everyone else" className="space-y-2">
           {people.map((s) => (
-            <Card key={s.key} section={s} collapsible defaultOpen={startOpen.has(s.key)} pay={payOf(s)}>
+            <Card key={s.key} section={s} collapsible final={final} defaultOpen={startOpen.has(s.key)} pay={payOf(s)}>
               <Lines section={s} lineProps={lineProps} draftRound={draftRound} />
             </Card>
           ))}
@@ -186,7 +199,7 @@ export function KkbView({ snapshot, refresh, onRenameMe, dateLabel, canShare }: 
         <section aria-label="Shared and unassigned" className="space-y-2">
           <h3 className="px-1 font-sans text-sm font-semibold text-ink-soft">Shared · settle at the table</h3>
           {shared.map((s) => (
-            <Card key={s.key} section={s} collapsible defaultOpen={startOpen.has(s.key)}>
+            <Card key={s.key} section={s} collapsible final={final} defaultOpen={startOpen.has(s.key)}>
               <Lines section={s} lineProps={lineProps} draftRound={draftRound} />
             </Card>
           ))}
@@ -219,24 +232,30 @@ function Completeness({ kkb, onEnterPrices }: { kkb: Kkb; onEnterPrices?: () => 
   if (total === 0) return null;
   const link = "min-h-11 cursor-pointer font-semibold text-tomato-ink underline underline-offset-2";
   const prices = onEnterPrices ? (
-    <span className="whitespace-nowrap">
-      {" · "}
-      <button type="button" onClick={onEnterPrices} className={link}>
-        {first ? "Enter prices" : "Edit prices"}
-      </button>
-    </span>
+    <>
+      {" "}
+      <span className="whitespace-nowrap">
+        {"· "}
+        <button type="button" onClick={onEnterPrices} className={link}>
+          {first ? "Enter prices" : "Edit prices"}
+        </button>
+      </span>
+    </>
   ) : null;
   const missing = total - priced;
   return (
     <p id="kkb-completeness" tabIndex={-1} className="text-sm text-ink outline-none">
       <span className="font-semibold whitespace-nowrap">{first ? `${priced} of ${total} dishes priced` : `All ${total === 1 ? "1 dish" : `${total} dishes`} priced`}</span>
       {first ? (
-        <span className="whitespace-nowrap">
-          {" · "}
-          <button type="button" onClick={() => showFirstUnpriced(lineKey(kkb.sections.find((x) => x.key === first.sectionKey)!, first.line, false))} className={link}>
-            Show the {missing === 1 ? "1 without a price" : `${missing} without a price`}
-          </button>
-        </span>
+        <>
+          {" "}
+          <span className="whitespace-nowrap">
+            {"· "}
+            <button type="button" onClick={() => showFirstUnpriced(lineKey(kkb.sections.find((x) => x.key === first.sectionKey)!, first.line, false))} className={link}>
+              Show the {missing === 1 ? "1 without a price" : `${missing} without a price`}
+            </button>
+          </span>
+        </>
       ) : null}
       {prices}
     </p>
@@ -305,8 +324,9 @@ function PayChip({ status }: { status: PaymentStatus | null }) {
   );
 }
 
-function Card({ section, isMe = false, collapsible = false, defaultOpen = false, pay, children }: { section: KkbSection; isMe?: boolean; collapsible?: boolean; defaultOpen?: boolean; pay?: PayProps; children: React.ReactNode }) {
+function Card({ section, final, isMe = false, collapsible = false, defaultOpen = false, pay, children }: { section: KkbSection; final: boolean; isMe?: boolean; collapsible?: boolean; defaultOpen?: boolean; pay?: PayProps; children: React.ReactNode }) {
   const note = noteOf(section, isMe);
+  const unpaid = pay?.status?.chip && pay.status.chip !== "paid" ? "" : undefined;
   const heading = (
     <div className="flex items-baseline justify-between gap-3">
       <p className="min-w-0 text-lg leading-snug">
@@ -314,7 +334,7 @@ function Card({ section, isMe = false, collapsible = false, defaultOpen = false,
         {note ? <span className="ml-1.5 font-sans text-sm text-ink-soft">· {note}</span> : null}
       </p>
       <span className="flex shrink-0 flex-col items-end gap-y-1">
-        <SummaryAmount section={section} />
+        <SummaryAmount section={section} final={final} />
         {pay?.chip ? <PayChip status={pay.status} /> : null}
       </span>
     </div>
@@ -323,25 +343,26 @@ function Card({ section, isMe = false, collapsible = false, defaultOpen = false,
     return (
       <section
         id={isMe ? MY_CARD_ID : undefined}
+        data-unpaid={unpaid}
         tabIndex={isMe ? -1 : undefined}
         aria-label={`${section.title}, your share`}
         className={cn("ticket px-5 py-3", isMe && "ring-2 ring-tomato/40 focus:outline-2 focus:outline-offset-2 focus:outline-ink")}
       >
         {heading}
         {children}
-        <Footer section={section} />
+        <Footer section={section} final={final} />
         {pay?.rows}
       </section>
     );
   }
   return (
-    <details open={defaultOpen} className="ticket px-5 py-1">
+    <details open={defaultOpen} data-unpaid={unpaid} className="ticket px-5 py-1">
       <summary className="flex min-h-12 cursor-pointer list-none items-center py-2 [&::-webkit-details-marker]:hidden">
         <div className="min-w-0 flex-1">{heading}</div>
       </summary>
       <div className="pb-3">
         {children}
-        <Footer section={section} />
+        <Footer section={section} final={final} />
         {pay?.rows}
       </div>
     </details>
@@ -349,19 +370,22 @@ function Card({ section, isMe = false, collapsible = false, defaultOpen = false,
 }
 
 /** The one number on a card's heading: the total once allocated, else the food so far, plus what's missing. */
-function SummaryAmount({ section }: { section: KkbSection }) {
+function SummaryAmount({ section, final }: { section: KkbSection; final: boolean }) {
+  // Person cards read "so far" until the bill is final; shared cards say what is shared, not what is owed.
+  const soFar = !final && !section.shared ? <span className="ml-1.5 font-sans text-xs text-ink-soft">so far</span> : null;
   if (section.shared && section.lines.length > 0 && section.lines.every((l) => l.billedTo)) return <span className="shrink-0 text-sm text-ink-soft">All billed</span>;
-  if (section.totalCentavos != null) return <span className="tally shrink-0 text-ink">{formatPeso(section.totalCentavos)}</span>;
+  if (section.totalCentavos != null) return <span className="shrink-0 text-right"><span className="tally text-ink">{formatPeso(section.totalCentavos)}</span>{soFar}</span>;
   if (section.status === "none" || section.status === "empty") return <span className="shrink-0 text-sm text-ink-soft">{section.status === "none" ? "No prices yet" : "Not confirmed"}</span>;
   return (
     <span className="shrink-0 text-right">
       <span className="tally text-ink">{formatPeso(section.pricedCentavos)}</span>
-      {section.unpricedUnits > 0 ? <span className="ml-1.5 rounded-full bg-saffron-wash px-2 py-0.5 font-sans text-xs font-semibold text-saffron-ink">{items(section.unpricedUnits)} no price</span> : null}
+      {soFar}
+      {section.unpricedUnits > 0 ? <span className="mt-1 ml-auto block w-fit rounded-full bg-saffron-wash px-2 py-0.5 font-sans text-xs font-semibold text-saffron-ink">{items(section.unpricedUnits)} no price</span> : null}
     </span>
   );
 }
 
-function Footer({ section }: { section: KkbSection }) {
+function Footer({ section, final }: { section: KkbSection; final: boolean }) {
   if (section.shared && section.lines.length > 0) {
     // Never "₱0.00 shared" for dishes nobody has priced yet: that reads like they were free.
     const counted = section.lines.filter((l) => !l.billedTo);
@@ -400,7 +424,7 @@ function Footer({ section }: { section: KkbSection }) {
             </div>
           ))}
           <div className="flex items-baseline justify-between gap-3 pt-1">
-            <dt className="font-semibold">{section.adjustments.length > 0 ? "Total" : "Total with service charge"}</dt>
+            <dt className="font-semibold">{final ? (section.adjustments.length > 0 ? "Total" : "Total with service charge") : "Total so far"}</dt>
             <dd className="tally text-2xl text-ink">{formatPeso(section.totalCentavos)}</dd>
           </div>
         </>
@@ -409,7 +433,7 @@ function Footer({ section }: { section: KkbSection }) {
   );
 }
 
-type LineProps = { rowKey: string; line: KkbLine; editing: boolean; canEdit: boolean; onEdit: () => void; editor: React.ReactNode };
+type LineProps = { rowKey: string; unbilled: boolean; line: KkbLine; editing: boolean; canEdit: boolean; onEdit: () => void; editor: React.ReactNode };
 
 function Lines({ section, lineProps, draftRound }: { section: KkbSection; lineProps: (s: KkbSection, l: KkbLine, draft: boolean) => LineProps; draftRound: number | null }) {
   return (
@@ -435,7 +459,7 @@ function Lines({ section, lineProps, draftRound }: { section: KkbSection; linePr
   );
 }
 
-function LineRow({ rowKey, line, editing, canEdit, onEdit, editor }: LineProps) {
+function LineRow({ rowKey, unbilled, line, editing, canEdit, onEdit, editor }: LineProps) {
   const split = line.splitWays ? `split ${line.splitWays} ways` : null;
   // Short tags never break inside; the names tag may, for long names.
   const tags = [
@@ -447,7 +471,7 @@ function LineRow({ rowKey, line, editing, canEdit, onEdit, editor }: LineProps) 
   const amount = line.subtotalCentavos != null ? formatPeso(line.subtotalCentavos) : null;
   const action = amount ?? (line.billable && line.unitCentavos != null ? "Bill to…" : "Add price");
   return (
-    <li data-line={rowKey} tabIndex={-1} className="rounded-lg focus-visible:bg-saffron-wash focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink">
+    <li data-line={rowKey} data-unbilled={unbilled ? "" : undefined} tabIndex={-1} className="rounded-lg focus-visible:bg-saffron-wash focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0 py-1 text-ink-soft">
           <p className={cn("break-words text-ink", line.billedTo && "text-ink-soft")}>

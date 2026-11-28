@@ -27,7 +27,7 @@ export function AdjustmentsBlock({ kkb, snapshot, refresh, isHost }: Adjustments
   const open = (adjustmentId: string | null) => setSheet({ open: true, id: adjustmentId });
 
   return (
-    <section aria-labelledby={`${id}-title`} className="rounded-2xl bg-paper p-4" id="kkb-adjustments">
+    <section aria-labelledby={`${id}-title`} id="kkb-adjustments" tabIndex={-1} className="scroll-mt-4 rounded-2xl bg-paper p-4 focus:outline-2 focus:outline-offset-2 focus:outline-ink">
       <h3 id={`${id}-title`} className="text-lg">
         Discounts and extras
       </h3>

@@ -77,7 +77,7 @@ export function ReceiptCheckBlock({ kkb, live, sessionId, refresh, canEdit, snap
   );
 
   return (
-    <section aria-labelledby={`${id}-title`} className="rounded-2xl bg-paper p-4" id="kkb-receipt">
+    <section aria-labelledby={`${id}-title`} id="kkb-receipt" tabIndex={-1} className="scroll-mt-4 rounded-2xl bg-paper p-4 focus:outline-2 focus:outline-offset-2 focus:outline-ink">
       <h3 id={`${id}-title`} className="text-lg">
         Check against the receipt
       </h3>

@@ -18,8 +18,8 @@ Each slice ships as its own branch and squash PR into `dev` (HANDOFF working rul
 | 7 | F10, F12 | Manifest `id`/`scope`, invite continuity copy, reliability fixes + tests | — | landed (PR #57) |
 | 8a | F16 | Menu link: `sessions.menu_url`/`menu_label`, URL validator, View menu on the Order tab | 0017 | landed (PR #58) |
 | 8b | F17 | Creation animation (tail-less table: current mark has a speech-bubble tail, `brand/logo.tsx:14`; aligned to the final logo in slice 10), Turnstile expiry/timeout states | — | landed (PR #59) |
-| 8c | F14 | Large-order navigation: measure a real-guest large order first, keep only what moves the number | — | landed (PR pending) |
-| 8d | F11, F13 | Billing next-step prompts, estimate vs final labels, export options (share `kkb.ts`, `kkb-view.tsx`, `summary-sheet.tsx`) | — | not started |
+| 8c | F14 | Large-order navigation: measure a real-guest large order first, keep only what moves the number | — | landed (PR #60) |
+| 8d | F11, F13 | Billing next-step prompts, estimate vs final labels, export options (share `kkb.ts`, `kkb-view.tsx`, `summary-sheet.tsx`) | — | landed (PR pending) |
 | 9 | Phase 9 | Full regression, money property tests, a11y sweep; real phones and pilot stay owner tasks | — | not started |
 | 10 | F15 | Shared Table logo and icon set (last, alone) | — | not started |
 
@@ -38,7 +38,7 @@ Each slice ships as its own branch and squash PR into `dev` (HANDOFF working rul
 | L9 | "Preserve incomplete values when connectivity fails. Show save and conflict states." (F01) | Typed values kept per row (and across closing the sheet, D9), Saving / Saved / Not saved · Try again / "Changed on another phone" | 1 | done |
 | L10 | "Do not require prices before confirming orders." / "Pricing reminders do not interrupt ordering." (F01) | Nothing before confirm; no toasts or banners; row only inside What's next and KKB | 1 | done |
 | L11 | "Guests can identify whether their KKB is incomplete." (F01) | Short dock label shows incompleteness (D11); today it drops "so far" (`kkb.ts:363`) | 1 | done |
-| L12 | "Treat pricing and settlement as one connected workflow… not a mandatory wizard." (F11) | Slice 1: price step; full sequence in slice 8 | 1, 8 | partial (price step done; rest slice 8) |
+| L12 | "Treat pricing and settlement as one connected workflow… not a mandatory wizard." (F11) | Slice 1: price step; full sequence in slice 8 | 1, 8 | done (8d) |
 | L13 | F02 "Receipt Discounts and Adjustments" incl. "The restaurant's final receipt is authoritative… must not subtract that discount again" | Adjusted total and receipt total shown separately; discrepancy never forced to zero | 2 | planned (slice 2 section) |
 | L14 | F03 "Proportional / Equal / Individual / Manual / Unallocated" | Allocation methods over `allocate` | 2 | planned (slice 2 section) |
 | L15 | F04 "Introduce an optional **Co-host** role" | Co-host flag (D2), serving capability, lock re-check | 3 | not started |
@@ -49,7 +49,7 @@ Each slice ships as its own branch and squash PR into `dev` (HANDOFF working rul
 | L20 | F09 "Introduce an explicit host-transfer workflow." | Atomic transfer | 6 | not started |
 | L21 | F10 "PWA Deep Linking and Invite Continuity" | Manifest + guidance, accurate platform docs | 7 | not started |
 | L22 | F12 "Offline and Realtime Reliability Improvements" | Scenario tests + targeted fixes | 3, 7 | not started |
-| L23 | F13 "Completed-Session Export" | Optional export sections | 8 | not started |
+| L23 | F13 "Completed-Session Export" | Optional export sections (8d full record) | 8 | done |
 | L24 | F14 "Large-Order Navigation and Usability" | Measured first (slice 8c): ticket collapse, Waiting cap, Served search, People collapse | 8c | planned |
 | L25 | F16 "Restaurant Menu Link Sharing & URL Safety" | Menu link (D4) | 8 | not started |
 | L26 | F17 "Animated Room Creation and Bot-Verification Experience" | Table animation in `BotCheck` | 8 | not started |
@@ -1838,7 +1838,7 @@ M4b lazy susan: six plates set, the ring turns slowly clockwise (8 s/turn).
 
 ## Slice 8c: large-order navigation (F14)
 
-Status: landed (PR pending)
+Status: landed (PR #60)
 
 Verify 2026-11-28: checker typecheck/lint/1252 unit/build + e2e (mobile 12 specs, webkit large-order) pass; two one-off flakes passed on rerun (`unavailable.spec.ts:222` stuck at /new in a long run; `my-order.spec.ts:29` axe on a fading arrival tag, follow-up 7). reviewer SHIPPABLE; qa SHIPPABLE; ui-critic SHIPPABLE. D58 after numbers (`.shots/s8c/numbers-after.json`, 375): What's next 14,193 → 1,801 (−87%), px above first Waiting 3,184 → 459 (−86%), first draft row 11,298 → 1,715 (−85%), named dish 6,814 px → 1 tap + typing, 11th People card 3,491 → 1,059 (−70%), guest Order 9,782 → 1,694. All four changes kept. Fixed in loop: failed row's Try again kept visible during a search (unit test); Fully served matches render as a plain list while searching (forced-open details desynced on tap); host's own People card no longer sorts first/opens (plan States); collapsed People header spacing tightened; ticket button `pb-4` so the stamp clears the zigzag (measured −5.8 px overlap at 8 px padding; +8 px padding computed, not reshot). Follow-ups 5–7 in `.shots/follow-ups.md`. Follow-ups 5, 6 done 2026-11-28: collapsed People status pill is icon-only below 400 px (`max-[400px]:sr-only`; v4 `max-*` is strict <, so 375 needed the wider cut), headers 44 px at 375/390, 320 except the typed long name; disclosure button hides its stamp while the ticket is open, closed stamp clears the zigzag by 2.2 px (measured). Checker ALL PASS, reviewer SHIPPABLE, qa re-check, ui-critic SHIPPABLE. Follow-up 7 done: `my-order.spec.ts` waits for arrival tags/pills to unmount (ARRIVAL_MS) before axe; 3/3 repeat runs pass.
 
@@ -2033,3 +2033,283 @@ M2a one card opened (Maria): header as M2 (chevron flipped), co-host toggle, her
 M2b guest Bea: "Bea (you)" first and open with lines and the "Yours?" block; a typed-name or Not assigned card holding lines she can claim starts open (D65 (a)); others as M2.
 
 M2c 320 header: `[Migs ⌄] (Still choosing) 4 ⋯` on one row (count word is already sr-only ≤375, `people-view.tsx:149`); a long name wraps under the badges (`flex-wrap`, as today).
+
+## Slice 8d: billing next step, estimate vs final, session record (F11, F13)
+
+Status: landed (PR pending)
+
+Verify 2026-11-28: checker typecheck/lint/1268 unit/build + full e2e pass (flakes: startOrder stuck at /new in rounds/food-tracker/onboarding, each passed alone); billing specs 30/30 on mobile + webkit after the last fixes. reviewer NOT SHIPPABLE → fixed → SHIPPABLE (re-check); qa NOT SHIPPABLE → fixed → SHIPPABLE (re-check); ui-critic SHIPPABLE (4 fix-in-loop fixed, measured). Fixed: full-record Payments called a no-price card "paid so far" (now "no price yet"/"nothing to pay", unit test); What's next step text squeezed to 59 px at 320 (`flex-1` set basis 0; now `grow basis-36`, buttons wrap below); pending icon consistent; `dishes` dedup; no-price badge on its own line; Completeness strip no longer overflows (separator space outside `whitespace-nowrap`); no line starts with "·" (`keepDots`). KKB sheet seed A at 375: host 20,134 → 6,541 px (−68%; group and Whole table cards count as shared under D69, so the ~3,000 projection was low), guest 4,858 → 5,117. Webkit `testMatch` doesn't include bill-flow/payments (config, unchanged). Follow-ups 8–9 in `.shots/follow-ups.md`. Follow-ups 8, 9 done 2026-11-28: a receipt mismatch (step 8) shows the saffron "next" row with arrow + Go for the host (`BillStep.differs`), guests stay green; What's next drops the ok tone there; Go sits beside two-line text at 320 (`grow basis-36`, measured: text 174×40, Go same row, no overflow); "1 of 3 paid" kept on one line (`keepDots`, unit test, not reshot); bill-flow e2e locator scoped to `main` (the KKB sheet auto-opens after End). Unit 1268 pass (before the keepDots test; bill-step 17/17 after), bill-flow + receipt-check e2e pass; reviewer, qa, ui-critic re-checks SHIPPABLE.
+
+Kickoff 2026-11-28. Goal: "slice 8d of docs/plans/salo-v1-4.md." Research: researcher brief (this session). Baseline: `.shots/before/` (8c's moved to `.shots/v1-4-slice8c/before/`), scripts and numbers in `.shots/s8d/` (seed A = `.shots/s8c/seed.mjs` large order; seed B = `.shots/s8d/seed-billing.mjs` small order stepped through billing states).
+
+### Ask ledger (slice 8d)
+
+Brief F11 (`salo-v1-4-brief.md:721-760`), F13 (`:810-840`), Phase 8 (`:1245-1253`), plan D60.
+
+| # | Owner's words | Planned change | Status |
+|---|---|---|---|
+| P1 | "Treat pricing and settlement as one connected workflow." / "Recommended sequence: 1. Complete missing prices. 2. Review the restaurant's actual receipt. 3. Record discounts and other adjustments. 4. Allocate the amounts. 5. Review final individual shares. 6. Optionally record payments." | One pure `nextBillStep` walks that order and names the first open step, except the receipt check, which comes after service charge and adjustments because Salo's total isn't comparable before (`reconcile` returns incomplete/waiting, `kkb.ts:339-347`) (Approach B1, D67) | done |
+| P2 | "This should not be a mandatory wizard." / "Users should be able to jump directly to relevant actions." | No step locks another; the prompt is one line with a jump button; every block stays where it is and editable | done |
+| P3 | "Surface the next appropriate action contextually." | Next-step line at the top of the KKB tab, in What's next once prices are in, and in the ended block (host) (D66) | done |
+| P4 | "Avoid excessive tabs." / "Avoid permanent warning banners." | No new tab or sheet; the line changes with the bill and reads as done when final (not a warning) | done |
+| P5 | "Use plain-English terminology." | Copy pinned in Approach (no "allocate", "reconcile" in UI copy) | done |
+| P6 | "Distinguish estimates from final obligations." | One rule: amounts read "so far" until `billFinal`; final reads "Shares are final" (D68) | done |
+| P7 | "Display unresolved amounts explicitly." | Guest/host status line names what's still open ("3 dishes without a price"); card amounts say "so far" | done |
+| P8 | "Keep guest KKB access straightforward." / "Preserve host and guest navigation consistency." | Same line in the same place for guests, without action buttons; entry points unchanged | done |
+| P9 | "Use existing Salo design components whenever practical." | Reuses `ChargeStrip`-style row, `Button`, existing block anchors | done |
+| P10 | F13 "Extend existing sharing features to optionally include: Session name. Dining date. Confirmed orders. Corrections. Final serving status. Individual KKB. Recorded discounts. Final receipt totals. Payment settlement status, if available." | KKB Copy/Share gains an opt-in "Include the full record" switch adding Orders, Corrections, Served, Receipt and discounts, Payments sections to `kkbText` (D70) | done |
+| P11 | "Use existing text/image sharing functionality where suitable." | Same Copy summary / Share summary buttons; text only | done |
+| P12 | "A printable or PDF export may be considered if there is sufficient demand." | Not doing (no demand evidence) | done (not doing) |
+| P13 | "Do not require accounts or permanent cloud history." / "Preserve the existing retention policy." | Client-side text from the snapshot; no endpoint, no migration; `CLOSED_RETENTION_DAYS` untouched | done |
+| P14 | Dining date (F13) | Export date = the order's first confirmed round, not the device's today (`summary-sheet.tsx:47`) (D71) | done |
+| P15 | D60: "KKB sheet length (20,134 px) … leave to slice 8d, which owns `kkb-view.tsx` defaults" | Others' cards start collapsed above 6 cards (D69) | done |
+| P16 | Phase 8: "Final accessibility audit." | Axe on the touched states here; the app-wide sweep stays slice 9 | done |
+
+### Today
+- Six steps live in one KKB tab (`kkb-view.tsx:150-199`): status strip (`Completeness` `:217-244`, `ChargeStrip` `:255-279`), Copy/Share (`:152-166`), cards, then Service charge (`#kkb-service`), Adjustments (`#kkb-adjustments`), Receipt check (`#kkb-receipt`), Payments (`#kkb-payments`) after every card (`:196-199`).
+- Prompts exist only for prices (dock "Enter prices · N left" `workspace.tsx:145-148`, What's next `PriceStatusRow` `:678`, KKB `Completeness`) and a blocked service charge (`ChargeStrip` link to `#kkb-review`). Receipt, adjustments, shares and payments are reached by scrolling.
+- After End there's no dock (`workspace.tsx:~724`); the ended block offers "Who ordered what" (`:600-606`) and says "The host can still fix prices and the bill."
+- `billFinal` (`payments.ts:9`) = all priced, no blockers, charge none/allocated, nothing unresolved; receipt match not included (slice 5, plan:882). Used only for payments (`kkb-view.tsx:11`).
+- Estimate wording is inconsistent: dock says "so far" when `kkb.unresolved` (`kkb.ts:395-404`); card heading (`SummaryAmount` `kkb-view.tsx:352`) and footer total (`Footer` `:403`) show a plain ₱ in that case; `kkbText` adds " so far" only in the food-only branch (`kkb.ts:366`); nothing ever says "final".
+- KKB length: cards start open if shared, or (host and the card has an unpriced line) (`kkb-view.tsx:54`); on seed A nearly every card is open. Baseline 375×812 (`.shots/s8d/numbers-before.json`): seed A host 20,134 px, guest 4,858; seed B (3 people) host 1,485–1,904 across states, guest 1,580.
+- Export: `kkbText` (`kkb.ts:355-392`) carries title, date, per-person totals, unassigned adjustments, "Not yet settled", "Total ₱X" / "Total not final: …". Items text/PNG are price-free by contract (`summary.ts`). Nothing carries corrections, serving status, receipt total or payments. Date is the device's today (`summary-sheet.tsx:47`), wrong for an ended order opened days later. The snapshot already has corrections, `rounds[].confirmedAt`, `servedCounts`, `settlement.receiptTotal`, receipts, adjustments, payments.
+- Stale reference: `.shots/before/kkb-export.txt` cited by slices 2/4/5 doesn't exist; the byte-for-byte baselines are inline in `tests/kkb.test.ts:258-262`, `tests/payments.test.ts:149-178`.
+
+### Approach
+- **B1 `nextBillStep(kkb, settlement, payments)`** in `lib/bill-step.ts` (pure, unit-tested). First match wins:
+  1. dishes without a price → `prices` "Enter prices · 3 left"
+  2. shared dishes with no payer (`billBlockers` unbilled) → `payers` "Choose who pays for 2 shared dishes"
+  3. a change pending with the waiter → `pending` "Waiting on a change with the waiter" (no button)
+  4. service charge unset → `service` "Add the service charge from the receipt"
+  5. service charge blocked → `review` "Service charge: 2 things to review"
+  6. an adjustment unassigned or needing a fix → `adjustment` "Choose who gets the senior citizen discount" / "Fix the senior citizen discount"
+  7. receipt total not entered → `receipt` "Check the total against the receipt" (soft: shares already final)
+  8. receipt differs → `receipt` "Receipt is ₱120.00 more than Salo's total" (soft)
+  9. final, someone unpaid → `payments` "Record payments · 1 of 3 paid" (where it shows: D72)
+  10. final, all paid → `final` (row reads "Shares are final" only)
+  Steps 7–8 never block "Final" (keeps `billFinal`, plan:882). Each step carries its target: `prices` opens the Prices sheet; others scroll to and focus the existing anchor (`#kkb-service`, `#kkb-review`, `#kkb-adjustments`, `#kkb-receipt`, `#kkb-payments`, or the first unbilled shared line).
+- **B2 Where it shows (D66)**:
+  - KKB tab: one row above the status strip, "Next: <text>" + button "Go" (host). Final rows read "Shares are final · <text>" with the ok tone. Guests see "Shares so far · waiting on 3 dishes without a price" or "Shares are final", no button.
+  - What's next (host, open): `PriceStatusRow` stays while prices are left; once all prices are in it shows the next step instead of "All prices in" (keeps "Edit prices").
+  - Ended block (host): the next step under the ended text; its button opens the KKB at that step. Guest ended block unchanged.
+  - Dock: placement unchanged; its "so far" rule per D73.
+- **B3 Estimate vs final (D68)**: one rule from `billFinal`. Not final: card heading amount and footer total read "₱1,240 so far" / "Total so far"; `kkbText` per person adds " so far" on every line. Final: plain amounts; the KKB top row says "Shares are final". `myShareLabel` switches from `kkb.unresolved` to `billFinal` (same plus prices/blockers/charge; check dock tests). `kkbText` output for a final bill is unchanged byte for byte.
+- **B4 KKB length (D69)**: above 6 cards, others' cards start collapsed for host and guests; own card and shared cards keep today's rule; ≤6 cards keep today's rule. "Show the N without a price" already opens the card (`showFirstUnpriced`). Measured before/after on seed A (host and guest).
+- **B5 Full record (D70, D71)**: under Copy/Share in the KKB tab, a switch "Include the full record" (off by default, not remembered). On, `kkbText(kkb, title, date, { record })` appends after the totals: Orders (per round, per person, dish ×qty), Corrections (per round, `from → to`), Served ("12 of 14 plates served", not-served dishes listed), Receipt (receipt total vs Salo total, each adjustment with amount), Payments (per person paid / left, or "None recorded"). Off = today's text byte for byte. Date for both Items and KKB text (and the PNG `?date=`) = first confirmed round's `confirmedAt` in the device's locale; today when nothing is confirmed.
+- **Tests**: unit `tests/bill-step.test.ts` (each step and its order, soft receipt steps, guest copy); `kkbText` record sections + off = existing literals unchanged; final/so-far labels; date helper. E2E: extend `e2e/payments.spec.ts` or new `e2e/bill-flow.spec.ts`: host walks prices → service charge → adjustment → receipt → payment by tapping the next-step button each time; guest sees "Shares so far" then "Shares are final"; full record copy contains each section; ended block shows the step; axe light/dark on the KKB tab.
+
+Rejected: a step-by-step wizard sheet (brief: "should not be a mandatory wizard"); moving the four blocks above the cards (bigger reflow; B4 collapse + jump buttons reach them).
+
+### Pinned details (plan-critic, verified)
+- **Copy**: step text stored in sentence case; "Next: " prefix applies `lowerFirst` ("Next: add the service charge from the receipt"); "Shares are final · " keeps the step's capital; adjustment labels via `lowerFirst` (keeps "PWD"). Buttons: "Go" in the KKB row, "Open bill" in What's next and the ended block; accessible name = visible text + step ("Go: Add the service charge from the receipt", WCAG 2.5.3).
+- **Step 1**: `nextBillStep` also takes `priceRows`; host copy = `enterPricesLabel(pricesLeft(rows))` (same as the dock); guest copy counts dishes like `Completeness`.
+- **Step 5** only fires for `zeroFood` (steps 1–3 take unpriced/unbilled/pending first, `kkb.ts:285`): "Service charge: no priced food to split it across yet", target `#kkb-review`.
+- **Steps 7–8** read `reconcileReceipts(kkb, settlement, snapshot)` (`receipts.ts:38`, as `receipt-check-block.tsx:69`): 7 = state `enter`; 8 = `more`/`less` with the block's existing difference copy.
+- **Step 9 target**: `PaymentsBlock` is `null` until a payment exists (`payments-block.tsx:136`), so the target is the first `hasShare` card without a Paid chip: open its `<details>`, focus its Record payment button (`showFirstUnpriced` pattern). "1 of 3 paid" = `hasShare` cards with chip `paid` over all `hasShare` cards.
+- **Focus targets**: `#kkb-service`, `#kkb-adjustments`, `#kkb-receipt`, `#kkb-payments` get `tabIndex={-1}` + the `#kkb-mine` focus style (`kkb-view.tsx:328`) and `scroll-mt` clearing the drawer header. Step 2 target = first unbilled shared line (open its card).
+- **Guest and co-host row** (prefix "Shares so far · "): 1 "waiting on N dishes without a price"; 2 "waiting on the host to choose who pays for N shared dishes"; 3 "waiting on a change with the waiter"; 4 "waiting on the host to add the service charge"; 5 "waiting on the host to sort out the service charge"; 6 "waiting on the host to finish the <adjustment>"; 7–10 "Shares are final".
+- **Mechanism**: `KkbView` gets a `focusTarget` prop beside `focusMine` (`summary-sheet.tsx` `onOpenAutoFocus`, `workspace.tsx:136`); "Open bill" = `openSummary("button","kkb")` + target. Step `prices` opens the workspace `PricesSheet` directly (`workspace.tsx:528`). Ended block row: host and `ended === "ended"` only, never `cancelled`. What's next shows only for an open session with the latest round confirmed (`workspace.tsx:657-678`); `PriceStatusRow` wraps "Open bill" and "Edit prices" to a second line at 320.
+- **Imports**: move `billFinal` into `kkb.ts` (re-export from `payments.ts`) so `myShareLabel` can use it; `bill-step.ts` is a leaf importing `kkb.ts`/`receipts.ts`.
+- **Cards (B3)**: person cards only; shared cards ("₱X shared", "All billed") untouched. Not final: heading "₱1,240 so far"; footer "Total"/"Total with service charge" both → "Total so far"; "Food subtotal"/"Priced subtotal", "No prices yet", "Not confirmed" unchanged. At 320 the heading's right column stacks amount+"so far" / no-price badge / Paid chip (sketch M6).
+- **kkbText (D74)**: " so far" at the end of each non-final person line incl. the `food + service = total` form; skipped for "no prices yet".
+- **Record text**: Corrections — QUANTITY "Round N: Sisig ×2 → ×1" (N = `sourceRoundNumber`, cancel-all "→ cancelled"), REPLACE "Round N: Sisig → Sinigang", unavailable appends " (out of stock)", pending appends " (waiting for the waiter)"; heading omitted when none. Orders show quantities after confirmed corrections (`confirmedLine`). Served: "N of M plates served" + not-served dishes; omitted when nothing is confirmed. Receipt: "Receipt total not entered" for `enter`; each extra receipt on its own line; adjustments with amount. Payments: "None recorded" once when none, else a line per `hasShare` card; `needsReview` payments listed "needs fixing".
+- **Date**: keep `DATE` format (`summary-sheet.tsx:14`, "Sat, Nov 28", no year); pure `dineDate(rounds, now)` (first `confirmedAt`, else today), unit tested; PNG `?date=` accepts it (`route.ts:11`); update the comment at `summary-sheet.tsx:46`.
+- **Checkbox**: "Include the full record" is `<input type="checkbox" className="size-5 accent-tomato">` in a label, 44 px row (`adjustment-sheet.tsx:309` pattern); resets when the sheet closes; copy status text unchanged.
+- **A11y**: the top row is not a live region (realtime would chatter); icons `aria-hidden`, text carries the state.
+- **Tests that change** (only as D68/D73/D74 decide): `tests/kkb.test.ts:265`, `:311`; `e2e/ux-polish.spec.ts:87,89,97`; check `e2e/adjustments.spec.ts:49`, `e2e/kkb.spec.ts:77`, `e2e/slice8-measure.spec.ts:210` (320 one-row dock); re-run `tests/splits.test.ts` and `tests/contract-*`.
+
+### Reuse
+- `priceCompleteness`, `billBlockers`, `kkb.charge`, `kkb.adjustments[].state` (`kkb.ts`), `reconcileReceipts` (`receipts.ts:38`), `priceRows`/`pricesLeft`/`enterPricesLabel`, `billFinal`, `paymentStatus`/`paymentTotals` (`payments.ts`); `kkbText` keeps its own reasons list (`kkb.ts:381-388`); no refactor (byte-identical tests, import cycle).
+- Existing anchors `#kkb-service`, `#kkb-review`, `#kkb-adjustments`, `#kkb-receipt`, `#kkb-payments`; `showFirstUnpriced` pattern for scroll + focus.
+- `ChargeStrip` row styling (wash + icon) for the next-step row; `PriceStatusRow` slot in What's next; `openSummary(source, "kkb")` for the ended block.
+- `summaryText`'s per-person dish grouping (`summary.ts`) for the Orders section; `trackerLines`/`servedCounts` (`serving.ts:78`) for Served.
+
+### Not doing
+- PDF / printable export (P12). KKB image export: the KKB has no image today; the only PNG is Items (`summary-sheet.tsx` `saveImage`), price-free by contract.
+- Changing Items text/PNG content (stays price-free); only its date source changes (D71).
+- A setting to remember the full-record switch; per-section checkboxes (D70 (a)).
+- Moving or redesigning the Service charge / Adjustments / Receipt / Payments blocks; rewriting `Completeness` or `ChargeStrip`.
+- Guest ended block; dock copy beyond D73.
+- App-wide a11y sweep (slice 9).
+
+### States
+- KKB host: prices left (Next: Enter prices · 3 left) · payers missing · pending · charge unset · charge blocked · adjustment unassigned · receipt not entered (Shares are final · Check the total…) · receipt differs · final, unpaid (Record payments · 1 of 3 paid) · all paid.
+- KKB guest: shares so far (names what's open) · final.
+- Cards: so far vs final amounts; large order (seed A) collapsed above 6 cards, host and guest; small order as today.
+- What's next (host, open): prices left (as today) · next step after prices.
+- Ended block host: next step + button; final + all paid; guest unchanged.
+- Full record switch off (today's text) / on (all sections); Items text with the dining date.
+- Widths 320 / 375 / 1280 light; 375 dark for the new row and switch.
+
+### Decisions
+Owner answers 2026-11-28: D66–D75 = recommended (a); sketches M1–M6 match.
+
+- **D66 [decided: (a)] Where the next step shows**: (a) KKB top row + What's next once prices are in + host ended block; (b) KKB top row only. Recommend (a): after End there's no dock and the ended block is where the host lands (`workspace.tsx:600-606`); the KKB alone means scrolling a 20k px sheet.
+- **D67 [decided: (a)] Receipt step**: (a) last and soft: after service charge and adjustments, never blocks "Final"; (b) brief order literally (right after prices), blocking "Final". Recommend (a): `reconcile` has nothing to compare until prices, payers and adjustments settle (`kkb.ts:339-347`); matches `billFinal` (plan:882). Brief: "2. Review the restaurant's actual receipt." / "This should not be a mandatory wizard."
+- **D68 [decided: (a)] Estimate vs final wording**: (a) "so far" on every amount until `billFinal`, "Shares are final" when final, no word "estimate"; (b) fix only the card footer. Recommend (a): "so far" is the word the dock and payments already use (`kkb.ts:401`, `payments-block.tsx:101`).
+- **D69 [decided: (a)] KKB card defaults**: (a) above 6 sections (`kkb.sections.length > 6`), only own + shared cards start open; the host's "unpriced card starts open" rule (`kkb-view.tsx:54`) is dropped there; (b) same but keep the host's unpriced cards open; (c) leave as is. Recommend (a): host 20,134 vs guest 4,858 px on seed A, the gap is that rule; the Prices sheet and "Show the N without a price" open cards on demand. Projected ~3,000 px.
+- **D72 [decided: (a)] Payments prompt before any payment**: (a) KKB row only, once final ("Shares are final · Record payments · 0 of 3 paid"); What's next and the ended block show plain "Shares are final"; (b) everywhere; (c) only after the first payment exists. Recommend (a): brief "6. Optionally record payments" and "Avoid permanent warning banners"; S5.1 "Nothing shows until the host records a payment".
+- **D73 [decided: (a)] Dock follows `billFinal`**: (a) yes, one rule; an all-priced bill with the service charge not entered reads "so far" until the host enters it (or No service charge); (b) dock keeps today's `kkb.unresolved` rule. Recommend (a): "Distinguish estimates from final obligations"; changes `kkb.test.ts:311`, `ux-polish.spec.ts:87-97`.
+- **D74 [decided: (a)] `kkbText` per-line "so far"**: (a) append " so far" to each non-final person line (not "no prices yet"); (b) leave lines, the footer's "Total not final: …" already says it. Recommend (a): a pasted line reads as final otherwise; changes `kkb.test.ts:265`.
+- **D75 [decided: (a)] Duplicate prompts in the KKB tab**: (a) no separate row for step 1 (host: `Completeness` already carries Enter prices) and the row for later steps even though `ChargeStrip` sits below; (b) row for every step incl. a second Enter prices. Recommend (a).
+- **D70 [decided: (a)] Full record shape**: (a) one switch "Include the full record" on the KKB tab's Copy/Share; (b) per-section checkboxes; (c) a separate "Copy full record" button. Recommend (a): one choice, default text unchanged.
+- **D71 [decided: (a)] Export date**: (a) first confirmed round's date; (b) keep the device's today. Recommend (a): an ended order shared 3 days later shows the wrong day today.
+
+### Assumptions
+- Mobile scope: responsive + native feel (D6 carried). Baseline re-checked: viewport/theme-color/tap highlight/16px inputs/dvh present (`layout.tsx:48-55`, `globals.css:171-181`, `ui/input.tsx:7`); hover is gated by Tailwind v4's default `hover:` (`@media (hover: hover)`).
+- Host-only actions stay host-only (co-hosts: serving only, D2).
+- Payments recording stays allowed before final (D29); the next step only suggests payments once final.
+- No analytics change.
+- `.shots/before/kkb-export.txt` references in slices 2/4/5 are historical; this slice's text baselines are `.shots/before/export-*.txt`.
+
+### Done when
+- `pnpm typecheck && pnpm lint && pnpm test && pnpm build`; e2e bill-flow spec (mobile + webkit) and existing kkb/payments/receipt-check/adjustments/summary specs pass.
+- `kkbText` literals for final bills unchanged (`kkb.test.ts:259`, `payments.test.ts:149-178`, `adjustments.test.ts:94`); tests listed in Pinned details change only as D68/D73/D74 decide.
+- KKB sheet height on seed A at 375 re-measured (host and guest) with the before numbers in `.shots/s8d/numbers-before.json`.
+- Manual: the States above; keyboard: next-step button moves focus to its target block.
+
+### Skills
+- `impeccable` + `.impeccable/surfaces/src-app.md`, `DESIGN.md`: ticket world, tones for the row.
+- `frontend-a11y` / `accessibility`: status row, switch label, focus on jump.
+- `e2e-testing`; HANDOFF working rules (no prettier on src, per 8c handoff).
+
+### You need to do (slice 8d)
+- [ ] Nothing (no migration, no env).
+
+### Mockups (slice 8d, text sketch)
+
+Dark mode: same layouts, existing tokens; new row and switch checked at 375 dark.
+
+M1 KKB tab, host, not final (375):
+```
+┌────────────────────────────────┐
+│ [Items] [KKB]                  │
+│ ┌────────────────────────────┐ │
+│ │ → Next: add the service    │ │  ← B1/B2, saffron wash
+│ │   charge from the receipt  │ │
+│ │                     [Go]   │ │  → scrolls to #kkb-service
+│ └────────────────────────────┘ │
+│ All 14 dishes priced · Edit prices│ ← today's strip
+│ Service charge: not entered yet…│
+│ [Copy summary] [Share summary] │
+│ ( ) Include the full record    │  ← B5 switch
+│ ┌ Ana · you ─── ₱1,240 so far ┐│  ← B3
+│ │ …lines…                     ││
+│ │ Food subtotal     ₱1,240.00 ││
+│ └─────────────────────────────┘│
+│ ▸ Bea ─────────── ₱860 so far  │  ← collapsed above 6 cards (B4)
+│ ▸ Carlo ───────── ₱410 so far  │
+│ … Service charge, Adjustments, │
+│   Receipt check, Payments …    │
+└────────────────────────────────┘
+```
+M1b KKB tab, host, final, one unpaid:
+```
+│ ┌────────────────────────────┐ │
+│ │ ✓ Shares are final ·       │ │  ← ok wash
+│ │   Record payments · 1 of 3 │ │
+│ │   paid              [Go]   │ │  → #kkb-payments
+│ └────────────────────────────┘ │
+│ ┌ Ana · you ── ₱1,364 [Paid] ┐ │  ← plain amount
+│ │ Total             ₱1,364.00│ │
+```
+M1c KKB, host, final, receipt not entered: "✓ Shares are final · Check the total against the receipt [Go]" (→ #kkb-receipt). All paid: "✓ Shares are final", no button.
+
+M2 KKB tab, guest:
+```
+│ ┌────────────────────────────┐ │
+│ │ ◔ Shares so far · waiting  │ │
+│ │   on 3 dishes without a    │ │
+│ │   price                    │ │  ← no button
+│ └────────────────────────────┘ │
+```
+Final: "✓ Shares are final".
+
+M3 Order tab What's next, host, open, all prices in:
+```
+│ What's next?                   │
+│ [+ Add more (round 4)]         │
+│ [✓ End the order]              │
+│ Next: add the service charge   │
+│ from the receipt · Open bill   │  ← replaces "All prices in · Edit prices"
+│ · Edit prices                  │
+```
+
+M4 Ended block, host:
+```
+│ This order has ended. Everyone │
+│ can still look at the tickets  │
+│ until Dec 5. The host can still│
+│ fix prices and the bill.       │
+│ Next: choose who gets the      │
+│ senior citizen discount        │  ← B2
+│ [Open bill]  [Who ordered what]│
+```
+Final (D72 (a)): "Shares are final", only [Who ordered what].
+
+M5 Full record text (switch on), appended after today's text before "Made with Salo":
+```
+Kain tayo · Sat, Nov 28
+Ana  ₱1,240.00 + ₱124.00 service = ₱1,364.00
+…
+Total ₱3,000.00
+
+Orders
+Round 1
+  Ana: Sinigang ×1, Rice ×2
+  Bea: Sisig ×1
+Round 2
+  …
+
+Corrections
+  Round 1: Sisig ×2 → ×1
+
+Served
+  13 of 14 plates served
+  Not served: Halo-halo ×1
+
+Receipt
+  Receipt total ₱3,000.00 · matches
+  Senior citizen discount −₱184.00
+
+Payments
+  Ana paid ₱1,364.00 · paid
+  Bea paid ₱500.00 · ₱360.00 left
+  Carlo ₱0.00 paid · ₱410.00 left
+(no payments at all: "Payments" / "  None recorded")
+
+Made with Salo
+```
+
+M6 Row variants and card heading at 320:
+```
+┌──────────────────────────┐
+│ → Next: choose who pays  │  ← step 2
+│   for 2 shared dishes    │
+│                   [Go]   │
+├──────────────────────────┤
+│ ◔ Waiting on a change    │  ← step 3, no button
+│   with the waiter        │
+├──────────────────────────┤
+│ → Next: choose who gets  │  ← step 6 (unassigned;
+│   the senior citizen     │     flagged: "fix the …")
+│   discount        [Go]   │
+├──────────────────────────┤
+│ ✓ Shares are final ·     │  ← step 8 (soft)
+│   Receipt is ₱150.00     │
+│   more than Salo's total │
+│                   [Go]   │
+├──────────────────────────┤
+│ ✓ Shares are final ·     │  ← step 9 (longest)
+│   Record payments · 1 of │
+│   3 paid          [Go]   │
+└──────────────────────────┘
+Card heading, not final, 320:
+│ Bea · added by…   ₱860.00 │
+│                   so far  │
+│            [2 items no price]│
+│                   [Unpaid]│
+Collapsed (>6 sections): "▸ Carlo ─── ₱410.00 so far", one row each.
+Checkbox row: "[☐] Include the full record" (44 px, wraps under the buttons).
+Step 5 (zeroFood): "→ Next: service charge: no priced food to split it across yet [Go]".
+```
