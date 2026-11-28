@@ -262,7 +262,8 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-  .tick {
+  .tick,
+  .table-plate {
     animation: none !important;
   }
   /* The wash is a colour change that says "this just changed", not movement: keep it. */
@@ -279,6 +280,29 @@
   ::view-transition-new(*) {
     animation: none !important;
   }
+}
+
+/* Salo table loader: each plate fades and scales in, holds, fades out; the next plate follows 160 ms later. The base
+   style is the set state, so no-JS, SSR and reduced motion show the set table. */
+@keyframes table-plate {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  25%,
+  70% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+.table-plate {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: table-plate 2.4s var(--ease-out-expo) calc(var(--i) * 160ms) infinite both;
 }
 
 @keyframes toast-in {
