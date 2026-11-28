@@ -4,9 +4,7 @@ import { X } from "lucide-react";
 import { useId, useState } from "react";
 import { DrawerClose, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
 import { searchPreps, type Prep } from "@/lib/corrections";
-import { normalizeText } from "@/lib/dish-name";
-
-const SEARCH_FROM = 8;
+import { normalizeText, SEARCH_FROM } from "@/lib/dish-name";
 
 /** Step one of the correction sheet: the round's dish lines, searchable once the list is long. */
 export function DishPicker({ roundNumber, preps, onPick }: { roundNumber: number; preps: Prep[]; onPick: (prep: Prep) => void }) {

@@ -24,6 +24,8 @@ test("My order: a guest sees what is theirs, what the host added, fixes it and s
   await expect(sheet.getByText("Chicken Katsu")).toBeVisible(T);
   await expect(sheet.getByText("Halo-halo")).toBeVisible(T);
   await expect(sheet.getByText("Rice")).toBeVisible(T);
+  // Arrival tags fade for ARRIVAL_MS, then unmount; axe mid-fade reads the blended colour as low contrast.
+  await expect(rafa.page.locator(".arrival-tag, .arrival-pill")).toHaveCount(0, T);
   for (const scheme of ["light", "dark"] as const) {
     await rafa.page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
     expect((await new AxeBuilder({ page: rafa.page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);

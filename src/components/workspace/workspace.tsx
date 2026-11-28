@@ -2,7 +2,6 @@
 
 import { CircleCheck, Hand, Lock, Plus, ReceiptText } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { WaiterTicket } from "@/components/ticket/waiter-ticket";
 import { Button } from "@/components/ui/button";
 import { describeOp, useSession, type AddInput, type EntryChanges, type OverlayEntry } from "@/hooks/use-session";
 import { consolidate } from "@/lib/consolidate";
@@ -43,6 +42,7 @@ import { EditDishSheet } from "./edit-dish-sheet";
 import { Guide } from "@/components/onboarding/guide";
 import { TourOffer } from "@/components/onboarding/tour-offer";
 import { guideFor, markTourSeen, subscribeTourSeen, tourSeen, type GuideAction } from "@/components/onboarding/guide-steps";
+import { CollapsibleTicket } from "./collapsible-ticket";
 import { ServedSection } from "./served-section";
 import { useServedEdits } from "@/hooks/use-served-edits";
 import { trackerLines } from "@/lib/serving";
@@ -230,8 +230,14 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
   const canServe = can(snapshot.me, "serving.update") && sessionOpen;
   const served = useServedEdits(snapshot.session.id, refresh, snapshot.session.revision, canServe);
   const [changeRequest, setChangeRequest] = useState<{ roundId: string; lineKey: string } | null>(null);
+  const [servedQuery, setServedQuery] = useState("");
+  const [servedShowAll, setServedShowAll] = useState(false);
   const servedSection = anyConfirmed ? (
     <ServedSection
+      query={servedQuery}
+      onQuery={setServedQuery}
+      showAll={servedShowAll}
+      onShowAll={setServedShowAll}
       tracker={tracker}
       canEdit={canServe}
       canChange={isHost && sessionOpen}
@@ -646,7 +652,7 @@ export function Workspace({ initial, appUrl, justJoined = false }: { initial: Se
           {view === "order" ? <MenuLink menu={snapshot.session.menu} title={snapshot.session.title} isHost={isHost} /> : null}
           {view === "order" && confirmedTicket ? (
             <div className="space-y-4">
-              <WaiterTicket ticket={confirmedTicket} size="compact" confirmed justConfirmed={justConfirmed === round.id} />
+              <CollapsibleTicket ticket={confirmedTicket} size="compact" confirmed justConfirmed={justConfirmed === round.id} />
               {servedSection}
               {sessionOpen ? (
                 isHost ? (

@@ -17,8 +17,8 @@ Each slice ships as its own branch and squash PR into `dev` (HANDOFF working rul
 | 6 | F08, F09 | My order sheet, host transfer | none (D39) | landed (PR #56) |
 | 7 | F10, F12 | Manifest `id`/`scope`, invite continuity copy, reliability fixes + tests | — | landed (PR #57) |
 | 8a | F16 | Menu link: `sessions.menu_url`/`menu_label`, URL validator, View menu on the Order tab | 0017 | landed (PR #58) |
-| 8b | F17 | Creation animation (tail-less table: current mark has a speech-bubble tail, `brand/logo.tsx:14`; aligned to the final logo in slice 10), Turnstile expiry/timeout states | — | landed (PR pending) |
-| 8c | F14 | Large-order navigation: measure a real-guest large order first, keep only what moves the number | — | not started |
+| 8b | F17 | Creation animation (tail-less table: current mark has a speech-bubble tail, `brand/logo.tsx:14`; aligned to the final logo in slice 10), Turnstile expiry/timeout states | — | landed (PR #59) |
+| 8c | F14 | Large-order navigation: measure a real-guest large order first, keep only what moves the number | — | landed (PR pending) |
 | 8d | F11, F13 | Billing next-step prompts, estimate vs final labels, export options (share `kkb.ts`, `kkb-view.tsx`, `summary-sheet.tsx`) | — | not started |
 | 9 | Phase 9 | Full regression, money property tests, a11y sweep; real phones and pilot stay owner tasks | — | not started |
 | 10 | F15 | Shared Table logo and icon set (last, alone) | — | not started |
@@ -50,7 +50,7 @@ Each slice ships as its own branch and squash PR into `dev` (HANDOFF working rul
 | L21 | F10 "PWA Deep Linking and Invite Continuity" | Manifest + guidance, accurate platform docs | 7 | not started |
 | L22 | F12 "Offline and Realtime Reliability Improvements" | Scenario tests + targeted fixes | 3, 7 | not started |
 | L23 | F13 "Completed-Session Export" | Optional export sections | 8 | not started |
-| L24 | F14 "Large-Order Navigation and Usability" | Order search, People collapse | 8 | not started |
+| L24 | F14 "Large-Order Navigation and Usability" | Measured first (slice 8c): ticket collapse, Waiting cap, Served search, People collapse | 8c | planned |
 | L25 | F16 "Restaurant Menu Link Sharing & URL Safety" | Menu link (D4) | 8 | not started |
 | L26 | F17 "Animated Room Creation and Bot-Verification Experience" | Table animation in `BotCheck` | 8 | not started |
 | L27 | F15 "This feature must be implemented **last**" | Slice 10, alone | 10 | not started |
@@ -1659,7 +1659,7 @@ M2b (alternative): the two fields appended inside the name form above its Save.
 
 ## Slice 8b: animated room creation and Turnstile states (F17)
 
-Status: landed (PR pending)
+Status: landed (PR #59)
 
 Verify 2026-11-28: checker typecheck/lint/1245 unit/build + e2e new-order + standalone (mobile + webkit) 41 pass, 1 skipped (webkit keyboard, Safari Tab default); reviewer SHIPPABLE; qa SHIPPABLE (flows A–L, 0 geometry findings over 42 states); ui-critic SHIPPABLE. Fixed in loop: dark-mode plates were near-black (`--on-tomato` is dark in dark theme) → loader uses the band pair (`fill-band`/`fill-on-band`), measured plate L 94 vs table L 25 in dark, light unchanged; one-word last lines → `text-balance` on the supporting line and error reason, last line now 4–7 words, checking/creating card 377 px and h1 y equal at 320/375. Follow-up 4 (e2e rAF hardening) done 2026-11-28: stale-callback test waits two frames and asserts no POST; new-order e2e 27 pass, 1 skipped.
 
@@ -1835,3 +1835,201 @@ M3b error with a long server reason (429, 320):
 │       [ ⛨ Try again ]      │
 ```
 M4b lazy susan: six plates set, the ring turns slowly clockwise (8 s/turn).
+
+## Slice 8c: large-order navigation (F14)
+
+Status: landed (PR pending)
+
+Verify 2026-11-28: checker typecheck/lint/1252 unit/build + e2e (mobile 12 specs, webkit large-order) pass; two one-off flakes passed on rerun (`unavailable.spec.ts:222` stuck at /new in a long run; `my-order.spec.ts:29` axe on a fading arrival tag, follow-up 7). reviewer SHIPPABLE; qa SHIPPABLE; ui-critic SHIPPABLE. D58 after numbers (`.shots/s8c/numbers-after.json`, 375): What's next 14,193 → 1,801 (−87%), px above first Waiting 3,184 → 459 (−86%), first draft row 11,298 → 1,715 (−85%), named dish 6,814 px → 1 tap + typing, 11th People card 3,491 → 1,059 (−70%), guest Order 9,782 → 1,694. All four changes kept. Fixed in loop: failed row's Try again kept visible during a search (unit test); Fully served matches render as a plain list while searching (forced-open details desynced on tap); host's own People card no longer sorts first/opens (plan States); collapsed People header spacing tightened; ticket button `pb-4` so the stamp clears the zigzag (measured −5.8 px overlap at 8 px padding; +8 px padding computed, not reshot). Follow-ups 5–7 in `.shots/follow-ups.md`. Follow-ups 5, 6 done 2026-11-28: collapsed People status pill is icon-only below 400 px (`max-[400px]:sr-only`; v4 `max-*` is strict <, so 375 needed the wider cut), headers 44 px at 375/390, 320 except the typed long name; disclosure button hides its stamp while the ticket is open, closed stamp clears the zigzag by 2.2 px (measured). Checker ALL PASS, reviewer SHIPPABLE, qa re-check, ui-critic SHIPPABLE. Follow-up 7 done: `my-order.spec.ts` waits for arrival tags/pills to unmount (ARRIVAL_MS) before axe; 3/3 repeat runs pass.
+
+Kickoff 2026-11-28. Goal: "slice 8c of docs/plans/salo-v1-4.md." Research: researcher brief (this session). Baseline: `.shots/before/` (8b's shots moved to `.shots/v1-4-slice8b/`), script `.shots/s8c/s8c-before.mjs`, seed `.shots/s8c/seed.mjs` → `seed.json` (host + 12 joined guests + 3 typed names, 40 dishes, 280 entries over 3 confirmed rounds 95/92/93, 14 correction rows, 1 dish unavailable, 30 of 51 dish+size priced, round 1 served, round 2 about half, round 3 none) and `seed-r4.json` (same plus round 4 open). Re-run after: `BASE=http://localhost:3400 OUT=.shots/after NUM=.shots/s8c/numbers-after.json node .shots/s8c/s8c-before.mjs` against `pnpm build && NEW_ORDERS_PER_HOUR=1000 JOINS_PER_HOUR=1000 POSTHOG_KEY= pnpm start -p 3400` (dev Postgres must still hold both seeded orders).
+
+### Ask ledger (slice 8c)
+
+Brief F14 (`salo-v1-4-brief.md:843-873`).
+
+| # | Owner's words | Planned change | Status |
+|---|---|---|---|
+| N1 | "Evaluate usability with realistic large dining sessions." | Seeded 12-guest, 3-round, 280-line order; numbers at 375×812 in `.shots/s8c/numbers-before.json` (Today) | done (baseline) |
+| N2 | "Only retain enhancements that measurably improve large-order navigation." / plan row "keep only what moves the number" | Each change names its metric; verify re-runs the script and reverts any change that cuts its metric by less than 30% (D58) | done |
+| N3 | "Do not implement every possible filter." | One search box (Served dishes) only; no filter chips, no per-person or per-round filters | done |
+| N4 | "Search or filtering for preparations." | "Find a dish" field in Served when it has 8+ rows (R4) | done |
+| N5 | "Collapsible sections." / "Reduced repetitive scrolling." | Confirmed ticket collapses on the Order tab (R1); Waiting shows the first 10 (R2); People cards collapse (R5) | done |
+| N6 | "Prioritization of outstanding food." | Waiting stays first and oldest-round first (already, `serving.ts:123-126`); R2 keeps the oldest 10 in view | done |
+| N7 | "Faster access to individual participant orders." | People cards collapsed to their header when there are more than 6, guest's own card first and open (R5) | done |
+| N8 | "Improved round navigation." / "Clearer correction-history references." / "More compact summary cards." | Measured: Rounds tab 1,437 px collapsed, last correction 601 px, 1 tap: below the bar, no change (Not doing). Compact Waiting rows projected under 30% once R2 lands (Not doing) | done (no change) |
+| N9 | "Maintain accessibility and keyboard focus when rows or sections change dynamically." | Disclosures use `aria-expanded`/`aria-controls`; filtered rows keep `useRowFocusFallback`; match count in a polite status; e2e asserts focus never drops to `body` | done |
+
+### Today
+
+Numbers at 375×812, host, dock 110 px (`numbers-before.json`):
+
+| Measure | Before |
+|---|---|
+| Order tab height (round 3 confirmed) | 15,029 |
+| → scroll to "What's next?" | 14,193 |
+| → px above the first Waiting row | 3,184 |
+| → scroll to 25th distinct dish (Buko Pandan, Waiting) | 6,814 |
+| → scroll to last Waiting row | 13,770 |
+| → Served rows rendered: Waiting / Fully served | 73 / 64 (Fully served collapsed) |
+| Order tab, round 4 open (`seed-r4`): height | 12,448 |
+| → scroll to the first draft-ticket row | 11,298 (73 Waiting rows above it) |
+| Order tab, guest Bea (read-only rows): height | 9,782 |
+| → scroll to last Waiting row | 8,786 |
+| People tab height (17 cards) | 5,475 |
+| → scroll to Migs (11th card) | 3,491 |
+| Rounds tab collapsed / all expanded | 1,437 / 9,045 |
+| → last correction row | 601 (1 tap) |
+| KKB sheet scroll height | 20,134 |
+| → Trisha's card | 7,100 |
+| → first unpriced line | 60 |
+| Summary Items sheet | 7,858 |
+
+- Order tab after confirm (`workspace.tsx:647-678`): `MenuLink`, the active round's `WaiterTicket size="compact"` (~3,000 px for 93 lines), `ServedSection`, then What's next (host) or a line (guest). The same dishes are on the ticket and in Waiting. The dock's Ticket button opens the full waiter view (`dock.tsx:72-76`), and the Rounds tab has every ticket.
+- Order tab while a round is open (`workspace.tsx:679-683`): `ServedSection` sits above the draft `OrderTicket`, so earlier rounds' Waiting rows push the draft down: the first draft row is 11,298 px down with 73 Waiting rows above it.
+- `ServedSection` (`served-section.tsx`): Waiting rows are ~150 px (label + stepper, meta line, people line, All served / Change… row, `:96-127`); never capped, no search. Fully served is a `<details>` closed above 5 (`COLLAPSE_ABOVE`, `:31,178`). Live count `role="status"` (`:197`). `useRowFocusFallback` on the row container (`:68,203`).
+- `PeopleView` (`people-view.tsx:129-176`): one `ticket` card per bucket, all expanded, active round only; header holds name, role badges, Ready badge, item count, Remove guest (host); then the co-host toggle, `Lines`, and the guest's "Yours?" claim block. Order from `byPerson` (`views.ts:23-42`); the guest's own card is not first.
+- Search today: only `DishPicker` (`dish-picker.tsx:9-36`): `SEARCH_FROM = 8`, labelled `type="search"`, `normalizeText`, "No dish matches."
+- Rounds are collapsed by default (`rounds-view.tsx:48`); KKB others' cards are `<details>`, host-unpriced ones start open (`kkb-view.tsx:54`).
+
+### Approach
+
+Five changes, each with the metric it must move (D58: ≥30% or it is reverted in verify):
+
+- **R1 Confirmed ticket collapses** (Order tab, confirmed round, host and guests). When the confirmed ticket has more than 8 dishes (`ticket.dishes.length`; sub-lines don't count), `WaiterTicket` sits behind a disclosure button, closed by default; ≤8 dishes render as today. The button shows "Round 3", the compact Stamp (no animation, keeps its `aria-label`) and "93 items" (`totalItems`), chevron `aria-hidden`; the open panel is today's `WaiterTicket` incl. its Corrections block. Rounds tab (`rounds-view.tsx:97`), review panel (`review-panel.tsx:99`), waiter panel (`waiter-panel.tsx:32`) and `/s/[id]/waiter` keep the full ticket. Metric: px above the first Waiting row (3,184 → ~250).
+- **R2 Waiting shows the first 10.** Above 10 Waiting rows, render the first 10 (oldest round first, as today) and a full-width "Show all 73 waiting dishes" button (rows, not plates); tapping shows all and the button becomes "Show fewer". Marking a row served pulls the next one in. Rows with an unsent, sending or failed edit (`edits[key]`) and the row `followKey` points at (`served-section.tsx:54-65`) always render, even past the first 10, so undo focus-follow and a failed row's Try again alert are never hidden. Metric: scroll to What's next (14,193 → ~2,000); in an open round, scroll to the first draft row.
+- **R4 Find a dish in Served.** With 8+ Served rows (Waiting + Fully served round-rows; 137 in the seed; reuse `SEARCH_FROM` by moving it next to `normalizeText` in `lib/dish-name.ts`), a labelled "Find a dish" `type="search"` field under the Served header. A query matches `line.label` (normalized, substring); while it is non-empty, matching Waiting rows show uncapped and matching Fully served rows show with the group forced open; "No dish matches." when empty; a polite status reads "3 dishes match" (counts round-rows), separate from `served-summary`, announced only when the query changes. Only `line.label` is searched, not the people line. The "N of M served" line and progress bar stay global. Copy "Find a dish" differs from DishPicker's "Search dishes" on purpose (this finds, it doesn't pick). Metric: reaching a named dish (6,814 px scroll → 1 tap + typing, 0 scroll).
+- **R5 People cards collapse.** Above 6 cards, each card shows only its header row (name, badges, count, Remove) plus a disclosure button (placement D64) with sr-only "Show Migs's order" (`aria-expanded`/`aria-controls`), a sibling of the header's controls, never wrapping them. The co-host toggle, lines and claim block are inside, so Make co-host becomes 2 taps on a large table. The guest's own card moves first and starts open; a "Possibly ordered twice" hint stays above, unchanged. Metric: scroll to the 11th card (3,491 → ~800 with D64 (a), ~1,200 with (b); +1 tap).
+- **Tests**: unit for the Served filter + cap helper; e2e on a seeded large order (extend `e2e/load.spec.ts` pattern) for each disclosure and the search, focus staying in the list after a filter removes the focused row, undo of a row past the cap keeps focus on its −, axe pass. Existing specs checked by plan-critic: none break (Order-tab ticket assertions are ≤8-dish orders; `load.spec.ts:38-39` asserts a People header, still visible; `motion.spec.ts:38` stamp is in the waiter dialog).
+
+Rejected: shipping the audit's guessed pair ("Order search, People collapse") without measuring — the brief says keep only what measurably helps, and the numbers show the Order tab's cost is the duplicated ticket and the uncapped Waiting list, not a missing dish search on the draft ticket.
+
+### Reuse
+- `normalizeText` (`lib/dish-name.ts:5`), `SEARCH_FROM` moved out of `dish-picker.tsx:9` into the same module, "No dish matches." copy.
+- Disclosure pattern of `rounds-view.tsx:136-148` (`aria-expanded` + `aria-controls`, chevron `aria-hidden`).
+- `useRowFocusFallback` already wraps Served rows; filtered/capped rows stay inside that container.
+- Seed + measure script `.shots/s8c/` for the after numbers; e2e helpers `joinAsGuest`, `confirmRound1`.
+
+### Not doing
+- Order-tab search on the draft `OrderTicket`: the draft holds one round (~40 dishes max); measure only if the `draft` numbers say otherwise.
+- Compact Waiting rows: after R2 only 10 rows show; saving ~50 px each is ~500 px of ~2,000 (25%, under D58's bar).
+- Rounds tab, corrections list: 1 tap and 601 px today.
+- KKB sheet and Summary Items (20,134 / 7,858 px): their open-by-default rules belong to the price and settle flow; handed to slice 8d with these numbers (D60).
+- Expand-all controls, filter chips, per-person/per-round filters, sticky section headers.
+- Groups tab (812 px).
+
+### States
+- Order tab, confirmed, host: ticket closed ("Round 3 ticket · 93 items"), Served header + Find a dish, 10 Waiting rows, "Show all 73 waiting", Fully served (64) closed, What's next. Ticket opened: today's ticket. Show all: 73 rows + "Show fewer".
+- Same, guest: read-only rows (no stepper/buttons), same cap and search, no What's next.
+- Small order (≤8 ticket lines, ≤10 Waiting, <8 Served rows): exactly as today (no disclosure, no cap button, no search).
+- Search: matches (Waiting uncapped + Fully served opened), no match ("No dish matches."), cleared (back to capped/closed state as before typing).
+- Order tab, round open (host): Served (capped) above the draft ticket.
+- People, host, 17 cards: all collapsed headers; one opened. People, guest: own card first, open; others collapsed. ≤6 cards: as today.
+- Widths 320 / 375 / 1280, light; dark at 375 for the new buttons.
+
+### Decisions
+Owner answers 2026-11-28: D58, D59, D62, D63, D64, D65 = recommended; M1 and M2 sketches match.
+
+- **D58 [decided: (a) ≥30%] Bar for "measurably improves"**: (a) a change stays only if it cuts its named metric by ≥30% on the seeded order at 375; (b) any improvement. Recommend (a).
+- **D59 [decided: R1, R2, R4, R5] Which changes to build**: R1, R2, R4, R5 (recommended, projections above); variants without R4 (search) or without R5.
+- **D60 [carried: (a) slice 8d; not asked separately] KKB sheet length** (20,134 px): (a) leave to slice 8d, which owns `kkb-view.tsx` defaults with the billing prompts; (b) add a KKB collapse here. Recommend (a).
+- **D63 [decided: (a) lift to workspace] Search and Show all across Change…**: Change… switches to Rounds (`workspace.tsx:244-247`), unmounting Served. (a) hold `query`/`showAll` in `workspace.tsx` so they survive the tab switch; (b) accept the reset. Recommend (a): the host fixing several dishes would retype and rescroll each time.
+- **D64 [decided: (a) name is the button] People disclosure placement**: (a) the name is the disclosure button inside the `<h3>`, badges/count/Remove beside it, one row per card; (b) a chevron button on its own row under the header. Recommend (a): ~100 px less per card, same pattern as Rounds' summary button (`rounds-view.tsx:136-148`).
+- **D65 [decided: (a) claimable cards open] Guest claimable cards**: collapsed cards would hide "That's mine" on typed-name / Not assigned cards holding host-added lines. (a) a card with lines this guest can claim starts open; (b) stays collapsed with a "Yours?" mark in the header. Recommend (a): a feature's prompt must be visible where users meet it (owner rule, memory).
+- **D62 [decided: (a) stay above, capped] Served while a round is open**: (a) stays above the draft ticket, capped by R2 (first draft row 11,298 → ~2,000 px); (b) moves below the draft ticket (→ ~300 px). Recommend (a): smallest change, keeps the served-first order F06 chose, and R2 already clears the bar.
+
+
+### Assumptions
+- Owner 2026-11-28 (after build): a just-confirmed ticket over 8 dishes starts closed too, so the confirm stamp animation plays only in the waiter view.
+- Thresholds: ticket collapses above 8 dishes, Waiting cap 10, search from 8 Served rows, People collapse above 6 cards (8 = existing `SEARCH_FROM`).
+- Mobile scope: responsive + native feel (D6 carried); new buttons `min-h-11`, hover gated as the app does.
+- R1 applies on the Order tab only; Rounds tab, review panel and the waiter view keep the full ticket.
+- R2/R4 state (show all, query) lives per D63; it never persists across a reload.
+- R5's open/closed state is per card, component state; opening the "Possibly ordered twice" hint does not open cards.
+
+### Done when
+- `pnpm typecheck && pnpm lint && pnpm test && pnpm build`; new e2e spec (mobile + webkit) passes; axe clean on Order and People with the large seed.
+- After numbers (`numbers-after.json`) meet D58 for every kept change; changes that don't are reverted before land.
+- Manual: the States above at 320/375/1280; keyboard: Tab through ticket disclosure → search → rows → Show all; filtering away the focused row keeps focus in the list.
+
+### Skills
+- `frontend-a11y`, `accessibility`: disclosures, live status, focus on dynamic rows (N9).
+- `e2e-testing`: seeded large-order spec.
+- `DESIGN.md` (single column, light weights) and `HANDOFF.md:60-66` working rules.
+
+### You need to do (slice 8c)
+- [ ] Nothing (no migration, no env).
+
+### Mockups (slice 8c, text sketch)
+
+Dark mode: same layouts, existing tokens; only the new buttons are checked at 375 dark.
+
+M1 Order tab, confirmed, host, 375 (after):
+```
+┌────────────────────────────────┐
+│ [Order] People Groups Rounds 3 │
+│ [Round 3 (CONFIRMED) 93 items ⌄]│  ← R1 disclosure, closed
+│ ┌ Served ────────────────────┐ │
+│ │ 67 of 230 served · 163 wait│ │
+│ │ ▓▓▓▓░░░░░░░░               │ │
+│ │ Find a dish                │ │  ← R4
+│ │ [                       ]  │ │
+│ │ WAITING                    │ │
+│ │ Sisig          [−] 0 [+]   │ │
+│ │ Round 2 · 0 of 2 · 2 wait. │ │
+│ │ Maria, Jose                │ │
+│ │ [✓ All served] [Change…]   │ │
+│ │ … 9 more rows …            │ │
+│ │ [Show all 73 waiting dishes]│ │  ← R2
+│ │ FULLY SERVED (64)        ⌄ │ │
+│ └────────────────────────────┘ │
+│ What's next?                   │
+│ [+ Add more (round 4)]         │
+│ [✓ End the order]              │
+└────────────────────────────────┘
+```
+M1a ticket opened: the disclosure button stays on top (chevron flipped), today's compact `WaiterTicket` (stamp, dishes, Corrections) below it, then Served as M1.
+
+M1b search "sisig":
+```
+│ │ Find a dish                │ │
+│ │ [sisig                  ]  │ │
+│ │ 2 dishes match             │ │  (polite status)
+│ │ WAITING                    │ │
+│ │ Sisig   … Round 2 row …    │ │  (uncapped; no Show all button)
+│ │ FULLY SERVED               │ │  (forced open)
+│ │ Sisig ×3        All ✓      │ │
+│ │ Round 1 · Bea, Carlo, Nina │ │
+```
+M1c search "pizza": field, status "No dish matches.", no Waiting / Fully served lists. Clearing the field returns to M1.
+
+M1d Show all: all 73 Waiting rows, then `[ Show fewer ]` in the button's place, then Fully served (64) closed.
+
+M1e guest (Bea), confirmed: as M1 without steppers, All served / Change… or What's next; rows are label, meta line, people line; the host line "The host confirmed round 3…" under Served.
+
+M1f host, round 4 open:
+```
+│ Served (M1 card: Find a dish, 10 Waiting, Show all 73 waiting dishes, Fully served ⌄) │
+│ ROUND 4 · draft ticket (OrderTicket, as today)                                           │
+│ Sisig · Bea                [−] 1 [+]                                                     │
+```
+(D62 (b) would swap the two blocks.)
+
+M2 People tab, host, 375 (after, D64 (a)):
+```
+┌────────────────────────────────┐
+│ For settling up: …  [Who ord…] │
+│ ┌────────────────────────────┐ │
+│ │ [Kovie ⌄] · host   12 items│ │  ← name is the disclosure button
+│ └────────────────────────────┘ │
+│ ┌────────────────────────────┐ │
+│ │ [Maria ⌄] (Ready) 7 items ⋯│ │  ⋯ = Remove guest trigger
+│ └────────────────────────────┘ │
+│ … 15 more one-row cards …      │
+└────────────────────────────────┘
+```
+M2a one card opened (Maria): header as M2 (chevron flipped), co-host toggle, her lines.
+
+M2b guest Bea: "Bea (you)" first and open with lines and the "Yours?" block; a typed-name or Not assigned card holding lines she can claim starts open (D65 (a)); others as M2.
+
+M2c 320 header: `[Migs ⌄] (Still choosing) 4 ⋯` on one row (count word is already sr-only ≤375, `people-view.tsx:149`); a long name wraps under the badges (`flex-wrap`, as today).

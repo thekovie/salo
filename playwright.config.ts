@@ -28,7 +28,7 @@ export default defineConfig({
   projects: [
     { name: "mobile", use: { ...devices["Pixel 7"] } },
     // iOS Safari engine on a core subset (CI time): `pnpm exec playwright test --project=webkit`.
-    { name: "webkit", use: { ...devices["iPhone 14"] }, testMatch: /(standalone|composer-details|kkb|food-tracker|new-order)\.spec\.ts/ },
+    { name: "webkit", use: { ...devices["iPhone 14"] }, testMatch: /(standalone|composer-details|kkb|food-tracker|new-order|large-order)\.spec\.ts/ },
   ],
   webServer: {
     command: `pnpm build && pnpm start -p ${PORT}`,
