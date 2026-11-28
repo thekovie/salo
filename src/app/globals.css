@@ -24,6 +24,7 @@
   --saffron: oklch(0.83 0.15 80);
   --saffron-ink: oklch(0.47 0.1 68);
   --saffron-wash: oklch(0.95 0.06 88);
+  --on-saffron: var(--ink);
   /* Carbon copies: round 1 white, round 2 canary, round 3+ pink (the order pad's own colours). */
   --copy-1: var(--ticket);
   --copy-2: oklch(0.965 0.065 101);
@@ -62,6 +63,7 @@
   --saffron: oklch(0.8 0.14 80);
   --saffron-ink: oklch(0.83 0.13 82);
   --saffron-wash: oklch(0.31 0.05 75);
+  --on-saffron: oklch(0.17 0.02 80);
   --copy-1: var(--ticket);
   --copy-2: oklch(0.3 0.045 98);
   --copy-3: oklch(0.29 0.04 8);
@@ -96,6 +98,7 @@
     --saffron: oklch(0.8 0.14 80);
     --saffron-ink: oklch(0.83 0.13 82);
     --saffron-wash: oklch(0.31 0.05 75);
+    --on-saffron: oklch(0.17 0.02 80);
     --copy-1: var(--ticket);
     --copy-2: oklch(0.3 0.045 98);
     --copy-3: oklch(0.29 0.04 8);
@@ -129,6 +132,7 @@
   --color-saffron: var(--saffron);
   --color-saffron-ink: var(--saffron-ink);
   --color-saffron-wash: var(--saffron-wash);
+  --color-on-saffron: var(--on-saffron);
   --color-copy-1: var(--copy-1);
   --color-copy-2: var(--copy-2);
   --color-copy-3: var(--copy-3);

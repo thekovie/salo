@@ -34,7 +34,7 @@ function Lines({ bucket, forOthers = 0, isMe = false, claimable, canClaimEntry, 
       <ul className="space-y-1">
         {bucket.entries.map((e) => (
           <li key={e.id} className="flex min-h-11 items-center justify-between gap-3">
-            <span>
+            <span className="min-w-0 break-words">
               {e.dishName}
               {e.variant || e.instructions ? <span className="text-ink-soft"> · {[e.variant, e.instructions].filter(Boolean).join(" · ")}</span> : null}
               <span className="tally ml-2 text-tomato-ink">×{e.quantity}</span>
@@ -50,7 +50,7 @@ function Lines({ bucket, forOthers = 0, isMe = false, claimable, canClaimEntry, 
       {bucket.ticket.dishes.map((dish) => (
         <li key={dish.dishId}>
           <div className="flex justify-between gap-3">
-            <span>{dish.name}</span>
+            <span className="min-w-0 break-words">{dish.name}</span>
             <span className="tally text-tomato-ink">×{dish.quantity}</span>
           </div>
           {hasSubLines(dish) ? (
@@ -152,10 +152,10 @@ export function PeopleView({ snapshot, entries, canClaim, onClaim, onRemoveDupli
         return (
           <section key={bucket.key} className="ticket px-5">
             <div className={cn("flex flex-wrap items-center justify-between gap-y-1", collapsible ? "gap-x-2" : "gap-x-3", open && "mb-2")}>
-              <h3 className="text-lg">
+              <h3 className="min-w-0 text-lg break-words">
                 {collapsible ? (
-                  <button type="button" aria-expanded={open} aria-controls={regionId} onClick={() => setToggled({ ...toggled, [bucket.key]: !open })} className="inline-flex min-h-11 cursor-pointer items-center gap-1 text-left">
-                    <span>
+                  <button type="button" aria-expanded={open} aria-controls={regionId} onClick={() => setToggled({ ...toggled, [bucket.key]: !open })} className="inline-flex min-h-11 max-w-full cursor-pointer items-center gap-1 text-left">
+                    <span className="min-w-0 wrap-anywhere">
                       {name}
                       <span className="sr-only"> · Show {bucket.title}&rsquo;s order</span>
                     </span>

@@ -37,14 +37,14 @@ export function WaiterTicket({ ticket, confirmed, justConfirmed, size = "waiter"
           {ticket.dishes.map((dish) => (
             <li key={dish.name} className={big ? "py-4" : "py-2"}>
               <div className="flex items-baseline justify-between gap-4">
-                <span className={big ? "text-[clamp(1.6rem,6vw,2.6rem)] leading-tight font-semibold" : "text-lg"}>{dish.name}</span>
+                <span className={cn("min-w-0 break-words", big ? "text-[clamp(1.6rem,6vw,2.6rem)] leading-tight font-semibold" : "text-lg")}>{dish.name}</span>
                 <span className={cn("tally shrink-0 leading-none text-tomato-ink", big ? "text-[clamp(2.4rem,10vw,4.2rem)]" : "text-2xl")}>×{dish.quantity}</span>
               </div>
               {dish.lines.length ? (
                 <ul className={cn("mt-1 space-y-0.5 border-l-[1.5px] border-rule pl-4", big ? "text-[clamp(1.25rem,4.5vw,1.9rem)]" : "text-ink-soft")}>
                   {dish.lines.map((line) => (
                     <li key={line.label} className="flex items-baseline justify-between gap-4">
-                      <span>{line.label}</span>
+                      <span className="min-w-0 break-words">{line.label}</span>
                       <span className="tally">×{line.quantity}</span>
                     </li>
                   ))}

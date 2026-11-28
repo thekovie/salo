@@ -35,7 +35,7 @@ export function Line({ name, qty, wash, children }: { name: string; qty: number;
 export function Pill({ who, text }: { who: string; text: string }) {
   return (
     <span className="arrival-pill inline-flex max-w-full items-center gap-1.5 rounded-full bg-saffron-wash py-0.5 pr-3 pl-0.5 text-xs text-saffron-ink shadow-ticket ring-1 ring-saffron/40">
-      <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-saffron font-display text-[0.7rem] text-ink">{who[0]}</span>
+      <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-saffron font-display text-[0.7rem] text-on-saffron">{who[0]}</span>
       <span className="truncate">
         <span className="font-semibold">{who}</span> {text}
       </span>
@@ -193,7 +193,7 @@ export function AddScene() {
           <p className="round-label text-xs">Round 1</p>
           <ul className="mt-1 text-base">
             <Line name="Gyoza" qty={gyoza} wash={step >= 4}>
-              {step >= 4 ? <span className="arrival-tag absolute -top-1 right-12 rounded-full bg-saffron px-2 py-0.5 font-sans text-[0.65rem] font-semibold text-ink">+2 · JD</span> : null}
+              {step >= 4 ? <span className="arrival-tag absolute -top-1 right-12 rounded-full bg-saffron px-2 py-0.5 font-sans text-[0.65rem] font-semibold text-on-saffron">+2 · JD</span> : null}
             </Line>
             <Line name="Sisig" qty={1} />
           </ul>

@@ -180,7 +180,7 @@ export function SummarySheet({ open, onOpenChange, snapshot, tab, onTabChange, r
               {summary.sections.map((s) => (
                 <li key={`${s.title}:${s.note}`} className="py-3">
                   <div className="flex items-baseline justify-between gap-3">
-                    <p className="min-w-0 text-lg leading-snug">
+                    <p className="min-w-0 text-lg leading-snug break-words">
                       {s.title}
                       {s.note ? <span className="ml-1.5 font-sans text-sm text-ink-soft">· {s.note}</span> : null}
                     </p>

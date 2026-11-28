@@ -27,12 +27,15 @@ async function pricedOrder(page: Page, browser: Parameters<typeof joinAsGuest>[0
   return { guest, sheet };
 }
 
-async function addDiscount(page: Page, who: string | null, amount: string) {
+async function addDiscount(page: Page, who: string | null, amount: string, opts: { reason?: string; percent?: boolean; split?: string } = {}) {
   await page.getByRole("button", { name: "Add discount or charge" }).click();
   const form = page.getByRole("dialog", { name: "Add discount or charge" });
-  if (who) await form.getByLabel("Who").selectOption({ label: who });
+  if (opts.reason) await form.getByLabel("Reason").selectOption({ label: opts.reason });
+  if (opts.split) await form.getByRole("radio", { name: opts.split }).check();
+  else if (who) await form.getByLabel("Who").selectOption({ label: who });
   else await form.getByRole("radio", { name: "Decide later" }).check();
-  await form.getByLabel("Amount in pesos").fill(amount);
+  if (opts.percent) await form.getByRole("radio", { name: "%", exact: true }).check();
+  await form.getByLabel(opts.percent ? "Percent" : "Amount in pesos").fill(amount);
   await Promise.all([page.waitForResponse((r) => r.url().includes("/adjustments/") && r.request().method() === "PUT", T), form.getByRole("button", { name: "Save" }).click()]);
   await expect(form).toBeHidden(T);
 }
@@ -55,6 +58,26 @@ test("adjustments: a senior discount for one guest updates their card, the dock 
   await receipt.getByLabel("Receipt total (₱)").fill("170");
   await receipt.getByRole("button", { name: "Save" }).click();
   await expect(receipt.getByText("Adjusted total")).toBeVisible(T);
+  await expect(receipt.getByText("Matches the receipt.")).toBeVisible(T);
+  await guest.context.close();
+});
+
+test("adjustments: a privilege-card discount for the whole table splits by what each ordered (scenario 4)", async ({ page, browser }) => {
+  test.slow();
+  const { guest, sheet } = await pricedOrder(page, browser);
+  // Everyone is ticked by default; 10 % of 120 and of 60.
+  await addDiscount(page, null, "10", { reason: "Privilege card", percent: true, split: "Split by what each ordered" });
+
+  const block = sheet.getByRole("region", { name: "Discounts and extras" });
+  await expect(block.getByText("Privilege card discount for everyone")).toBeVisible(T);
+  await expect(sheet.getByText("−₱12.00").first()).toBeVisible(T);
+  await expect(sheet.getByText("−₱6.00").first()).toBeVisible(T);
+
+  const receipt = sheet.getByRole("region", { name: "Check against the receipt" });
+  await expect(receipt.getByText("Adjusted total")).toBeVisible(T);
+  await expect(receipt).toContainText("₱162.00");
+  await receipt.getByLabel("Receipt total (₱)").fill("162");
+  await receipt.getByRole("button", { name: "Save" }).click();
   await expect(receipt.getByText("Matches the receipt.")).toBeVisible(T);
   await guest.context.close();
 });
