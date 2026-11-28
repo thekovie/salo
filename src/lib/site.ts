@@ -17,6 +17,9 @@ export const BRAND_HEX = {
   saffron: "#f1b83c",
   canary: "#fbf3b8",
   darkPaper: "#1f1b18",
+  /** oklch(0.68 0.17 33) and oklch(0.17 0.02 30): --tomato / --on-tomato in .dark. */
+  darkTomato: "#ee694f",
+  darkOnTomato: "#170c0a",
   /** oklch(0.36 0.105 29): the header band under the dim bar light (--band in .dark). */
   darkBand: "#6a211a",
 } as const;

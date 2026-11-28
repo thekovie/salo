@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { ImageResponse } from "next/og";
+import { MarkShapes } from "@/components/brand/mark";
 import { BRAND_HEX as C } from "@/lib/site";
 
 export const OG_SIZE = { width: 1200, height: 630 } as const;
@@ -30,11 +31,7 @@ async function loadFonts() {
 export function Mark({ size }: { size: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 48 48">
-      <circle cx="25" cy="23" r="20" fill={C.tomato} />
-      <path d="M6.5 44.5 9.6 31.5 18.2 38.6Z" fill={C.tomato} />
-      <circle cx="14.5" cy="23" r="4.6" fill={C.onTomato} />
-      <circle cx="25" cy="23" r="4.6" fill={C.onTomato} />
-      <circle cx="35.5" cy="23" r="4.6" fill={C.onTomato} />
+      {MarkShapes({ table: C.tomato, plate: C.onTomato, rim: true })}
     </svg>
   );
 }

@@ -133,7 +133,7 @@ test("reduced motion shows the set table", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await stubTurnstile(page);
   const plates = page.locator(".table-plate");
-  await expect(plates).toHaveCount(6);
+  await expect(plates).toHaveCount(5);
   for (const plate of await plates.all()) {
     await expect(plate).toHaveCSS("opacity", "1");
     await expect(plate).toHaveCSS("animation-name", "none");

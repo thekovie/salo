@@ -20,8 +20,8 @@ Each slice ships as its own branch and squash PR into `dev` (HANDOFF working rul
 | 8b | F17 | Creation animation (tail-less table: current mark has a speech-bubble tail, `brand/logo.tsx:14`; aligned to the final logo in slice 10), Turnstile expiry/timeout states | — | landed (PR #59) |
 | 8c | F14 | Large-order navigation: measure a real-guest large order first, keep only what moves the number | — | landed (PR #60) |
 | 8d | F11, F13 | Billing next-step prompts, estimate vs final labels, export options (share `kkb.ts`, `kkb-view.tsx`, `summary-sheet.tsx`) | — | landed (PR #61) |
-| 9 | Phase 9 | Full regression, money property tests, a11y sweep; real phones and pilot stay owner tasks | — | landed (PR pending) |
-| 10 | F15 | Shared Table logo and icon set (last, alone) | — | not started |
+| 9 | Phase 9 | Full regression, money property tests, a11y sweep; real phones and pilot stay owner tasks | — | landed (PR #62) |
+| 10 | F15 | Shared Table logo and icon set (last, alone) | — | landed (PR pending) |
 
 ## Ask ledger
 
@@ -2316,7 +2316,7 @@ Step 5 (zeroFood): "→ Next: service charge: no priced food to split it across 
 
 ## Slice 9: functional validation and stabilization (Phase 9)
 
-Status: landed (PR pending)
+Status: landed (PR #62)
 
 Verify 2026-11-28: checker typecheck/lint/1325 unit/build + full e2e (167 passed, 19 skipped, 0 failed, mobile + webkit) + drill (26 tables, every probe named its constraint) + money properties 3/3; re-check after fixes: typecheck/lint/unit/a11y-sweep pass. reviewer SHIPPABLE; qa SHIPPABLE (real taps at 320 hit every control incl. with arrival pills, so keyboard activation in tests hides no tap defect; dark contrast tag 10.17, pill 7.82); ui-critic SHIPPABLE. Fixed in loop: drawer opener check uses `canFocus` (`src/lib/focus.ts`); a11y-sweep 320 describe serial (CI retry can recover); collapsed People name wraps (`min-w-0 wrap-anywhere`; measured 3 lines, no overflow at 320 with 9 people); header round label no longer truncates with the offline pill (pill wraps to a second line; measured scrollWidth = clientWidth at 375/320, header +20 px offline only); HANDOFF stale offline-retry line removed (fixed in #49). Tried and reverted: waiter "Back to order" `whitespace-nowrap` (pushed Copy 19 px off-screen, follow-up 12). CI drill step not run locally (no host pg_dump): first proof is CI. Follow-ups 10-13 in `.shots/follow-ups.md`. Follow-ups 10, 12 done 2026-11-28: "Keep the order" returns focus to End/Cancel order (`order-options-sheet.tsx` `lastStep`; tap + keyboard, both entry points); waiter "Back to order" shows "Back" below 360 px, accessible name unchanged (measured one line, no overflow at 320/359/360/375/768). Checks: 1325 unit, 8 e2e specs 51/52 + notifications flaky (passed alone, follow-up 14); reviewer re-check, qa re-check, ui-critic re-check SHIPPABLE. Follow-up 14 done: not the keyboard helper — the guest's dish could land after the host opened Review, and the server correctly refused the confirm (STALE_REVISION); `notifications.spec.ts` now waits for the host to see "JD added Sisig" (16/16 with retries off). Same pass: the sweep's offline axe check failed when adding a dish scrolled the steppers under the sticky header; it now scrolls to top first (sweep 47/48 with retries off across 1 and 4 workers; the 1 failure is follow-up 16). Bot-check failures seen only under parallel load are Cloudflare's test widget, not the app (CI retries once). Follow-ups 15, 16 added.
 
@@ -2433,3 +2433,82 @@ Owner answers 2026-11-28: D76-D83 = recommended (a); D82 skip.
 
 ### Mockups (slice 9)
 - None: no layout change planned.
+
+## Slice 10: Shared Table logo and icon set (F15)
+
+Status: landed (PR pending)
+
+Verify 2026-11-28: checker typecheck/lint/1331 unit + e2e new-order, motion, policies, a11y-sweep, invite-continuity, summary (43 passed, 1 skipped webkit) ALL PASS; reviewer SHIPPABLE; qa SHIPPABLE (geometry byte-identical before/after on all page states; maskable table 53 % of tile); ui-critic SHIPPABLE. Fixed in loop: primary logo canvas 189→136 wide (measured text ends at x=135 with Fredoka), `site.ts` darkBand comment back above its key; primary files transparent (implementer had added a background rect, not in plan). Follow-ups 17, 18 in `.shots/follow-ups.md`. Follow-ups 17, 18 done 2026-11-28: Wordmark drops plate rims (`logo.tsx` `rim={false}`; sub-pixel at 1.6em on 1x), plates crisp in the 4x zoom; invite (40 px) and removed notice (48 px) captured with a real code, rims read; typecheck + lint pass; ui-critic re-check SHIPPABLE.
+
+Design goal, UI only, no migration, no endpoint changes. Brief: `salo-v1-4-brief.md:875-937` (F15), `:1268-1275` (Phase 10), `:1700-1704` (align the creation animation).
+
+### Ask ledger (slice 10)
+
+| # | Owner's words (brief F15 / Phase 10) | Planned change | Status |
+|---|---|---|---|
+| S10-1 | "A minimalist top-down illustration of a circular dining table with three or four plates and an optional central serving dish." | New mark: one shared geometry (D85) | done |
+| S10-2 | "Remove speech-bubble silhouettes. Avoid chat/message icons." | Tail path and the three-in-a-row "typing" plates go everywhere | done |
+| S10-3 | "Avoid generic fork-and-spoon restaurant branding." | No cutlery in the mark | done |
+| S10-4 | "Preserve Salo's tomato-red and warm-paper palette." / "Do not replace the established typography, layout system, or application color palette" | `--tomato` / `--on-tomato` / `BRAND_HEX`; Fredoka wordmark unchanged | done |
+| S10-5 | "Use simple, recognizable geometry. Remain identifiable at small sizes." | Circles only; checked at 16/24/32 px (board); favicon drops the plate rims | done |
+| S10-6 | "Support light and dark contexts. Work in monochrome." | Light + dark (CSS vars, unchanged mechanism) + mono SVG (one colour, plates cut out) | done |
+| S10-7 | "Support maskable PWA icons." | `/pwa-icon/maskable-512` keeps the paper tile with the mark inside the 80 % safe zone (58 %) | done |
+| S10-8 | "Required deliverables: Primary logo. Compact icon. Favicon. Apple touch icon. PWA icons. Maskable icon. Light and dark variants. Monochrome variant." | Wordmark, LogoMark, `icon.svg`, `apple-icon`, `pwa-icon/{192,512,maskable-512}`, `assets/brand/*.svg` (primary, mark, mark-dark, mark-mono) | done |
+| S10-9 | "Update relevant existing assets and metadata without unnecessarily changing the application's UI architecture." / "Maintain the existing name and tagline" | Same components, same call sites, same sizes; `SITE` untouched | done |
+| S10-10 | "If the final Shared Table logo changes iconography used in the room-creation animation, align the animation to the approved final logo during this phase without changing its verification behavior." | TableLoader redrawn to end on the new mark (D86); `bot-check.tsx` logic untouched | done |
+
+### Today
+- The mark is drawn by hand in four copies feeding five render sites: `src/components/brand/logo.tsx:7-20` (React, CSS vars, `inverse` prop unused by any caller), `src/app/icon.svg` (favicon + manifest `any`), `src/server/og/app-icon.tsx:9-15` (apple-icon 180, PWA 192/512/maskable via `src/app/pwa-icon/[variant]/route.ts`), `src/server/og/render.tsx:30-40` (`Mark` in `/opengraph-image`, `/i/[code]/opengraph-image`, and the saved-summary PNG `summary-image.tsx:4,29` via `/api/sessions/[id]/summary`). All carry the bubble tail `M6.5 44.5 9.6 31.5 18.2 38.6Z` and three plates in a row (`logo.tsx:3-6` says "typing…").
+- Call sites (unchanged by this slice): `Wordmark` in `app/page.tsx:53`, `policy/policy-page.tsx:14`; `LogoMark` in `not-found.tsx:9` (size-16), `i/[code]/page.tsx:69` (size-10), `workspace/removed-notice.tsx:10` (size-12), `landing/scenes.tsx:280` (size-6).
+- Creation animation: `src/components/motion/table-loader.tsx` — band-coloured table, inner ring, six plates looping (`globals.css:291-310`, 160 ms stagger), bare table when `still` (error). Used only at `landing/bot-check.tsx:169`.
+- Docs: `PRODUCT.md:26` says the plate dots "read as a speech bubble". Manifest icons `src/app/manifest.ts:17-22`; theme colours `layout.tsx:49-52`; proxy excludes `icon.svg`, `apple-icon` (`proxy.ts:55`). No test references any icon file; `e2e/new-order.spec.ts:135-141` asserts 6 `.table-plate` under reduced motion.
+
+### Approach
+One geometry module, `src/components/brand/mark.tsx`:
+- Exports the constants (table, `PLATES[]` positions, plate / rim / dish radii) and `MarkShapes({ table, plate, rim })`: a pure, hook-free function returning a fragment of intrinsic `<circle>`s (no `useId`, no nested components). satori (next 16.4.5) rejects a component element inside `<svg>` but renders a function call (critic ran it): React callers use `<MarkShapes/>`; `app-icon.tsx` and `render.tsx` `Mark` call `{MarkShapes(...)}`. `strokeOpacity` and `fillRule="evenodd"` render in satori (verified).
+- Geometry (A2; changes if another option is picked): `viewBox 0 0 48 48`, table `cx=24 cy=24 r=22`; plates `r=5.6` at (24,11) (37,24) (24,37) (11,24); rims `r=3.25 fill=none stroke=table stroke-opacity=.45 stroke-width=1.1`; dish `r=3.6` at (24,24), plate colour, no rim. The mark is now centred (old one sat at 25,23 to make room for the tail), so the table is ~10 % larger in its box (44/48 vs 40/48) at every call site.
+- Static files: `tests/brand-assets.test.ts` (vitest includes only `*.test.ts`, so `createElement`, no JSX) builds each SVG with `renderToStaticMarkup` inside its own `<svg xmlns viewBox="0 0 48 48">` with hex colours and compares with the committed files; `UPDATE_BRAND=1` writes them. No `scripts/` runner (no tsx/jiti installed). Files: `src/app/icon.svg` (rim-less everywhere: it is also the manifest `any` icon), `assets/brand/mark.svg`, `mark-dark.svg` (rims), `mark-mono.svg` (one `<path fill="currentColor" fill-rule="evenodd">`, table + plates + dish as arcs, no rims; mask rejected: ids collide when inlined), plus the primary logo per D87.
+- `TableLoader` maps the constants itself: one `<g className="table-plate" style="--i">` per plate clockwise from top (`--i` 0-3), the dish as a fifth `.table-plate` (`--i=4`); the `rotate(i*60)` wrappers go; same `size-28` box, `viewBox 0 0 48 48`; class name, keyframes, `still` and `bot-check.tsx` untouched.
+- Rejected: hand-editing the four copies again (they already drifted: `logo.tsx` has plate rims, the others don't); switching `icon.svg` to a generated PNG `icon.tsx` (loses the crisp SVG favicon).
+
+### Reuse
+`BRAND_HEX` (`lib/site.ts:10`) for static/OG colours; `--tomato`/`--on-tomato`/`--band`/`--on-band` for in-app; `renderAppIcon` tile and sizes as they are; `cachedImage` route unchanged (in-process LRU of 200, emptied by every deploy, so no key bump). Browsers hold `max-age=86400, immutable`: installed clients refresh within a day (see You need to do); a `?v=` on manifest srcs would be faster but isn't asked for.
+
+### Not doing
+Wordmark type, tagline, palette, header band, layout. OG card layout (only its mark changes). A dark-mode favicon (tomato table with cream plates reads on light and dark tabs; board row "dark"). `favicon.ico` (none today; every target browser takes `icon.svg` or the PNGs). Removing the unused `inverse` prop.
+
+### States
+- Mark at every call site: 24 px (scene), 40 px (invite), 48 px (removed), 64 px (not-found), wordmark 1.6 em (landing, policy) — light and dark, 375 and 1280.
+- Favicon 16/32 (rims off), apple-icon 180, PWA 192/512 (paper tile, mark 72 %), maskable 512 (mark 58 %, inside the circle crop).
+- OG previews: `/opengraph-image`, `/i/[code]/opengraph-image`, saved-summary PNG: new mark, nothing else moves.
+- `/new` bot-check: animating (plates set one by one, then the dish; loops), error (`still`: bare table), reduced motion (set table = the mark), light and dark.
+- Mono asset on white and on black.
+
+### Decisions
+Plan-critic (one pass) fixed: satori needs `MarkShapes` called as a function; generator moved into a vitest test (no tsx); loader maps constants per plate; e2e plate count; OG site list (no `/s/` preview, summary PNG added); dark plates are near-black like the app; cache bump dropped; loader box 112 px; PRODUCT.md line; mono via evenodd. Raised D87.
+
+- **D85 [decided 2026-11-28: A2] Mark**. Board: `.shots/mockups/marks.html` / `marks.png` (16/24/32/64, dark, mono black/white, apple tile, maskable crop, wordmark). Options: **A2** four rimmed plates + solid centre dish; **A** four solid plates + ring dish; **B2** three rimmed plates + dish; **B** three solid plates + ring dish. Rejected on the board: four plates with nothing in the middle (reads as a sewing button), plates sitting on the rim (looks like a gear and clips at the edge). Recommend **A2**: the rims make the plates read as plates rather than holes, and four places plus a dish says "a table of people" best. Its 16 px favicon drops the rims (they fall below a pixel).
+- **D86 [decided 2026-11-28: (a) match the logo] Creation animation**. (a) Redraw TableLoader as the new mark in its `size-28` box: the plates set one by one (same keyframes and stagger), then the dish; error = bare table; reduced motion = the full mark. (b) Keep six plates, drop only the inner ring. Recommend (a): brief `:1702` "align the animation to the approved final logo"; the loop timing, `still` and `bot-check.tsx` are untouched, so verification behaviour can't change.
+- **D87 [decided 2026-11-28: (1) SVG with live text] Primary logo as a file** (raised by critic). Brief: "Primary logo… Light and dark variants. Monochrome variant." No font-to-path tool is installed. (1) `assets/brand/primary.svg` + `primary-dark.svg`: mark + `<text font-family="Fredoka">salo</text>` (ink `#262b45` light; paper on dark), noting the font file `assets/fonts/fredoka-latin-500-normal.woff`; (2) outline the glyphs once and commit paths (portable, one-off tool); (3) mark files only; the in-app `Wordmark` is the primary logo. Recommend (1): cheap, and the in-app wordmark is already live text.
+- Mobile scope: carried from D6 (responsive + native feel); this slice changes no layout.
+
+### Assumptions
+- Table colour: `--tomato` in app (dark mode's lighter tomato), plates `--on-tomato`, rims at 45 % table colour; the loader keeps `--band`/`--on-band` as today.
+- Mono = one colour (`currentColor`), with the plates and dish cut out (`fill-rule="evenodd"` path or mask), so it prints and embosses.
+- `mark-dark.svg`: table `#ee694f` (`oklch(0.68 0.17 33)`, `globals.css:59`), plates `#170c0a` (`--on-tomato` dark, `globals.css:60`), matching the app; add `darkTomato` / `darkOnTomato` to `BRAND_HEX`. Loader in dark keeps `--band`/`--on-band`.
+- Apple/PWA tile background stays paper; SVG box 72 % / 58 % unchanged; table diameter now 66 % / 53 % of the tile, inside the 80 % maskable safe zone.
+- Docs: `PRODUCT.md:26` becomes "top-down round table with four plates and a serving dish"; comments at `logo.tsx:3-6` and `table-loader.tsx:3` updated.
+
+### Done when
+- `pnpm typecheck && pnpm lint && pnpm test && pnpm build` pass; new unit test: committed `icon.svg` + `assets/brand/*.svg` equal the script's output; no file in `src/` still has the tail path (`grep -r "M6.5 44.5"` empty).
+- E2E: `e2e/new-order.spec.ts:137` → `toHaveCount(5)`; rest of `e2e/` green.
+- Manual: shots of every state above vs `.shots/before/`; `/pwa-icon/maskable-512` checked against a circle crop.
+
+### Skills
+`impeccable` + `.impeccable/surfaces/src-app.md` (order-pad world, palette); `frontend-design` for the mark; `accessibility` (mark stays decorative or `role="img"` with title as today; loader stays `aria-hidden`).
+
+### You need to do
+- [ ] After release, reinstall or wait a day for installed PWAs / home-screen icons to pick up the new icon (iOS caches the apple-touch-icon until the shortcut is re-added).
+
+### Mockups (slice 10)
+Rendered SVG board instead of ASCII (a logo can't be judged in text): `.shots/mockups/marks.html`, `.shots/mockups/marks.png`. Baseline: `.shots/before/` (37 files; the Turnstile "Preparing your table…" state isn't capturable without a site key). Generator: `scratchpad/marks/gen2.mjs` (throwaway).

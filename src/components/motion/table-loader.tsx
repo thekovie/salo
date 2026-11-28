@@ -1,21 +1,23 @@
-const PLATES = [0, 1, 2, 3, 4, 5];
+import { MARK_DISH, MARK_PLATE_R, MARK_PLATES, MARK_RIM, MARK_TABLE } from "@/components/brand/mark";
 
-/** A top-down Salo table with six plates set round it. Decorative; `still` (error state) leaves the table bare. */
+/** The Shared Table mark set plate by plate (four plates clockwise, then the dish). Decorative; `still` (error state) leaves the table bare. */
 export function TableLoader({ still = false }: { still?: boolean }) {
   return (
-    <svg viewBox="0 0 120 120" aria-hidden className="mx-auto size-28">
-      <circle cx="60" cy="60" r="56" className="fill-band" />
-      <circle cx="60" cy="60" r="34" fill="none" strokeWidth="1.5" className="stroke-on-band/30" />
-      {still
-        ? null
-        : PLATES.map((i) => (
-            <g key={i} transform={`rotate(${i * 60} 60 60)`}>
-              <g className="table-plate" style={{ "--i": i } as React.CSSProperties}>
-                <circle cx="60" cy="26" r="8" className="fill-on-band" />
-                <circle cx="60" cy="26" r="4.5" fill="none" strokeWidth="1" className="stroke-band/40" />
-              </g>
+    <svg viewBox="0 0 48 48" aria-hidden className="mx-auto size-28">
+      <circle cx={MARK_TABLE.cx} cy={MARK_TABLE.cy} r={MARK_TABLE.r} className="fill-band" />
+      {still ? null : (
+        <>
+          {MARK_PLATES.map((p, i) => (
+            <g key={i} className="table-plate" style={{ "--i": i } as React.CSSProperties}>
+              <circle cx={p.cx} cy={p.cy} r={MARK_PLATE_R} className="fill-on-band" />
+              <circle cx={p.cx} cy={p.cy} r={MARK_RIM.r} fill="none" strokeWidth={MARK_RIM.width} className="stroke-band/40" />
             </g>
           ))}
+          <g className="table-plate" style={{ "--i": MARK_PLATES.length } as React.CSSProperties}>
+            <circle cx={MARK_DISH.cx} cy={MARK_DISH.cy} r={MARK_DISH.r} className="fill-on-band" />
+          </g>
+        </>
+      )}
     </svg>
   );
 }
