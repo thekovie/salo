@@ -23,7 +23,7 @@ Next.js PWA, PostgreSQL, Server-Sent Events, self-hosted on Coolify. Host-only: 
 
 ## Brand Commitments
 - Name: **Salo** (from *salu-salo*, a shared meal). Tagline: "One table. Everyone's order."
-- Logo: top-down round table whose plate dots read as a speech bubble.
+- Logo: top-down round table with four plates and a serving dish.
 - Visual direction pinned by the owner: "Order ticket" (warm paper, tomato red, saffron accents, perforated ticket cards, big tabular quantities, rounded light-weight type, bottom dock, light and dark). The owner dislikes sidebars and heavy type.
 - Voice: plain warm English with light Taglish touches in empty states and success messages ("Ayos!", "Kain na"). Buttons, labels and errors stay in plain English.
 
