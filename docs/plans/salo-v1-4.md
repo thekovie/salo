@@ -16,8 +16,8 @@ Each slice ships as its own branch and squash PR into `dev` (HANDOFF working rul
 | 5 | F07 | Payment ledger, derived balances | 0016 | landed (PR #55) |
 | 6 | F08, F09 | My order sheet, host transfer | none (D39) | landed (PR #56) |
 | 7 | F10, F12 | Manifest `id`/`scope`, invite continuity copy, reliability fixes + tests | — | landed (PR #57) |
-| 8a | F16 | Menu link: `sessions.menu_url`/`menu_label`, URL validator, View menu on the Order tab | 0017 | landed (PR pending) |
-| 8b | F17 | Creation animation (tail-less table: current mark has a speech-bubble tail, `brand/logo.tsx:14`; aligned to the final logo in slice 10), Turnstile expiry/timeout states | — | not started |
+| 8a | F16 | Menu link: `sessions.menu_url`/`menu_label`, URL validator, View menu on the Order tab | 0017 | landed (PR #58) |
+| 8b | F17 | Creation animation (tail-less table: current mark has a speech-bubble tail, `brand/logo.tsx:14`; aligned to the final logo in slice 10), Turnstile expiry/timeout states | — | landed (PR pending) |
 | 8c | F14 | Large-order navigation: measure a real-guest large order first, keep only what moves the number | — | not started |
 | 8d | F11, F13 | Billing next-step prompts, estimate vs final labels, export options (share `kkb.ts`, `kkb-view.tsx`, `summary-sheet.tsx`) | — | not started |
 | 9 | Phase 9 | Full regression, money property tests, a11y sweep; real phones and pilot stay owner tasks | — | not started |
@@ -1470,7 +1470,7 @@ M2 Join offline: under the name field, "No connection. Your name is still here; 
 
 ## Slice 8a: restaurant menu link (F16)
 
-Status: landed (PR pending)
+Status: landed (PR #58)
 
 Verify 2026-11-27: checker typecheck/lint/1244 unit (incl. 148-scenario golden contract `tests/contract-menu-link-golden.test.ts`)/build + touched e2e pass; reviewer SHIPPABLE (fixed: menu step reuses `useDirectSave` with an `offlineMessage` param; zod too-long uses `MENU_REASONS.tooLong`); contract-tester CONTRACT HOLDS; qa SHIPPABLE (8 flows); ui-critic SHIPPABLE, 2 fix-in-loop items fixed and measured (hint `min-h-5`: Link input top 574px in every state; Report link `pr-3`: right edge = icon right edge at 320/375/1280). Follow-ups 1–3 done 2026-11-27 (owner picked all): domain cut from the start, visible "Share the menu link" title on the menu step, rate-limit wait in minutes above 90 s (`waitText`); re-check also cut the Options-row domain from the start and set the step description to `text-sm`. Re-check: checker 1245 unit + menu-link e2e pass, reviewer/qa/ui-critic SHIPPABLE. Note: unit tests share `salo_test`; never run two `pnpm test` at once.
 
@@ -1656,3 +1656,182 @@ Label (optional) [Drinks menu     ]
 [           Remove link           ]   ← ghost, only when a link exists
 ```
 M2b (alternative): the two fields appended inside the name form above its Save.
+
+## Slice 8b: animated room creation and Turnstile states (F17)
+
+Status: landed (PR pending)
+
+Verify 2026-11-28: checker typecheck/lint/1245 unit/build + e2e new-order + standalone (mobile + webkit) 41 pass, 1 skipped (webkit keyboard, Safari Tab default); reviewer SHIPPABLE; qa SHIPPABLE (flows A–L, 0 geometry findings over 42 states); ui-critic SHIPPABLE. Fixed in loop: dark-mode plates were near-black (`--on-tomato` is dark in dark theme) → loader uses the band pair (`fill-band`/`fill-on-band`), measured plate L 94 vs table L 25 in dark, light unchanged; one-word last lines → `text-balance` on the supporting line and error reason, last line now 4–7 words, checking/creating card 377 px and h1 y equal at 320/375. Follow-up 4 (e2e rAF hardening) done 2026-11-28: stale-callback test waits two frames and asserts no POST; new-order e2e 27 pass, 1 skipped.
+
+Kickoff 2026-11-27. Goal: "slice 8b of docs/plans/salo-v1-4.md." Research done in-session (the brief names the files; all read): no researcher. Baseline: `.shots/before/` (script `.shots/s8b-before.mjs`; 8a's shots moved to `.shots/s8a/`). States are frozen with a `window.turnstile` stub injected by `addInitScript` (`loadScript` returns early when it exists, `bot-check.tsx:23`). Baseline captured: 5 states × 320/375/1280 light+dark + 768 light, plus `checking-375-light-reduced`, measure-rows JSON per shot, `heights.json`. Re-run: `OUT=.shots/after BASE=http://localhost:3400 node .shots/s8b-before.mjs` against a scratchpad copy (`rsync` + `cp -cR node_modules`, symlinks break Turbopack) on port 3400 with the always-pass test keys. Before, at 375 light: card 317 px (checking/creating) → 381 (check error) → 405 (network/server error), h1 y 305.5 → 261.5; the empty status `<p>` leaves a gap above the alert in error states.
+
+### Ask ledger (slice 8b)
+
+Brief F17 (`salo-v1-4-brief.md:1533-1673`).
+
+| # | Owner's words | Planned change | Status |
+|---|---|---|---|
+| B1 | "Create a lightweight, original animation based on Salo's shared-table identity." / "A top-down circular dining table. Small plates or serving elements appearing or moving gently. Warm tomato-red and cream colors." / "No large animated backgrounds." | New `TableLoader` SVG (tail-less table, plates) replaces the `LogoMark` on `/new` (M1; animation D55) | done |
+| B2 | "Use CSS or lightweight SVG animation where practical." / "Avoid adding a substantial animation dependency" | Inline SVG + CSS keyframes in `globals.css`; no dependency, no JS timers | done |
+| B3 | State 1: "Preparing your table…" / "Just a quick security check before we start." / "Show the existing Turnstile widget when user interaction is required." | Copy per D54; widget box kept (`appearance: "interaction-only"` unchanged) | done |
+| B4 | State 2: "Setting up your table…" / "Getting everything ready for your order." | Copy per D54 while `POST /api/sessions` runs | done |
+| B5 | State 3: "Transition directly to the created dining session." / "may be shown if it does not delay navigation." | `router.replace` on 201 as today; no success frame (Assumptions) | done |
+| B6 | State 4: "clear explanation and actionable retry option" ("Verification could not finish." / "Connection was lost." / "Session creation failed.") / "Do not replace meaningful error messages with decorative animation." | Three error kinds with title + reason + Try again (Pinned copy); animation stops, error text keeps `role="alert"` | done |
+| B7 | Security list ("Preserve Cloudflare Turnstile… Siteverify… action and hostname… rate limiting… idempotency… Handle token expiry and failed verification… Never treat animation completion as proof… Never bypass… Never display a fake success state") | Server untouched (`turnstile.ts`, `api/sessions/route.ts`); state driven only by Turnstile callbacks and the API response; add `timeout-callback`, `unsupported-callback`, expiry → error | done |
+| B8 | "Do not introduce artificial waiting periods." / "Start verification as early as practical." | No minimum display time; `preconnect` to `challenges.cloudflare.com` during render | done |
+| B9 | "Keep animation lightweight." / "Avoid excessive JavaScript or CPU usage." / "Pause unnecessary animation when the page is not visible" | Transform/opacity keyframes only; hidden tabs don't render CSS animations, so no JS listener (Assumptions) | done |
+| B10 | "Respect `prefers-reduced-motion`." / "Display a usable fallback if motion is disabled or unavailable." | Reduced motion: still table with all plates set (final frame); server render shows the same still frame before CSS runs | done |
+| B11 | "Ensure readable status text with assistive technologies." / "Prevent disruptive repeated screen-reader announcements." | One always-mounted `role="status"` region; only checking → creating is announced (initial copy is page content); errors in `role="alert"`; SVG `aria-hidden` | done |
+| B12 | "Work at 320px…" / "light and dark mode" / "consistent Salo typography" / "Avoid unnecessary layout shifts." / "Turnstile challenge remains accessible and unobstructed." | Fixed-height copy block, widget box keeps `min-h-[65px]` below the copy, animation never overlaps it; tokens only | done |
+| B13 | Tests list (success, verification timeout, expired token, failed token, network interruption, creation failure, retry, no duplicate room, reduced motion, keyboard, SR announcements, narrow mobile, browser + installed PWA) | `e2e/new-order.spec.ts` grows to cover each with the stub + `page.route`; server failed/unavailable token stay in `tests/turnstile.test.ts`; iOS engine by adding `new-order` to the webkit `testMatch` (`playwright.config.ts:31`); installed PWA stays an owner check | done |
+| B14 | Phase 0 audit: "token expiry resets silently with no message (`bot-check.tsx:95`); no `timeout-callback`/`unsupported-callback`" / "Any F17 table animation should use a tail-less table" | Covered by B7 and B1 | done |
+
+### Today
+- `/new` (`app/new/page.tsx:11-24`): ticket card, `LogoMark size-12`, h1 "One moment", line "A quick check that you're a person, then we'll open your order.", `BotCheck`, "Back to Salo" link.
+- `BotCheck` (`landing/bot-check.tsx`): states `checking | creating | error` (`:20`). Widget box `min-h-[65px]` (`:105`), status `<p role="status" aria-live="polite">` with spinner + "Checking you're a person…" / "Starting your order…" (`:106-109`); error `<p role="alert">` + Try again (`:110-130`).
+- Callbacks: `callback` → `create(token)`; `error-callback` → "The quick check couldn't finish. Try again."; `expired-callback` → silent `reset` (`:84-95`). No `timeout-callback` / `unsupported-callback`. Script load failure → "The quick check couldn't load…" (`:97`), but a hanging script load spins forever (no timeout).
+- `create` (`:46-67`): one `attemptKey` per mount, reused on every retry (`??=`), so a retry after a lost response returns the same order (server replay store, `api/sessions/route.ts:28-33`). Error message = server `error.message`, or "No connection…" on `Failed to fetch`. The fetch has no timeout: a hung request spins forever.
+- Server: rate limit before verification, Siteverify 5 s timeout, never fails open, hostname + action checked (`api/sessions/route.ts:34-51`, `turnstile.ts:20-39`). Errors: 429 RATE_LIMITED, 403 BOT_CHECK_FAILED, 503 BOT_CHECK_UNAVAILABLE.
+- Motion: global reduced-motion rule clamps every animation to one 0.01 ms iteration (`globals.css:256-264`), so a keyframe whose end state is "plates set" shows the still frame. Keyframes live in `globals.css` (`:284-499`); `components/motion/` holds only `ticker.tsx`.
+- Mark: `LogoMark` has a speech-bubble tail (`brand/logo.tsx:13`); slice 10 redraws the logo, so the loader must not depend on it.
+- Tests: `e2e/new-order.spec.ts` (16 lines) asserts heading "One moment" (`:14`) — must change. `startOrder` (`e2e/support/helpers.ts:3-8`) and `e2e/standalone.spec.ts:8` only wait for `/s/<id>`: unaffected. Playwright runs Cloudflare always-pass keys (`playwright.config.ts:41-42`).
+
+### Approach
+- **`src/components/motion/table-loader.tsx`** (new, ~40 lines, server-safe, no hooks): inline SVG `viewBox 0 0 120 120`, `aria-hidden`: a tomato table circle (no tail), a faint inner rim ring, six cream plates on the rim at 60° steps, each a `<g class="table-plate">` with `--i` for its stagger. Prop `still` (error state: plates hidden, table only). Size `size-28` (112 px).
+- **Keyframes** in `globals.css` next to the others: per D55. Transform + opacity only, `transform-box: fill-box; transform-origin: center`. End keyframe = plate set, `animation-fill-mode: both`, so the global reduced-motion rule lands on the still "table set" frame.
+- **`BotCheck`**: state → copy table (Pinned copy). Render the loader + h1 + supporting line inside BotCheck (it owns the state), so `/new` page shrinks to the card shell + Back link. Add `timeout-callback` and `unsupported-callback` → verification error; `expired-callback` → verification error with its own reason (replaces the silent reset); watchdogs per D57 (same `attemptKey` on retry). `preconnect("https://challenges.cloudflare.com")` from `react-dom` at the top of render.
+- **Error classification** in BotCheck: Turnstile callback / script problems → `check`; `TypeError`/`AbortError`/timeout from fetch → `connection`; any non-2xx → `server` (body message shown as the reason). Kind picks the title, the reason is the second line.
+- Rejected: a JS/rAF-driven animation or a motion library (brief B2; CSS covers it); a minimum display time so the animation "finishes" (brief B8); keeping "One moment" as the h1 (see D54).
+
+### Pinned copy
+| State | h1 | Supporting line |
+|---|---|---|
+| checking | Preparing your table… | Just a quick security check before we start. |
+| creating | Setting up your table… | Getting everything ready for your order. |
+| error, check | Verification could not finish. | per cause: error-callback "The quick check couldn't finish. Try again." · timeout "The check timed out. Try again." · expired "The check expired before we could use it. Try again." · unsupported "This browser can't run the quick check. Try another browser." · script failed/15 s "The quick check couldn't load. Check your connection and try again." |
+| error, connection | Connection was lost. | No connection. Check your data or Wi-Fi and try again. |
+| error, check (server) | Verification could not finish. | 403 BOT_CHECK_FAILED / 503 BOT_CHECK_UNAVAILABLE: the server's `error.message` |
+| error, server | We couldn't set up your table. | other non-2xx (e.g. 429 RATE_LIMITED "Too many new orders… Try again in N minutes."): the server's `error.message`, else "Could not start an order. Try again." |
+
+Error block: title + line inside `role="alert"`, then the existing Try again button (unchanged behaviour: reset widget, or reload when the widget never rendered). Focus is not moved (Assumptions).
+
+### Pinned details (plan-critic, verified)
+- **Reduced motion:** `.table-plate` base style is the set state (opacity 1, no transform). Add `.table-plate { animation: none !important; }` to the reduced-motion block next to `.tick` (`globals.css:265-267`). The generic clamp doesn't touch `animation-delay`, so it would leave plates hidden up to 0.8 s and land on the empty 100 % frame.
+- **Live regions:** the `role="status"` container stays mounted in every state (never re-mounted on retry): h1 + supporting line while checking/creating, empty in error. In error, title + reason live in the `role="alert"` block, so the title is announced once.
+- **Error classification:** connection = thrown `TypeError` or `name` in `AbortError`/`TimeoutError` (never match `"Failed to fetch"`; Safari says "Load failed", `bot-check.tsx:69`), or a rejected `.json()` on an ok response (today swallowed, `:57`). Non-2xx: `error.code` BOT_CHECK_FAILED / BOT_CHECK_UNAVAILABLE → check kind; anything else → server kind. Server message is the reason line.
+- **No auto-retry loop:** remove `turnstile.reset` from the catch (`:65`): reset re-runs the managed challenge and its `callback` would call `create` again, so a 429/503 would auto-retry and hammer the limiter. Reset only on Try again. `callback` ignores tokens unless state is `checking`.
+- **Stale callbacks:** `error-`, `timeout-`, `unsupported-`, `expired-callback` change state only while `checking`; ignored in `creating`/`error` (an expiry 300 s after a used token must not overwrite an error).
+- **Script watchdog (D57):** sets a flag so a late script load doesn't render the widget behind the error.
+- **Widget box in error:** stays mounted (reset needs it) but `hidden`; `min-h-[65px]` returns on retry. Try again sits under the alert text, centred, as today.
+- **preconnect:** only when `siteKey` is set, no `crossOrigin` (plain script tag). Not CSP-governed; `csp.ts` already lists `challenges.cloudflare.com`.
+- **E2E details:** the stub stores `render` options so tests fire callbacks, and its `reset` re-invokes `callback`; stub token `XXXX.DUMMY.TOKEN.XXXX` (the lost-response test's `route.fetch()` reaches real Siteverify with the test secret); reduced-motion test asserts plate `opacity: 1` and `animation-name: none` (Chromium reports `1e-05s` durations); axe under `emulateMedia({ reducedMotion: "reduce" })` like `standalone.spec.ts`; real-path heading regex `/Preparing your table|Setting up your table/`; 320 tests call `page.setViewportSize` (project default 412). 503 test expects "Verification could not finish." + server message; server-kind test uses 429 RATE_LIMITED.
+
+### Reuse
+- Existing `BotCheck` flow, `attemptKey` idempotency, `Button`, `track` events (unchanged names), tokens `--tomato` / `--on-tomato` / `--rule` (dark values already defined), global reduced-motion rule, `ticket` card class.
+
+### Not doing
+- Any server change (Turnstile, rate limit, replay store): brief says preserve.
+- Reusing or changing `LogoMark` (slice 10 owns the logo).
+- A visible success frame or delay before navigation.
+- JS `visibilitychange` pausing (browsers don't paint hidden tabs; CSS-only animation costs nothing there).
+- Real-device and installed-PWA manual checks (owner, slice 9); Playwright can't emulate display-mode and the loader has no display-mode dependence.
+- `start-form.tsx` (plain `Link` to `/new`, `prefetch={false}`): unchanged, as the brief asks.
+
+### States
+- checking (default, widget invisible): loader animating, "Preparing your table…" + supporting line, empty 65 px widget box under the copy.
+- checking, interaction needed: same, Cloudflare widget visible in the box (box sits below the copy, nothing overlaps it).
+- creating: loader keeps animating, "Setting up your table…" copy; box stays (no shift).
+- error × 3 kinds: loader still (table only), title + reason in the alert, Try again; Back to Salo stays.
+- retry: back to checking copy; same `attemptKey`.
+- reduced motion: still table with six plates, same copy.
+- Widths 320/375/768/1280, light and dark; no layout shift between checking and creating: below 440 px viewport the h1 reserves 2 lines and the supporting line 2 lines (content is 240 px at 320, 295 px at 375; both copies wrap), 1 + 1 at ≥ 440. Implementer pins the `min-h` from measured line heights; verify measures 320/375/430/768. Error blocks may be taller; only checking → creating must not shift.
+- checking, interaction needed at 320: per D56.
+
+### Decisions
+Owner answers 2026-11-27: D54–D57 = recommended option.
+
+- **D54 [decided: (a) state is the heading] Heading and status structure.** (a) h1 shows the state's primary message ("Preparing your table…" → "Setting up your table…"), supporting line under it, both in one `role="status"` region; "One moment" and the old intro line retire. (b) keep h1 "One moment" + intro, brief's messages become the small status line under the widget. Recommend (a): the brief calls them "Primary message" / "Supporting message" (`brief:1577-1595`); (b) shows two competing messages.
+- **D55 [decided: (a) M4a table being set] Animation (M4).** (a) M4a "table being set": each plate runs the same 2.4 s cycle (fade + scale in from 0.6, hold, fade out) offset by `--i × 160 ms`, so plates arrive and leave as a wave round the table (plan-critic: "clear together" would need six keyframes). (b) M4b "lazy susan": all six plates on the table, the ring of plates turns slowly (one rotate, 8 s per turn). Recommend (a): brief "Small plates or serving elements appearing or moving gently" and "Preparing your table"; it reads as setting the table, and reduced motion shows the set table via `animation: none` (Pinned details). (b) is cheaper (one transform) but reads as a spinner.
+- **D56 [decided: (1) compact below 340 px] Interactive widget at 320.** Content is 240 px wide (`heights.json`), Cloudflare's normal widget is 300×65 and the `ticket` mask clips overflow. (1) `size: "compact"` (150×140) when `matchMedia("(max-width: 339px)")`, normal otherwise; verify with forced-interactive key `3x00000000000000000000FF`. (2) keep normal, widen the box with `-mx-6` (possible ~6 px clip). (3) leave it, note the limit. Recommend (1): brief "remains accessible and unobstructed" + "Work at 320px".
+- **D57 [decided: (a) both, 15 s + 20 s] Watchdogs.** Invented numbers, not in the brief. (a) keep both: 15 s for Cloudflare's script to load, 20 s abort on `POST /api/sessions` → error + Try again; (b) script watchdog only (a hung create keeps spinning); (c) neither (rely on `timeout-callback` and browser network errors). Recommend (a): today a hung load or request spins forever with no way out but reload; caveat in Assumptions (possible second empty order after a 20 s abort).
+- Mobile scope: carried from D6 (responsive + native feel; no inputs on this screen, Try again stays 44 px).
+
+### Assumptions
+- No success frame: on 201, `router.replace` right away; the creating copy stays until the new page paints.
+- Error state: focus is not moved; the alert announces, and Try again is the first tab stop in the card (before Back to Salo).
+- Expired token → error with Try again instead of a silent reset (audit U7); Try again resets the widget.
+- SSR markup has the set state as the plates' base style; the animation is CSS only, so it runs without JS too.
+- Timeout, unsupported, expired and script-load failures fire the existing `turnstile_failed` (`analytics.ts:18`); no new event names.
+- Focus after Try again falls to body as today (the button unmounts); the next Tab reaches the widget if shown, else Back to Salo.
+- A client timeout while request 1 still runs server-side can leave a second, never-opened empty order (`created.set` runs after `createSession`, `route.ts:52`, no in-flight lock). Accepted; server out of scope. A completed-but-lost response replays as 200, which `response.ok` accepts.
+
+### Done when
+- `pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm e2e` pass (one `pnpm test` at a time, shared `salo_test`).
+- `e2e/new-order.spec.ts`: keeps the API 403 check and the real always-pass path (heading "Preparing your table…" or "Setting up your table…", then `/s/<id>`); adds, with the `window.turnstile` stub and `page.route`: error-callback → "Verification could not finish." + Try again → passes on retry; timeout-callback; expired-callback; unsupported-callback; `/api/sessions` aborted → "Connection was lost."; 503 → "We couldn't set up your table." + server message; lost response (`route.fetch()` then `route.abort()`) → Try again lands on the same `/s/<id>` and both requests carried the same `Idempotency-Key`; reduced motion → plates' computed animation is clamped and plates visible; keyboard: Tab reaches Try again, Enter retries; the status region text changes exactly once from checking to creating; 320 px: no horizontal overflow; axe light/dark on checking and error.
+- Manual: `.shots/after/` vs `.shots/before/` for every state at 320/375/768/1280, light and dark.
+
+### Skills
+- `impeccable` + `.impeccable/surfaces/src-app.md` (Salo look), `motion-foundations` (keyframe timing, reduced motion), `frontend-a11y` (live regions, alert), `mobile-native` (320 px, no hover). No `.claude/skills/` in the repo.
+
+### You need to do (slice 8b)
+- Nothing (no migration, no env change).
+
+### Mockups (slice 8b, text sketch)
+M1 checking, 375 (creating identical with its copy):
+```
+┌ ticket ──────────────────────────────┐
+│              ( table )               │  ← TableLoader 112px, plates animate
+│                                      │
+│       Preparing your table…          │  ← h1 text-3xl, in role=status
+│  Just a quick security check before  │  ← text-ink-soft
+│            we start.                 │
+│        [ Turnstile box 65px ]        │  ← empty unless a click is needed
+└──────────────────────────────────────┘
+            Back to Salo
+```
+M2 creating: same layout, "Setting up your table…" / "Getting everything ready for your order."
+
+M3 error (connection shown):
+```
+┌ ticket ──────────────────────────────┐
+│              ( table )               │  ← still, no plates
+│        Connection was lost.          │  ← h1, inside role=alert
+│  No connection. Check your data or   │
+│       Wi-Fi and try again.           │
+│           [ ⛨ Try again ]            │
+└──────────────────────────────────────┘
+            Back to Salo
+```
+M4a table being set (wave: each plate fades/scales in, holds, fades out; next plate 160 ms later; 2.4 s per plate cycle):
+```
+  t=0      t=0.3s     t=0.8s       t=1.4s        t=2.0s
+  ( )      (•   )     (•• •)       (•• ••)       ( • ••)   ← first plates leave as the last arrive
+```
+M5 checking, interaction needed (Cloudflare widget in the box under the copy):
+```
+375: content 295 px; widget 300×65 normal → fits (box may bleed into padding)
+┌ ticket ───────────────────────────┐
+│            ( table )              │
+│      Preparing your table…        │
+│ Just a quick security check …     │
+│ ┌ ☐ Verify you are human  CF ───┐ │
+│ └───────────────────────────────┘ │
+└───────────────────────────────────┘
+320 (D56 option 1): compact widget 150×140 centred in the box
+│   ┌ ☐ Verify ┐   │
+│   │  …    CF │   │
+│   └──────────┘   │
+```
+M6 reduced motion: table with all six plates set, still; copy as M1.
+
+M3b error with a long server reason (429, 320):
+```
+│         ( table )          │
+│ We couldn't set up your    │
+│          table.            │
+│ Too many new orders from   │
+│ this connection. Try again │
+│ in 12 minutes.             │
+│       [ ⛨ Try again ]      │
+```
+M4b lazy susan: six plates set, the ring turns slowly clockwise (8 s/turn).
